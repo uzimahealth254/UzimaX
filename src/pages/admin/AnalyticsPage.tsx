@@ -1,14 +1,24 @@
-import { useState } from 'react';
-import { useData } from '@/contexts/DataContext';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '@/lib/apiClient';
 import PageHeader from '@/components/layout/PageHeader';
 import { formatCurrency } from '@/lib/utils';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, AreaChart, Area } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { useState } from 'react';
 
 type Tab = 'volume' | 'pipeline' | 'participants' | 'performance';
 
 export default function AnalyticsPage() {
-  const { invoices, offers, packages, payments, organisations } = useData();
   const [tab, setTab] = useState<Tab>('volume');
+  const { data, isLoading } = useQuery({
+    queryKey: ['admin-analytics'],
+    queryFn: async () => (await api.get('/admin/analytics')).data as {
+      totals: { invoices: number; totalFaceValue: number; assignedFaceValue: number; organisations: number; packages: number; paymentUpdates: number };
+      pipeline: Record<string, number>;
+      monthlyVolume: { month: string; count: number; value: number }[];
+      participants: { suppliers: number; buyers: number; spv: number };
+      performance: { avgDiscountPct: number; settlementEvents: number; paymentEvents: number };
+    },
+  });
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'volume', label: 'Volume' },
@@ -17,53 +27,29 @@ export default function AnalyticsPage() {
     { id: 'performance', label: 'Performance' },
   ];
 
-  // Volume data: monthly
-  const monthlyVolume = Array.from({ length: 6 }, (_, i) => {
-    const month = new Date(2025, 8 + i, 1);
-    const monthInvs = invoices.filter(inv => {
-      const d = new Date(inv.createdAt);
-      return d.getMonth() === month.getMonth() && d.getFullYear() === month.getFullYear();
-    });
-    return {
-      month: month.toLocaleDateString('en', { month: 'short' }),
-      count: monthInvs.length,
-      value: monthInvs.reduce((s, i) => s + i.amount, 0),
-    };
-  });
-
-  // Pipeline data
-  const pipelineData = [
-    { name: 'Listed', value: invoices.filter(i => i.status === 'listed').length },
-    { name: 'Verified', value: invoices.filter(i => i.status === 'verified').length },
-    { name: 'Offer Stage', value: invoices.filter(i => ['offer_received', 'offer_accepted'].includes(i.status)).length },
-    { name: 'Assigned', value: invoices.filter(i => i.status === 'assigned').length },
-    { name: 'Packaged', value: invoices.filter(i => i.status === 'packaged').length },
-    { name: 'Completed', value: invoices.filter(i => ['disbursed', 'settled'].includes(i.status)).length },
-  ];
   const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#6366f1', '#8b5cf6', '#14b8a6'];
-
-  // Participants
+  const pipelineData = Object.entries(data?.pipeline || {}).map(([name, value]) => ({ name, value }));
   const participantData = [
-    { type: 'Suppliers', count: organisations.filter(o => o.type === 'supplier').length },
-    { type: 'Buyers', count: organisations.filter(o => o.type === 'buyer').length },
-    { type: 'SPV', count: organisations.filter(o => o.type === 'spv').length },
+    { type: 'Suppliers', count: data?.participants.suppliers || 0 },
+    { type: 'Buyers', count: data?.participants.buyers || 0 },
+    { type: 'SPV', count: data?.participants.spv || 0 },
   ];
 
-  // Performance
-  const avgDiscount = offers.length > 0 ? (offers.reduce((s, o) => s + o.discountRate, 0) / offers.length).toFixed(1) : '0';
-  const avgTenor = offers.length > 0 ? Math.round(offers.reduce((s, o) => s + o.tenor, 0) / offers.length) : 0;
-  const settlementRate = payments.length > 0 ? ((payments.filter(p => p.status === 'paid').length / payments.length) * 100).toFixed(0) : '0';
+  if (isLoading || !data) {
+    return <div className="p-8 text-sm text-muted-foreground">Loading analytics…</div>;
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Analytics" subtitle="Platform performance metrics and insights" />
+      <PageHeader title="Analytics" subtitle="Live aggregations from Postgres" />
 
-      <div className="flex gap-1 border-b">
+      <div className="flex gap-1 border-b scroll-x-pad">
         {tabs.map(t => (
           <button
             key={t.id}
+            type="button"
             onClick={() => setTab(t.id)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === t.id ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap shrink-0 ${tab === t.id ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'}`}
           >
             {t.label}
           </button>
@@ -75,112 +61,68 @@ export default function AnalyticsPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="stat-card border-l-4 border-l-blue-500">
               <p className="text-sm text-muted-foreground">Total Invoices</p>
-              <p className="text-2xl font-bold font-mono mt-1">{invoices.length}</p>
+              <p className="text-2xl font-bold font-mono mt-1">{data.totals.invoices}</p>
             </div>
             <div className="stat-card border-l-4 border-l-primary">
-              <p className="text-sm text-muted-foreground">Total Volume</p>
-              <p className="text-2xl font-bold font-mono mt-1">{formatCurrency(invoices.reduce((s, i) => s + i.amount, 0))}</p>
+              <p className="text-sm text-muted-foreground">Face value</p>
+              <p className="text-2xl font-bold font-mono mt-1">{formatCurrency(data.totals.totalFaceValue)}</p>
             </div>
-            <div className="stat-card border-l-4 border-l-emerald-500">
-              <p className="text-sm text-muted-foreground">Avg Invoice Size</p>
-              <p className="text-2xl font-bold font-mono mt-1">{formatCurrency(Math.round(invoices.reduce((s, i) => s + i.amount, 0) / invoices.length))}</p>
+            <div className="stat-card border-l-4 border-l-accent">
+              <p className="text-sm text-muted-foreground">Assigned exposure</p>
+              <p className="text-2xl font-bold font-mono mt-1">{formatCurrency(data.totals.assignedFaceValue)}</p>
             </div>
           </div>
-          <div className="border rounded-lg p-6">
-            <h3 className="font-semibold text-sm mb-4">Monthly Invoice Volume</h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={monthlyVolume}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey="month" fontSize={12} />
-                <YAxis fontSize={12} tickFormatter={(v) => `${(v / 1000000).toFixed(0)}M`} />
-                <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                <Area type="monotone" dataKey="value" stroke="#1B6BB5" fill="#1B6BB5" fillOpacity={0.1} strokeWidth={2} />
-              </AreaChart>
+          <div className="h-72 border rounded-2xl p-4">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={data.monthlyVolume}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" />
+                <YAxis />
+                <Tooltip />
+                <Bar dataKey="value" fill="#0d9488" name="Face value" />
+              </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
       )}
 
       {tab === 'pipeline' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="border rounded-lg p-6">
-            <h3 className="font-semibold text-sm mb-4">Status Distribution</h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie data={pipelineData} cx="50%" cy="50%" outerRadius={100} dataKey="value" label={({ name, value }) => `${name} (${value})`} labelLine={false}>
-                  {pipelineData.map((_, idx) => <Cell key={idx} fill={COLORS[idx % COLORS.length]} />)}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="border rounded-lg p-6">
-            <h3 className="font-semibold text-sm mb-4">Pipeline Funnel</h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={pipelineData} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis type="number" fontSize={12} />
-                <YAxis type="category" dataKey="name" fontSize={12} width={80} />
-                <Tooltip />
-                <Bar dataKey="value" fill="#1B6BB5" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+        <div className="h-80 border rounded-2xl p-4">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie data={pipelineData} dataKey="value" nameKey="name" outerRadius={110} label>
+                {pipelineData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+              </Pie>
+              <Tooltip />
+            </PieChart>
+          </ResponsiveContainer>
         </div>
       )}
 
       {tab === 'participants' && (
-        <div className="space-y-6">
-          <div className="border rounded-lg p-6">
-            <h3 className="font-semibold text-sm mb-4">Organisation Breakdown</h3>
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={participantData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey="type" fontSize={12} />
-                <YAxis fontSize={12} />
-                <Tooltip />
-                <Bar dataKey="count" fill="#1B6BB5" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {participantData.map(p => (
-              <div key={p.type} className="stat-card border-l-4 border-l-primary">
-                <p className="text-sm text-muted-foreground">{p.type}</p>
-                <p className="text-2xl font-bold font-mono mt-1">{p.count}</p>
-              </div>
-            ))}
-          </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {participantData.map((p) => (
+            <div key={p.type} className="stat-card">
+              <p className="text-sm text-muted-foreground">{p.type}</p>
+              <p className="text-2xl font-bold font-mono mt-1">{p.count}</p>
+            </div>
+          ))}
         </div>
       )}
 
       {tab === 'performance' && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="stat-card border-l-4 border-l-primary">
-              <p className="text-sm text-muted-foreground">Avg Discount Rate</p>
-              <p className="text-2xl font-bold font-mono mt-1">{avgDiscount}%</p>
-            </div>
-            <div className="stat-card border-l-4 border-l-blue-500">
-              <p className="text-sm text-muted-foreground">Avg Tenor (days)</p>
-              <p className="text-2xl font-bold font-mono mt-1">{avgTenor}</p>
-            </div>
-            <div className="stat-card border-l-4 border-l-emerald-500">
-              <p className="text-sm text-muted-foreground">Settlement Rate</p>
-              <p className="text-2xl font-bold font-mono mt-1">{settlementRate}%</p>
-            </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="stat-card">
+            <p className="text-sm text-muted-foreground">Avg discount</p>
+            <p className="text-2xl font-bold font-mono mt-1">{data.performance.avgDiscountPct}%</p>
           </div>
-          <div className="border rounded-lg p-6">
-            <h3 className="font-semibold text-sm mb-4">Offers Over Time</h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={monthlyVolume}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey="month" fontSize={12} />
-                <YAxis fontSize={12} />
-                <Tooltip />
-                <Line type="monotone" dataKey="count" stroke="#1B6BB5" strokeWidth={2} dot={{ r: 4 }} />
-              </LineChart>
-            </ResponsiveContainer>
+          <div className="stat-card">
+            <p className="text-sm text-muted-foreground">Payment events</p>
+            <p className="text-2xl font-bold font-mono mt-1">{data.performance.paymentEvents}</p>
+          </div>
+          <div className="stat-card">
+            <p className="text-sm text-muted-foreground">Fully settled events</p>
+            <p className="text-2xl font-bold font-mono mt-1">{data.performance.settlementEvents}</p>
           </div>
         </div>
       )}

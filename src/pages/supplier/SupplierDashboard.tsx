@@ -1,5 +1,5 @@
 import { useAuth } from '@/contexts/AuthContext';
-import { useData } from '@/contexts/DataContext';
+import { useData } from '@/hooks/usePlatformData';
 import { useNotifications } from '@/contexts/NotificationContext';
 import PageHeader from '@/components/layout/PageHeader';
 import StatCard from '@/components/shared/StatCard';
@@ -11,15 +11,16 @@ import { useNavigate } from 'react-router-dom';
 
 export default function SupplierDashboard() {
   const { user } = useAuth();
-  const { invoices, offers } = useData();
+  const { invoices, offers, optIns } = useData();
   const { notifications } = useNotifications();
   const navigate = useNavigate();
 
   const myInvoices = invoices.filter(inv => inv.supplierId === user?.organisationId);
-  const activeInvoices = myInvoices.filter(inv => !['settled', 'defaulted', 'draft'].includes(inv.status));
+  const activeInvoices = myInvoices.filter(inv => !['settled', 'defaulted', 'draft', 'opt_in_declined'].includes(inv.status));
   const totalListed = myInvoices.filter(inv => inv.status !== 'draft').length;
   const totalValue = myInvoices.reduce((sum, inv) => sum + inv.amount, 0);
   const pendingOffers = offers.filter(o => o.supplierId === user?.organisationId && o.status === 'pending');
+  const pendingOptIns = optIns.filter(o => o.supplierId === user?.organisationId && o.status === 'pending');
   const recentInvoices = myInvoices.slice(0, 5);
   const userNotifs = notifications.filter(n => n.userId === user?.id && !n.read);
 
@@ -30,13 +31,22 @@ export default function SupplierDashboard() {
         subtitle={`${user?.organisationName} — Supplier Dashboard`}
       />
 
-      {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Total Invoices" value={totalListed} icon={FileText} accent="blue" />
         <StatCard label="Total Value" value={formatCurrency(totalValue)} icon={DollarSign} accent="green" />
-        <StatCard label="Active Trades" value={activeInvoices.length} icon={TrendingUp} accent="teal" />
-        <StatCard label="Pending Offers" value={pendingOffers.length} icon={Clock} accent="red" change={pendingOffers.length > 0 ? 'Action required' : undefined} />
+        <StatCard label="Pending opt-ins" value={pendingOptIns.length} icon={Clock} accent="teal" change={pendingOptIns.length > 0 ? 'Action required' : undefined} />
+        <StatCard label="Pending Offers" value={pendingOffers.length} icon={TrendingUp} accent="red" change={pendingOffers.length > 0 ? 'Action required' : undefined} />
       </div>
+
+      {pendingOptIns.length > 0 && (
+        <button
+          type="button"
+          onClick={() => navigate('/supplier/opt-in')}
+          className="w-full md:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-primary text-primary-foreground font-medium"
+        >
+          Review {pendingOptIns.length} opt-in request{pendingOptIns.length > 1 ? 's' : ''} <ArrowRight size={16} />
+        </button>
+      )}
 
       <ProfileCompletionCard />
 

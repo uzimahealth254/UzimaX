@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useData } from '@/contexts/DataContext';
+import { useData } from '@/hooks/usePlatformData';
 import { useAuth } from '@/contexts/AuthContext';
 import { Invoice, InvoiceStatus } from '@/types';
 

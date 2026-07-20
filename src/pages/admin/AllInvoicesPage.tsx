@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useData } from '@/contexts/DataContext';
+import { useData } from '@/hooks/usePlatformData';
 import PageHeader from '@/components/layout/PageHeader';
 import DataTable from '@/components/shared/DataTable';
 import StatusBadge from '@/components/shared/StatusBadge';
@@ -44,7 +44,7 @@ export default function AllInvoicesPage() {
               exportInvoicesToCsv(filtered);
               toast.success(`Exported ${filtered.length} invoices`);
             }}
-            className="flex items-center gap-2 px-4 py-2 border rounded-lg text-sm font-medium hover:bg-secondary transition-colors"
+            className="w-full sm:w-auto min-h-[44px] justify-center flex items-center gap-2 px-4 py-2.5 border rounded-lg text-sm font-medium hover:bg-secondary transition-colors"
           >
             <Download size={14} /> Export CSV
           </button>

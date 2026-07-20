@@ -1,0 +1,433 @@
+openapi: 3.0.3
+info:
+  title: Uzima Platform API
+  description: |
+    Unified JWT + API-key backend for Uzima trade receivables (UZIMA-ARCH-001).
+    Dual origination, AfyaX parties/webhooks, wallets, fees, documents, packages, programmes.
+  version: 2.0.0
+servers:
+  - url: http://localhost:8787
+    description: Local development
+security:
+  - bearerAuth: []
+  - apiKeyAuth: []
+tags:
+  - name: System
+  - name: Auth
+  - name: Parties
+  - name: Invoices
+  - name: OptIns
+  - name: Verifications
+  - name: Offers
+  - name: Consents
+  - name: Assignments
+  - name: Escrow
+  - name: Wallets
+  - name: Packages
+  - name: Programmes
+  - name: Fees
+  - name: Documents
+  - name: Admin
+  - name: Webhooks
+paths:
+  /api/v1/health:
+    get:
+      summary: Health check
+      security: []
+      tags: [System]
+      responses:
+        "200":
+          description: Service is up
+  /api/v1/auth/login:
+    post:
+      summary: Portal login (JWT + httpOnly refresh cookie)
+      security: []
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        "200":
+          description: accessToken + user (refreshToken in cookie; body only if ALLOW_BODY_REFRESH)
+        "401":
+          description: Invalid credentials
+        "429":
+          description: Rate limited / locked out
+  /api/v1/auth/refresh:
+    post:
+      summary: Rotate refresh token and issue new access token
+      security: []
+      tags: [Auth]
+      responses:
+        "200":
+          description: New accessToken
+  /api/v1/auth/logout:
+    post:
+      summary: Revoke refresh tokens
+      tags: [Auth]
+      responses:
+        "200":
+          description: Logged out
+  /api/v1/auth/me:
+    get:
+      summary: Current user
+      tags: [Auth]
+      responses:
+        "200":
+          description: User profile
+    patch:
+      summary: Update name/email
+      tags: [Auth]
+      responses:
+        "200":
+          description: Updated profile
+  /api/v1/auth/forgot-password:
+    post:
+      summary: Request password-reset OTP
+      security: []
+      tags: [Auth]
+      responses:
+        "200":
+          description: Always ok (no enumeration)
+  /api/v1/auth/reset-password:
+    post:
+      summary: Reset password with OTP (strong password required)
+      security: []
+      tags: [Auth]
+      responses:
+        "200":
+          description: Password updated
+  /api/v1/parties:
+    post:
+      summary: Upsert AfyaX party (issues uzimaPartyId)
+      tags: [Parties]
+      security: [apiKeyAuth: []]
+      responses:
+        "201":
+          description: Party created or existing
+  /api/v1/parties/{uzimaPartyId}:
+    get:
+      summary: Get party by Uzima ID
+      tags: [Parties]
+      security: [apiKeyAuth: []]
+      parameters:
+        - name: uzimaPartyId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Organisation
+  /api/v1/invoices:
+    get:
+      summary: List invoices (org-scoped)
+      tags: [Invoices]
+      responses:
+        "200":
+          description: Invoice list
+    post:
+      summary: Create invoice (buyer or supplier portal)
+      tags: [Invoices]
+      responses:
+        "201":
+          description: Created
+  /api/v1/external/invoices:
+    post:
+      summary: Create invoice via API key (buyer org bound)
+      tags: [Invoices]
+      security: [apiKeyAuth: []]
+      responses:
+        "201":
+          description: Created
+  /api/v1/invoices/{id}:
+    get:
+      summary: Invoice detail + status history (IDOR protected)
+      tags: [Invoices]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Invoice
+        "404":
+          description: Not found / cross-tenant
+  /api/v1/ious/{iouRegistryId}:
+    get:
+      summary: Lookup by IOU registry ID
+      tags: [Invoices]
+      parameters:
+        - name: iouRegistryId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Invoice
+  /api/v1/opt-ins:
+    get:
+      summary: List opt-ins
+      tags: [OptIns]
+      responses:
+        "200":
+          description: Opt-in rows
+  /api/v1/opt-ins/{id}/respond:
+    post:
+      summary: Supplier accept/decline opt-in
+      tags: [OptIns]
+      responses:
+        "200":
+          description: Updated + optional assignment
+  /api/v1/buyer-verifications:
+    get:
+      summary: List buyer verifications
+      tags: [Verifications]
+      responses:
+        "200":
+          description: Verification rows
+  /api/v1/buyer-verifications/{id}/respond:
+    post:
+      summary: Buyer verify/reject supplier-listed invoice
+      tags: [Verifications]
+      responses:
+        "200":
+          description: Updated + optional assignment
+  /api/v1/offers:
+    get:
+      summary: List purchase offers (role-scoped)
+      tags: [Offers]
+      responses:
+        "200":
+          description: Offers
+    post:
+      summary: SPV create offer (programme bands enforced)
+      tags: [Offers]
+      responses:
+        "201":
+          description: Offer created
+  /api/v1/offers/{id}/respond:
+    post:
+      summary: Supplier accept/decline offer
+      tags: [Offers]
+      responses:
+        "200":
+          description: Offer + optional consent
+  /api/v1/consents:
+    get:
+      summary: List assignment consents
+      tags: [Consents]
+      responses:
+        "200":
+          description: Consents
+  /api/v1/consents/{id}/request-otp:
+    post:
+      summary: Send OTP for consent signing
+      tags: [Consents]
+      responses:
+        "200":
+          description: OTP sent
+  /api/v1/consents/{id}/confirm-sign:
+    post:
+      summary: Confirm consent with OTP
+      tags: [Consents]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [otp]
+              properties:
+                otp: { type: string }
+      responses:
+        "200":
+          description: Signed + assignment
+  /api/v1/assignments:
+    get:
+      summary: List assignments
+      tags: [Assignments]
+      responses:
+        "200":
+          description: Assignments
+  /api/v1/escrow:
+    get:
+      summary: List escrow legs (SPV/admin)
+      tags: [Escrow]
+      responses:
+        "200":
+          description: Escrow legs
+  /api/v1/escrow/{id}/release:
+    post:
+      summary: Release escrow leg
+      tags: [Escrow]
+      responses:
+        "200":
+          description: Updated leg
+  /api/v1/wallets/me:
+    get:
+      summary: Own org wallet + transactions
+      tags: [Wallets]
+      responses:
+        "200":
+          description: Wallet
+  /api/v1/wallets/me/deposit:
+    post:
+      summary: Simulated deposit (disabled in production)
+      tags: [Wallets]
+      responses:
+        "200":
+          description: Updated wallet
+        "403":
+          description: Simulation disabled
+  /api/v1/wallets/me/withdraw:
+    post:
+      summary: Simulated withdraw (disabled in production)
+      tags: [Wallets]
+      responses:
+        "200":
+          description: Updated wallet
+  /api/v1/packages:
+    get:
+      summary: List packages (SPV/admin)
+      tags: [Packages]
+      responses:
+        "200":
+          description: Packages
+    post:
+      summary: Create securitisation package
+      tags: [Packages]
+      responses:
+        "201":
+          description: Package created
+  /api/v1/packages/{id}/status:
+    patch:
+      summary: Advance package status (NSE ref on listed)
+      tags: [Packages]
+      responses:
+        "200":
+          description: Updated package
+  /api/v1/programmes:
+    get:
+      summary: Programme utilisation
+      tags: [Programmes]
+      responses:
+        "200":
+          description: Programmes
+    post:
+      summary: Create programme (admin)
+      tags: [Programmes]
+      responses:
+        "201":
+          description: Created
+  /api/v1/programmes/{id}:
+    patch:
+      summary: Update programme
+      tags: [Programmes]
+      responses:
+        "200":
+          description: Updated
+  /api/v1/fees:
+    get:
+      summary: Fee configs + ledger (admin)
+      tags: [Fees]
+      responses:
+        "200":
+          description: Fees
+    post:
+      summary: Create fee config
+      tags: [Fees]
+      responses:
+        "201":
+          description: Created
+  /api/v1/fees/{id}:
+    patch:
+      summary: Update fee config
+      tags: [Fees]
+      responses:
+        "200":
+          description: Updated
+    delete:
+      summary: Soft-deactivate fee config
+      tags: [Fees]
+      responses:
+        "200":
+          description: Deactivated
+  /api/v1/documents:
+    get:
+      summary: List org documents
+      tags: [Documents]
+      responses:
+        "200":
+          description: Documents
+  /api/v1/documents/upload:
+    post:
+      summary: Upload PDF/PNG/JPEG
+      tags: [Documents]
+      responses:
+        "201":
+          description: Stored
+  /api/v1/documents/download:
+    get:
+      summary: Download by key (org-scoped)
+      tags: [Documents]
+      parameters:
+        - name: key
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: File bytes
+  /api/v1/admin/analytics:
+    get:
+      summary: Admin portfolio analytics
+      tags: [Admin]
+      responses:
+        "200":
+          description: Aggregates
+  /api/v1/admin/reconciliation:
+    get:
+      summary: Period reconciliation summary
+      tags: [Admin]
+      parameters:
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Disbursed/collected/variance
+  /api/v1/admin/audit:
+    get:
+      summary: Audit log
+      tags: [Admin]
+      responses:
+        "200":
+          description: Audit rows
+  /api/v1/webhooks/payment-update:
+    post:
+      summary: AfyaX payment webhook (HMAC + idempotency)
+      tags: [Webhooks]
+      security: [apiKeyAuth: []]
+      responses:
+        "200":
+          description: Applied
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key

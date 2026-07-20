@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useData } from '@/contexts/DataContext';
+import { useData } from '@/hooks/usePlatformData';
 import { useActor } from '@/hooks/useActor';
 import PageHeader from '@/components/layout/PageHeader';
 import DataTable from '@/components/shared/DataTable';
@@ -21,31 +21,27 @@ export default function PackagingPage() {
     setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
 
-  const handleCreatePackage = () => {
-    if (selectedIds.length < 2) {
-      toast.error('Select at least 2 invoices to create a package');
+  const handleCreatePackage = async () => {
+    if (selectedIds.length < 1) {
+      toast.error('Select at least 1 invoice to create a package');
       return;
     }
     if (!packageName.trim()) {
       toast.error('Enter a package name');
       return;
     }
-    const selectedInvs = invoices.filter(inv => selectedIds.includes(inv.id));
-    const totalFace = selectedInvs.reduce((sum, inv) => sum + inv.amount, 0);
-
-    createPackage({
-      name: packageName,
-      spvId: 'org-spv-1',
-      invoiceIds: selectedIds,
-      totalFaceValue: totalFace,
-      weightedAvgDiscount: 4.8,
-      weightedAvgTenor: 82,
-    }, actor);
-
-    toast.success('Package created successfully');
-    setSelectedIds([]);
-    setPackageName('');
-    setTab('packages');
+    try {
+      await createPackage({
+        name: packageName,
+        invoiceIds: selectedIds,
+      }, actor);
+      toast.success('Package created');
+      setSelectedIds([]);
+      setPackageName('');
+      setTab('packages');
+    } catch (e: any) {
+      toast.error(e.message || 'Package creation failed');
+    }
   };
 
   const assignedColumns = [
@@ -64,9 +60,9 @@ export default function PackagingPage() {
 
   const packageColumns = [
     { key: 'name', header: 'Package Name', render: (p: SecuritisationPackage) => <span className="font-medium">{p.name}</span> },
-    { key: 'count', header: 'IOUs', render: (p: SecuritisationPackage) => p.invoiceIds.length },
-    { key: 'face', header: 'Total Face Value', render: (p: SecuritisationPackage) => <span className="font-mono">{formatCurrency(p.totalFaceValue)}</span> },
-    { key: 'discount', header: 'Avg Discount', render: (p: SecuritisationPackage) => <span className="font-mono">{p.weightedAvgDiscount.toFixed(1)}%</span> },
+    { key: 'count', header: 'Face', render: (p: SecuritisationPackage) => <span className="font-mono text-xs">{formatCurrency(p.totalFaceValue)}</span> },
+    { key: 'face', header: 'Purchase', render: (p: any) => <span className="font-mono">{formatCurrency(Number(p.totalPurchasePrice || 0))}</span> },
+    { key: 'discount', header: 'NSE ref', render: (p: any) => <span className="font-mono text-xs">{p.nseReference || '—'}</span> },
     { key: 'status', header: 'Status', render: (p: SecuritisationPackage) => <StatusBadge status={p.status} /> },
     { key: 'action', header: '', render: (p: SecuritisationPackage) => (
       p.status === 'draft' ? (
@@ -91,16 +87,16 @@ export default function PackagingPage() {
     <div className="space-y-6 animate-fade-in">
       <PageHeader title="Packaging & NSE USP" subtitle="Structure and list securitisation packages" />
 
-      <div className="flex gap-1 border-b">
+      <div className="scroll-x-pad border-b pb-px">
         <button
           onClick={() => setTab('packages')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === 'packages' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+          className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap shrink-0 min-h-[44px] ${tab === 'packages' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
         >
           My Packages ({packages.length})
         </button>
         <button
           onClick={() => setTab('create')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === 'create' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+          className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap shrink-0 min-h-[44px] ${tab === 'create' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
         >
           Create Package ({assignedInvoices.length} available)
         </button>
@@ -117,17 +113,17 @@ export default function PackagingPage() {
             <input
               value={packageName}
               onChange={e => setPackageName(e.target.value)}
-              placeholder="AFIX USP Series X"
+              placeholder="Uzima USP Series X"
               className="w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
           </div>
           <DataTable columns={assignedColumns} data={assignedInvoices} emptyMessage="No assigned invoices available for packaging" />
           {selectedIds.length > 0 && (
-            <div className="flex items-center gap-4 p-4 bg-secondary/50 rounded-lg">
-              <p className="text-sm"><span className="font-medium">{selectedIds.length}</span> invoices selected · Total: <span className="font-mono font-medium">{formatCurrency(invoices.filter(i => selectedIds.includes(i.id)).reduce((s, i) => s + i.amount, 0))}</span></p>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 bg-secondary/50 rounded-lg">
+              <p className="text-sm flex-1 min-w-0"><span className="font-medium">{selectedIds.length}</span> invoices selected · Total: <span className="font-mono font-medium">{formatCurrency(invoices.filter(i => selectedIds.includes(i.id)).reduce((s, i) => s + i.amount, 0))}</span></p>
               <button
                 onClick={handleCreatePackage}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
+                className="w-full sm:w-auto px-4 py-2.5 min-h-[44px] bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
               >
                 Create Package
               </button>

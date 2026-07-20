@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useData } from '@/contexts/DataContext';
+import { useData } from '@/hooks/usePlatformData';
 import { useActor } from '@/hooks/useActor';
 import IOURegistryId from '@/components/shared/IOURegistryId';
 import PageHeader from '@/components/layout/PageHeader';
@@ -19,7 +19,7 @@ export default function OffersPage() {
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<'available' | 'pending' | 'accepted' | 'receivables' | 'closed'>('available');
 
-  const available = invoices.filter(inv => inv.status === 'verified');
+  const available = invoices.filter(inv => inv.status === 'verified' || inv.status === 'assigned');
   const pendingOffers = offers.filter(o => o.status === 'pending');
   const acceptedOffers = offers.filter(o => o.status === 'accepted');
   const receivableInvoices = invoices.filter(inv => ['disbursed', 'matured'].includes(inv.status));
@@ -28,30 +28,21 @@ export default function OffersPage() {
   const handleMakeOffer = async () => {
     if (!selectedInvoice) return;
     setLoading(true);
-    await new Promise(r => setTimeout(r, 600));
-
-    const rate = parseFloat(discountRate);
-    const offerPrice = Math.round(selectedInvoice.amount * (1 - rate / 100));
-    const tenor = Math.round((new Date(selectedInvoice.dueDate).getTime() - new Date(selectedInvoice.issueDate).getTime()) / 86400000);
-
-    makeOffer({
-      invoiceId: selectedInvoice.id,
-      iouRegistryId: selectedInvoice.iouRegistryId,
-      spvId: 'org-spv-1',
-      spvName: 'AFIX Capital SPV',
-      supplierId: selectedInvoice.supplierId,
-      supplierName: selectedInvoice.supplierName,
-      faceValue: selectedInvoice.amount,
-      offerPrice,
-      discountRate: rate,
-      tenor,
-      expiresAt: new Date(Date.now() + 7 * 86400000).toISOString(),
-    }, actor);
-
-    setLoading(false);
-    setSelectedInvoice(null);
-    setAgreed(false);
-    toast.success('Offer submitted successfully');
+    try {
+      const rate = parseFloat(discountRate);
+      await makeOffer({
+        invoiceId: selectedInvoice.id,
+        discountRate: rate,
+        discountRateBps: Math.round(rate * 100),
+      }, actor);
+      toast.success('Offer submitted');
+      setSelectedInvoice(null);
+      setAgreed(false);
+    } catch (e: any) {
+      toast.error(e.response?.data?.message || e.message || 'Offer failed');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const availableColumns = [
@@ -81,7 +72,7 @@ export default function OffersPage() {
     <div className="space-y-6 animate-fade-in">
       <PageHeader title="Offers & Receivables" subtitle="Purchase offers and active receivable positions" />
 
-      <div className="flex gap-1 border-b overflow-x-auto">
+      <div className="scroll-x-pad border-b pb-px">
         {([
           { id: 'available' as const, label: 'Available', count: available.length },
           { id: 'pending' as const, label: 'Pending', count: pendingOffers.length },
@@ -92,7 +83,7 @@ export default function OffersPage() {
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${tab === t.id ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap shrink-0 min-h-[44px] ${tab === t.id ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
           >
             {t.label} ({t.count})
           </button>
@@ -130,16 +121,19 @@ export default function OffersPage() {
 
       {/* Offer modal */}
       {selectedInvoice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/40" onClick={() => { setSelectedInvoice(null); setAgreed(false); }} />
-          <div className="relative bg-card rounded-xl shadow-lg border p-6 w-full max-w-md animate-fade-in max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => { setSelectedInvoice(null); setAgreed(false); }} />
+          <div className="relative bg-card rounded-t-3xl sm:rounded-xl shadow-lg border p-5 sm:p-6 w-full max-w-md animate-fade-in max-h-[85dvh] overflow-y-auto scroll-touch safe-pad-bottom">
+            <div className="sm:hidden w-10 h-1 rounded-full bg-muted mx-auto mb-4" />
             <h2 className="text-lg font-semibold mb-1">Make purchase offer</h2>
-            <p className="text-xs text-muted-foreground font-mono mb-4">{selectedInvoice.iouRegistryId}</p>
+            <p className="text-xs text-muted-foreground font-mono mb-4 break-anywhere">{selectedInvoice.iouRegistryId}</p>
 
             <OfferCalculator
               faceValue={selectedInvoice.amount}
               supplierName={selectedInvoice.supplierName}
               buyerName={selectedInvoice.buyerName}
+              issueDate={selectedInvoice.issueDate}
+              dueDate={selectedInvoice.dueDate}
               discountRate={discountRate}
               onDiscountChange={setDiscountRate}
             />

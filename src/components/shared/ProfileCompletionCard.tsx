@@ -14,7 +14,7 @@ export default function ProfileCompletionCard({ className }: { className?: strin
     { ok: !!user.name, label: 'Full name', required: true },
     { ok: !!user.email, label: 'Email', required: true },
     { ok: !!user.organisationName, label: 'Organisation', required: true },
-    { ok: user.organisationId.length > 0, label: 'Organisation link', required: true },
+    { ok: !!(user.organisationId && user.organisationId.length > 0), label: 'Organisation link', required: true },
   ];
 
   const filled = checks.filter(c => c.ok).length;

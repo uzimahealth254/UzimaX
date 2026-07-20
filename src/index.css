@@ -40,12 +40,14 @@
   html {
     -webkit-text-size-adjust: 100%;
     scroll-behavior: smooth;
+    overflow-x: hidden;
   }
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
     min-height: 100dvh;
     overscroll-behavior-y: none;
+    overflow-x: hidden;
   }
 
   h1, h2, h3 {
@@ -165,14 +167,38 @@
   }
 
   .main-pad {
-    @apply p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full;
-    padding-bottom: calc(var(--tab-bar-h) + var(--safe-bottom) + 1.25rem);
+    @apply p-3 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full;
+    padding-bottom: calc(var(--tab-bar-h) + var(--safe-bottom) + 1.5rem);
   }
 
   @media (min-width: 1024px) {
     .main-pad {
       padding-bottom: 2rem;
     }
+  }
+
+  .scroll-touch {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  /* Horizontal scroll chips / tabs without page bleed */
+  .scroll-x-pad {
+    @apply flex gap-1 overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .scroll-x-pad::-webkit-scrollbar {
+    display: none;
+  }
+
+  .form-surface {
+    @apply border rounded-2xl p-4 sm:p-6 space-y-4 sm:space-y-5 w-full max-w-2xl;
+  }
+
+  .break-anywhere {
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 }
 

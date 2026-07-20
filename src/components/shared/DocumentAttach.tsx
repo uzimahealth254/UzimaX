@@ -1,89 +1,87 @@
-import { useState, useRef } from 'react';
-import { Upload, FileText, X } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { getAccessToken } from '@/lib/apiClient';
 import { toast } from 'sonner';
+import { Paperclip, X } from 'lucide-react';
 
-interface DocFile {
-  id: string;
+interface DocMeta {
   name: string;
-  category: string;
-  sizeLabel: string;
+  size: number;
+  url?: string;
+  category?: string;
 }
 
-const CATEGORIES = ['Invoice', 'Contract', 'Delivery note', 'Supporting doc'];
+interface Props {
+  onChange?: (docs: DocMeta[]) => void;
+}
 
-/** Document attach UI — adapted from Malipo Polepole document upload (mock storage) */
-export default function DocumentAttach({ onChange }: { onChange?: (files: DocFile[]) => void }) {
-  const [files, setFiles] = useState<DocFile[]>([]);
-  const [category, setCategory] = useState(CATEGORIES[0]);
+/** Uploads to Uzima /documents/upload and returns metadata */
+export default function DocumentAttach({ onChange }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [docs, setDocs] = useState<DocMeta[]>([]);
+  const [busy, setBusy] = useState(false);
 
-  const addFiles = (list: FileList | null) => {
-    if (!list?.length) return;
-    const next = [...files];
-    Array.from(list).forEach(file => {
-      next.push({
-        id: `doc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        name: file.name,
-        category,
-        sizeLabel: file.size > 1024 * 1024
-          ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
-          : `${Math.round(file.size / 1024)} KB`,
+  const upload = async (file: File) => {
+    setBusy(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      form.append('docType', 'supporting');
+      const base = (import.meta.env.VITE_API_URL || 'http://localhost:8787') + '/api/v1';
+      const res = await fetch(`${base}/documents/upload`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${getAccessToken()}` },
+        body: form,
       });
-    });
-    setFiles(next);
-    onChange?.(next);
-    toast.success(`${list.length} file(s) attached`);
-  };
-
-  const remove = (id: string) => {
-    const next = files.filter(f => f.id !== id);
-    setFiles(next);
-    onChange?.(next);
+      if (!res.ok) throw new Error('Upload failed');
+      const data = await res.json();
+      const next = [...docs, { name: file.name, size: file.size, url: data.fileUrl }];
+      setDocs(next);
+      onChange?.(next);
+      toast.success('Document uploaded');
+    } catch (e: any) {
+      toast.error(e.message || 'Upload failed');
+    } finally {
+      setBusy(false);
+      if (inputRef.current) inputRef.current.value = '';
+    }
   };
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-col sm:flex-row gap-2">
-        <select
-          value={category}
-          onChange={e => setCategory(e.target.value)}
-          className="px-3 py-2 border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary/20"
-        >
-          {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          className="flex items-center justify-center gap-2 px-4 py-2 border border-dashed border-primary/40 rounded-lg text-sm text-primary hover:bg-brand-blue-light transition-colors"
-        >
-          <Upload size={16} />
-          Attach documents
-        </button>
-        <input
-          ref={inputRef}
-          type="file"
-          multiple
-          className="hidden"
-          onChange={e => addFiles(e.target.files)}
-        />
-      </div>
-
-      {files.length > 0 && (
-        <ul className="space-y-2">
-          {files.map(f => (
-            <li key={f.id} className="flex items-center gap-3 px-3 py-2 bg-secondary/50 rounded-lg text-sm">
-              <FileText size={16} className="text-primary shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="truncate font-medium">{f.name}</p>
-                <p className="text-xs text-muted-foreground">{f.category} · {f.sizeLabel}</p>
-              </div>
-              <button type="button" onClick={() => remove(f.id)} className="p-1 hover:bg-secondary rounded">
-                <X size={14} />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+    <div className="space-y-2">
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => inputRef.current?.click()}
+        className="inline-flex items-center gap-2 text-sm text-primary"
+      >
+        <Paperclip size={14} /> {busy ? 'Uploading…' : 'Attach supporting document'}
+      </button>
+      <input
+        ref={inputRef}
+        type="file"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) void upload(f);
+        }}
+      />
+      <ul className="space-y-1">
+        {docs.map((d, i) => (
+          <li key={`${d.name}-${i}`} className="text-xs flex items-center gap-2 text-muted-foreground">
+            {d.name}
+            <button
+              type="button"
+              onClick={() => {
+                const next = docs.filter((_, j) => j !== i);
+                setDocs(next);
+                onChange?.(next);
+              }}
+            >
+              <X size={12} />
+            </button>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

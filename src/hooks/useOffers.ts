@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useData } from '@/contexts/DataContext';
+import { useData } from '@/hooks/usePlatformData';
 import { OfferStatus } from '@/types';
 
 export function useOffers(filters?: { status?: OfferStatus | OfferStatus[]; supplierId?: string }) {

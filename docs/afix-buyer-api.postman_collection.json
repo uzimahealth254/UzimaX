@@ -1,0 +1,78 @@
+﻿{
+  "info": {
+    "name": "AFIX Buyer API (Demo)",
+    "description": "Phase 1–2 buyer invoice API for Kenya Breweries demo key.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8787" },
+    { "key": "apiKey", "value": "afix_demo_kbc_7f3a9c2e1b" },
+    { "key": "invoiceId", "value": "inv-api-0001" },
+    { "key": "iouRegistryId", "value": "IOU-KE-2026-00001-3" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/health"
+      }
+    },
+    {
+      "name": "Create invoice",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{apiKey}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"invoiceNumber\": \"INV-KBC-POSTMAN-001\",\n  \"supplierOrgId\": \"org-supplier-1\",\n  \"amount\": 2500000,\n  \"currency\": \"KES\",\n  \"issueDate\": \"2026-02-01T00:00:00.000Z\",\n  \"dueDate\": \"2026-04-01T00:00:00.000Z\",\n  \"description\": \"Approved payable - Postman upload\"\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/invoices"
+      }
+    },
+    {
+      "name": "List invoices",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{apiKey}}" }],
+        "url": "{{baseUrl}}/api/v1/invoices"
+      }
+    },
+    {
+      "name": "Get invoice",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{apiKey}}" }],
+        "url": "{{baseUrl}}/api/v1/invoices/{{invoiceId}}"
+      }
+    },
+    {
+      "name": "Get IOU",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{apiKey}}" }],
+        "url": "{{baseUrl}}/api/v1/ious/{{iouRegistryId}}"
+      }
+    },
+    {
+      "name": "Status",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{apiKey}}" }],
+        "url": "{{baseUrl}}/api/v1/invoices/{{invoiceId}}/status"
+      }
+    },
+    {
+      "name": "Sync",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/sync"
+      }
+    }
+  ]
+}

@@ -1,43 +1,69 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
-import { Notification } from '@/types';
-import { seedNotifications } from '@/data/seed';
-import { generateId } from '@/lib/utils';
+import { createContext, useContext, useCallback, type ReactNode } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { api } from '@/lib/apiClient';
+import { useAuth } from './AuthContext';
+
+export interface AppNotification {
+  id: string;
+  userId: string;
+  title: string;
+  message: string;
+  type: 'info' | 'success' | 'warning' | 'error';
+  read: boolean;
+  createdAt: string;
+  link?: string;
+}
 
 interface NotificationContextType {
-  notifications: Notification[];
-  unreadCount: number;
-  addNotification: (notif: Omit<Notification, 'id' | 'read' | 'createdAt'>) => void;
+  notifications: AppNotification[];
+  addNotification: (n: Omit<AppNotification, 'id' | 'read' | 'createdAt'>) => void;
   markAsRead: (id: string) => void;
-  markAllAsRead: (userId: string) => void;
+  markAllAsRead: (userId?: string) => void;
+  unreadCount: number;
 }
 
 const NotificationContext = createContext<NotificationContextType | null>(null);
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
-  const [notifications, setNotifications] = useState<Notification[]>(seedNotifications);
+  const { isAuthenticated } = useAuth();
+  const qc = useQueryClient();
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const { data = [] } = useQuery({
+    queryKey: ['notifications'],
+    queryFn: async () => (await api.get('/notifications')).data.data,
+    enabled: isAuthenticated,
+    refetchInterval: 15000,
+  });
 
-  const addNotification = useCallback((data: Omit<Notification, 'id' | 'read' | 'createdAt'>) => {
-    const notif: Notification = {
-      ...data,
-      id: generateId('notif'),
-      read: false,
-      createdAt: new Date().toISOString(),
-    };
-    setNotifications(prev => [notif, ...prev]);
-  }, []);
+  const notifications: AppNotification[] = (data || []).map((n: any) => ({
+    id: n.id,
+    userId: n.userId,
+    title: n.title,
+    message: n.body || '',
+    type: 'info',
+    read: !!n.isRead,
+    createdAt: n.createdAt,
+  }));
 
-  const markAsRead = useCallback((id: string) => {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-  }, []);
+  const addNotification = useCallback((_n: Omit<AppNotification, 'id' | 'read' | 'createdAt'>) => {
+    // Server-created; just refresh
+    void qc.invalidateQueries({ queryKey: ['notifications'] });
+  }, [qc]);
 
-  const markAllAsRead = useCallback((userId: string) => {
-    setNotifications(prev => prev.map(n => n.userId === userId ? { ...n, read: true } : n));
-  }, []);
+  const markAsRead = useCallback(async (id: string) => {
+    await api.post(`/notifications/${id}/read`);
+    void qc.invalidateQueries({ queryKey: ['notifications'] });
+  }, [qc]);
+
+  const markAllAsRead = useCallback(async (_userId?: string) => {
+    await Promise.all(notifications.filter((n) => !n.read).map((n) => api.post(`/notifications/${n.id}/read`)));
+    void qc.invalidateQueries({ queryKey: ['notifications'] });
+  }, [notifications, qc]);
+
+  const unreadCount = notifications.filter((n) => !n.read).length;
 
   return (
-    <NotificationContext.Provider value={{ notifications, unreadCount, addNotification, markAsRead, markAllAsRead }}>
+    <NotificationContext.Provider value={{ notifications, addNotification, markAsRead, markAllAsRead, unreadCount }}>
       {children}
     </NotificationContext.Provider>
   );

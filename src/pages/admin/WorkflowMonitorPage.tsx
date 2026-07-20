@@ -1,14 +1,15 @@
-import { useData } from '@/contexts/DataContext';
+import { useData } from '@/hooks/usePlatformData';
 import PageHeader from '@/components/layout/PageHeader';
 import StatusBadge from '@/components/shared/StatusBadge';
-import { formatCurrency, formatDate } from '@/lib/utils';
-import { ActivityLog } from '@/types';
+import { formatDate } from '@/lib/utils';
+import { exportToCsv } from '@/lib/exportUtils';
+import { toast } from 'sonner';
 
 export default function WorkflowMonitorPage() {
   const { activityLogs, invoices } = useData();
 
   const recentTransitions = invoices
-    .filter(inv => inv.listedAt || inv.verifiedAt)
+    .filter(inv => inv.listedAt || inv.verifiedAt || inv.postedAt || inv.assignedAt)
     .slice(0, 20)
     .map(inv => ({
       id: inv.id,
@@ -17,15 +18,31 @@ export default function WorkflowMonitorPage() {
       buyerName: inv.buyerName,
       amount: inv.amount,
       status: inv.status,
-      lastUpdate: inv.verifiedAt || inv.listedAt || inv.createdAt,
+      lastUpdate: inv.assignedAt || inv.verifiedAt || inv.postedAt || inv.listedAt || inv.createdAt,
     }));
+
+  const exportAudit = () => {
+    exportToCsv(
+      'uzima-audit-log.csv',
+      ['timestamp', 'user', 'action', 'entityType', 'entityId', 'details'],
+      activityLogs.map(l => [l.timestamp, l.userName, l.action, l.entityType, l.entityId, l.details || '']),
+    );
+    toast.success('Audit log exported');
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Workflow Monitor" subtitle="Track invoice lifecycle transitions and platform activity" />
+      <PageHeader
+        title="Workflow Monitor"
+        subtitle="Track invoice lifecycle transitions and platform activity"
+        actions={
+          <button type="button" onClick={exportAudit} className="px-4 py-2 text-sm rounded-xl border font-medium">
+            Export audit CSV
+          </button>
+        }
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Lifecycle timeline */}
         <div className="border rounded-lg">
           <div className="p-4 border-b">
             <h3 className="font-semibold text-sm">Recent Transitions</h3>
@@ -46,7 +63,6 @@ export default function WorkflowMonitorPage() {
           </div>
         </div>
 
-        {/* Activity log */}
         <div className="border rounded-lg">
           <div className="p-4 border-b">
             <h3 className="font-semibold text-sm">Activity Log</h3>

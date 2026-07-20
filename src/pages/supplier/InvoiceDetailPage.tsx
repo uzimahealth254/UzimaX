@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { useData } from '@/contexts/DataContext';
+import { useData } from '@/hooks/usePlatformData';
 import { useActor } from '@/hooks/useActor';
 import PageHeader from '@/components/layout/PageHeader';
 import StatusBadge from '@/components/shared/StatusBadge';
@@ -89,26 +89,26 @@ export default function InvoiceDetailPage() {
           </div>
           <div className="divide-y">
             {invoiceOffers.map(offer => (
-              <div key={offer.id} className="p-4 flex items-center justify-between">
-                <div>
+              <div key={offer.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="min-w-0">
                   <p className="text-sm font-medium">{offer.spvName}</p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-muted-foreground break-words">
                     {offer.discountRate}% discount · {offer.tenor} day tenor · Offer: {formatCurrency(offer.offerPrice)}
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
                   <StatusBadge status={offer.status} />
                   {offer.status === 'pending' && (
-                    <div className="flex gap-1.5 ml-2">
+                    <div className="flex gap-2 w-full sm:w-auto sm:ml-2">
                       <button
                         onClick={() => setConfirmModal({ offerId: offer.id, accept: true })}
-                        className="px-3 py-1.5 text-xs font-medium bg-accent text-white rounded-md hover:bg-accent/90 transition-colors"
+                        className="flex-1 sm:flex-none min-h-[40px] px-3 py-2 text-xs font-medium bg-accent text-white rounded-md hover:bg-accent/90 transition-colors"
                       >
                         Accept
                       </button>
                       <button
                         onClick={() => setConfirmModal({ offerId: offer.id, accept: false })}
-                        className="px-3 py-1.5 text-xs font-medium border rounded-md hover:bg-secondary transition-colors"
+                        className="flex-1 sm:flex-none min-h-[40px] px-3 py-2 text-xs font-medium border rounded-md hover:bg-secondary transition-colors"
                       >
                         Reject
                       </button>

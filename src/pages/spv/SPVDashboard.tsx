@@ -1,4 +1,4 @@
-import { useData } from '@/contexts/DataContext';
+import { useData } from '@/hooks/usePlatformData';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { useAuth } from '@/contexts/AuthContext';
 import PageHeader from '@/components/layout/PageHeader';
@@ -24,7 +24,7 @@ export default function SPVDashboard() {
     <div className="space-y-6 animate-fade-in">
       <PageHeader
         title={`Welcome back, ${user?.name.split(' ')[0]}`}
-        subtitle="AFIX Capital SPV — Operations Dashboard"
+        subtitle="Uzima Capital SPV — Operations Dashboard"
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

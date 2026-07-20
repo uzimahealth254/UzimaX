@@ -1,19 +1,6 @@
 import { Invoice } from '@/types';
 
-export function exportInvoicesToCsv(invoices: Invoice[], filename = 'afix-invoices.csv') {
-  const headers = ['IOU Registry ID', 'Invoice Number', 'Supplier', 'Buyer', 'Amount', 'Currency', 'Issue Date', 'Due Date', 'Status'];
-  const rows = invoices.map(inv => [
-    inv.iouRegistryId,
-    inv.invoiceNumber,
-    inv.supplierName,
-    inv.buyerName,
-    inv.amount,
-    inv.currency,
-    inv.issueDate,
-    inv.dueDate,
-    inv.status,
-  ]);
-
+export function exportToCsv(filename: string, headers: string[], rows: (string | number)[][]) {
   const csv = [headers, ...rows]
     .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
     .join('\n');
@@ -25,4 +12,22 @@ export function exportInvoicesToCsv(invoices: Invoice[], filename = 'afix-invoic
   link.download = filename;
   link.click();
   URL.revokeObjectURL(url);
+}
+
+export function exportInvoicesToCsv(invoices: Invoice[], filename = 'uzima-invoices.csv') {
+  exportToCsv(
+    filename,
+    ['IOU Registry ID', 'Invoice Number', 'Supplier', 'Buyer', 'Amount', 'Currency', 'Issue Date', 'Due Date', 'Status'],
+    invoices.map(inv => [
+      inv.iouRegistryId,
+      inv.invoiceNumber,
+      inv.supplierName,
+      inv.buyerName,
+      inv.amount,
+      inv.currency,
+      inv.issueDate,
+      inv.dueDate,
+      inv.status,
+    ]),
+  );
 }

@@ -1,61 +1,64 @@
-# Kenya Farmers Training — Trade Receivables Platform (AFIX)
+# Uzima Platform (production architecture)
 
-**Single integrated repository** for the private-sector trade receivables platform.
+Trade receivables / securitisation platform for **UzimaX**.  
+Engineering reference: `docs/UZIMA_ARCH_001.md`
 
-Connects **Suppliers**, **Buyers**, **SPV**, and **Admin** — invoice listing, verification, purchase offers, buyer consent, packaging, and settlement.
-
-Built as a polished AFIX-style product, incorporating selected workflow patterns from a prior government receivables system (adapted for private sector). Theme: **blue / green / white**.
-
----
-
-## Repository
-
-**https://github.com/Einzelgaanger/Kenya-Farmers-Training**
-
-This is the only active project repo for this build. Do not push client work to other remotes.
-
----
-
-## Run locally
+## Quick start
 
 ```bash
+# 1. Postgres
+docker compose up -d
+
+# 2. Env
+cp .env.example .env
+
+# 3. Schema + seed
 npm install
+npm run db:setup
+
+# 4. API + portal (two terminals)
+npm run dev:api
 npm run dev
 ```
 
-Open **http://localhost:5173**
+- Portal: http://localhost:5173  
+- API: http://localhost:8787  
 
 ## Demo accounts
 
-Password for all: **`AFIX2026!`**
+Password: **`Uzima2026!`**
 
-| Role     | Email               |
-|----------|---------------------|
-| Supplier | supplier@afix.co.ke |
-| Buyer    | buyer@afix.co.ke    |
-| SPV      | spv@afix.co.ke      |
-| Admin    | admin@afix.co.ke    |
+| Role | Email |
+|------|--------|
+| Buyer | buyer@uzima.co.ke |
+| Supplier | supplier@uzima.co.ke |
+| SPV | spv@uzima.co.ke |
+| Admin | admin@uzima.co.ke |
 
-## Features
+### API keys (seed)
 
-- **Supplier** — list invoices, attach documents, review offers, track lifecycle
-- **Buyer** — verify register, sign assignment consent, payment schedule
-- **SPV** — IOU registry, offer calculator, packaging, assignments, backend engine
-- **Admin** — pipeline, users & orgs, workflow monitor, analytics
+- Buyer: `uzima_buyer_kbc_demo_7f3a9c2e`
+- AfyaX: `uzima_afyax_demo_key_9c2e1b7f`
 
-## Stack
+## Architecture
 
-React 18 · TypeScript · Vite · Tailwind CSS · Recharts · mock data (no backend required)
+- **Postgres** single source of truth (Drizzle ORM)
+- **JWT** auth + **API keys** for AfyaX
+- **Dual origination:** buyer post → opt-in · supplier post → buyer verify
+- **Wallets:** simulated ledger (no live bank rails)
+- Portal uses **react-query** against the API (no in-memory seed business state)
 
 ## Scripts
 
-| Command         | Description              |
-|-----------------|--------------------------|
-| `npm run dev`   | Development server       |
-| `npm run build` | Production build         |
-| `npm start`     | Serve production `dist/` |
-| `npm run preview` | Preview production build |
+| Script | Purpose |
+|--------|---------|
+| `npm run db:migrate` | Push schema |
+| `npm run db:seed` | Seed demo data |
+| `npm run dev:api` | API on :8787 |
+| `npm run dev` | Vite portal |
+| `npm run build` | Production portal build |
+| `npm run smoke` | Critical-path API smoke (`scripts/smoke-uzima.ts`) |
 
----
+## Deploy
 
-© 2026 · Client delivery build
+See `render.yaml` (`uzima-api` + `uzima-portal` + `uzima-db`).

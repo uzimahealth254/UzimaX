@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useData } from '@/contexts/DataContext';
+import { useData } from '@/hooks/usePlatformData';
 import PageHeader from '@/components/layout/PageHeader';
 import DataTable from '@/components/shared/DataTable';
 import StatusBadge from '@/components/shared/StatusBadge';
@@ -40,7 +40,7 @@ export default function IOURegistryPage() {
         actions={
           <button
             onClick={() => navigate('/spv/offers')}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
+            className="w-full sm:w-auto min-h-[44px] px-4 py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
           >
             Make Offer
           </button>
@@ -66,6 +66,8 @@ export default function IOURegistryPage() {
             className="pl-9 pr-8 py-2 border rounded-lg text-sm appearance-none bg-card focus:outline-none focus:ring-2 focus:ring-primary/20"
           >
             <option value="all">All Statuses</option>
+            <option value="awaiting_opt_in">Awaiting Opt-in</option>
+            <option value="listed">Listed</option>
             <option value="verified">Verified</option>
             <option value="offer_received">Offer Made</option>
             <option value="offer_accepted">Accepted</option>
@@ -77,7 +79,12 @@ export default function IOURegistryPage() {
         </div>
       </div>
 
-      <DataTable columns={columns} data={filtered} emptyMessage="No IOUs match your search criteria" />
+      <DataTable
+        columns={columns}
+        data={filtered}
+        emptyMessage="No IOUs match your search criteria"
+        onRowClick={(inv: Invoice) => navigate(`/spv/registry/${inv.id}`)}
+      />
     </div>
   );
 }

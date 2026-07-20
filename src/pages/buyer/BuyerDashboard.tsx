@@ -1,5 +1,5 @@
 import { useAuth } from '@/contexts/AuthContext';
-import { useData } from '@/contexts/DataContext';
+import { useData } from '@/hooks/usePlatformData';
 import { useNotifications } from '@/contexts/NotificationContext';
 import PageHeader from '@/components/layout/PageHeader';
 import StatCard from '@/components/shared/StatCard';
@@ -35,6 +35,14 @@ export default function BuyerDashboard() {
         <StatCard label="Upcoming Payments" value={upcomingPayments.length} icon={Calendar} accent="green" />
         <StatCard label="Overdue" value={overduePayments.length} icon={AlertTriangle} accent="red" />
       </div>
+
+      <button
+        type="button"
+        onClick={() => navigate('/buyer/post-iou')}
+        className="w-full md:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-primary text-primary-foreground font-medium shadow-md shadow-primary/20"
+      >
+        Post approved invoice / IOU <ArrowRight size={16} />
+      </button>
 
       <ProfileCompletionCard />
 

@@ -1,116 +1,102 @@
-import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
-import { User, UserRole } from '@/types';
-import { demoUsers } from '@/data/seed';
+import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
+import { fetchMe, loginApi, logoutApi, getAccessToken, setTokens, type UzimaUser } from '@/lib/apiClient';
 
-interface AuthState {
-  user: User | null;
+interface AuthContextType {
+  user: UzimaUser | null;
   isAuthenticated: boolean;
-}
-
-interface AuthContextType extends AuthState {
+  loading: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
-  updateProfile: (updates: Partial<Pick<User, 'name' | 'email'>>) => void;
+  updateProfile: (updates: Partial<Pick<UzimaUser, 'name' | 'email'>>) => void;
   showIdleWarning: boolean;
   dismissIdleWarning: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-const DEMO_PASSWORD = 'Afix2026!';
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 const IDLE_WARNING_MS = 25 * 60 * 1000;
-const SESSION_KEY = 'afix-session';
 
-function loadSession(): AuthState {
-  try {
-    const raw = localStorage.getItem(SESSION_KEY);
-    if (!raw) return { user: null, isAuthenticated: false };
-    const { userId } = JSON.parse(raw) as { userId: string };
-    const user = demoUsers.find(u => u.id === userId);
-    if (!user) return { user: null, isAuthenticated: false };
-    return { user, isAuthenticated: true };
-  } catch {
-    return { user: null, isAuthenticated: false };
-  }
-}
-
-function saveSession(userId: string | null) {
-  if (userId) {
-    localStorage.setItem(SESSION_KEY, JSON.stringify({ userId }));
-  } else {
-    localStorage.removeItem(SESSION_KEY);
-  }
+export function getRoleRedirect(role: string): string {
+  return { supplier: '/supplier', buyer: '/buyer', spv: '/spv', admin: '/admin' }[role] || '/login';
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AuthState>(loadSession);
+  const [user, setUser] = useState<UzimaUser | null>(null);
+  const [loading, setLoading] = useState(true);
   const [showIdleWarning, setShowIdleWarning] = useState(false);
-  const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const warningTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const clearSession = useCallback(() => {
-    saveSession(null);
-    setState({ user: null, isAuthenticated: false });
-    setShowIdleWarning(false);
-  }, []);
-
-  const resetIdleTimers = useCallback(() => {
-    if (idleTimer.current) clearTimeout(idleTimer.current);
-    if (warningTimer.current) clearTimeout(warningTimer.current);
-    setShowIdleWarning(false);
-
-    if (state.isAuthenticated) {
-      warningTimer.current = setTimeout(() => setShowIdleWarning(true), IDLE_WARNING_MS);
-      idleTimer.current = setTimeout(clearSession, IDLE_TIMEOUT_MS);
-    }
-  }, [state.isAuthenticated, clearSession]);
 
   useEffect(() => {
-    if (!state.isAuthenticated) return;
-    const events = ['mousedown', 'keydown', 'scroll', 'touchstart'];
-    events.forEach(e => window.addEventListener(e, resetIdleTimers));
-    resetIdleTimers();
-    return () => {
-      events.forEach(e => window.removeEventListener(e, resetIdleTimers));
-      if (idleTimer.current) clearTimeout(idleTimer.current);
-      if (warningTimer.current) clearTimeout(warningTimer.current);
-    };
-  }, [state.isAuthenticated, resetIdleTimers]);
-
-  const login = useCallback(async (email: string, password: string) => {
-    await new Promise(r => setTimeout(r, 600));
-    if (password !== DEMO_PASSWORD) {
-      return { success: false, error: 'Invalid credentials. Use password: Afix2026!' };
-    }
-    const user = demoUsers.find(u => u.email === email);
-    if (!user) {
-      return { success: false, error: 'No account found with this email.' };
-    }
-    saveSession(user.id);
-    setState({ user, isAuthenticated: true });
-    return { success: true };
+    (async () => {
+      if (!getAccessToken()) {
+        setLoading(false);
+        return;
+      }
+      try {
+        const me = await fetchMe();
+        setUser(me);
+      } catch {
+        setTokens(null, null);
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, []);
 
   const logout = useCallback(() => {
-    clearSession();
-  }, [clearSession]);
-
-  const updateProfile = useCallback((updates: Partial<Pick<User, 'name' | 'email'>>) => {
-    setState(prev => {
-      if (!prev.user) return prev;
-      const updated = { ...prev.user, ...updates };
-      return { ...prev, user: updated };
-    });
+    void logoutApi();
+    setUser(null);
+    setShowIdleWarning(false);
   }, []);
 
-  const dismissIdleWarning = useCallback(() => {
-    setShowIdleWarning(false);
-    resetIdleTimers();
-  }, [resetIdleTimers]);
+  useEffect(() => {
+    if (!user) return;
+    let idleTimer: ReturnType<typeof setTimeout>;
+    let warnTimer: ReturnType<typeof setTimeout>;
+    const reset = () => {
+      clearTimeout(idleTimer);
+      clearTimeout(warnTimer);
+      setShowIdleWarning(false);
+      warnTimer = setTimeout(() => setShowIdleWarning(true), IDLE_WARNING_MS);
+      idleTimer = setTimeout(logout, IDLE_TIMEOUT_MS);
+    };
+    const events = ['mousedown', 'keydown', 'scroll', 'touchstart'];
+    events.forEach((e) => window.addEventListener(e, reset));
+    reset();
+    return () => {
+      events.forEach((e) => window.removeEventListener(e, reset));
+      clearTimeout(idleTimer);
+      clearTimeout(warnTimer);
+    };
+  }, [user, logout]);
+
+  const login = useCallback(async (email: string, password: string) => {
+    try {
+      const data = await loginApi(email, password);
+      setUser(data.user);
+      return { success: true };
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+        || 'Login failed';
+      return { success: false, error: msg };
+    }
+  }, []);
+
+  const updateProfile = useCallback((updates: Partial<Pick<UzimaUser, 'name' | 'email'>>) => {
+    setUser((prev) => (prev ? { ...prev, ...updates } : prev));
+  }, []);
 
   return (
-    <AuthContext.Provider value={{ ...state, login, logout, updateProfile, showIdleWarning, dismissIdleWarning }}>
+    <AuthContext.Provider value={{
+      user,
+      isAuthenticated: !!user,
+      loading,
+      login,
+      logout,
+      updateProfile,
+      showIdleWarning,
+      dismissIdleWarning: () => setShowIdleWarning(false),
+    }}>
       {children}
     </AuthContext.Provider>
   );
@@ -120,14 +106,4 @@ export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error('useAuth must be inside AuthProvider');
   return ctx;
-}
-
-export function getRoleRedirect(role: UserRole): string {
-  const routes: Record<UserRole, string> = {
-    supplier: '/supplier',
-    buyer: '/buyer',
-    spv: '/spv',
-    admin: '/admin',
-  };
-  return routes[role];
 }

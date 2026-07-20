@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { api } from '@/lib/apiClient';
 import { toast } from 'sonner';
 
 export default function ProfileEditor() {
@@ -13,10 +14,15 @@ export default function ProfileEditor() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    await new Promise(r => setTimeout(r, 400));
-    updateProfile({ name, email });
-    setSaving(false);
-    toast.success('Profile updated');
+    try {
+      const { data } = await api.patch('/auth/me', { name, email });
+      updateProfile({ name: data.name, email: data.email });
+      toast.success('Profile saved');
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to save profile');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -44,7 +50,7 @@ export default function ProfileEditor() {
       <button
         type="submit"
         disabled={saving}
-        className="px-5 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-semibold hover:bg-primary/90 disabled:opacity-50"
+        className="w-full sm:w-auto min-h-[44px] px-5 py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-semibold hover:bg-primary/90 disabled:opacity-50"
       >
         {saving ? 'Saving...' : 'Save Changes'}
       </button>

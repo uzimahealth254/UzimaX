@@ -1,61 +1,81 @@
-import { useState, useEffect } from 'react';
 import { formatCurrency } from '@/lib/utils';
-import { Wallet, FileCheck } from 'lucide-react';
+import { priceReceivable, computeTenorDays } from '@/lib/pricing';
+import { Wallet, FileCheck, CalendarClock } from 'lucide-react';
+import { useMemo } from 'react';
 
 interface OfferCalculatorProps {
   faceValue: number;
   supplierName?: string;
   buyerName?: string;
+  issueDate?: string;
+  dueDate?: string;
   discountRate: string;
   onDiscountChange: (rate: string) => void;
+  band?: { discountMin: number; discountMax: number; maxTenorDays: number };
 }
 
-const PRESETS = [
-  { value: '3', label: '3% · Low risk' },
-  { value: '5', label: '5% · Standard' },
-  { value: '7', label: '7% · Moderate' },
-  { value: '10', label: '10% · Higher' },
-  { value: '12', label: '12% · Premium' },
-];
-
-/** Adapted from Malipo Polepole SPV offer calculator for private-sector AFIX */
+/** SPV purchase engine v1 — tenor-based discount (not loan interest UI) */
 export default function OfferCalculator({
   faceValue,
   supplierName,
   buyerName,
+  issueDate,
+  dueDate,
   discountRate,
   onDiscountChange,
+  band,
 }: OfferCalculatorProps) {
-  const [offerPrice, setOfferPrice] = useState(0);
+  const tenorDays = issueDate && dueDate ? computeTenorDays(issueDate, dueDate) : 90;
 
-  useEffect(() => {
-    const rate = parseFloat(discountRate) || 0;
-    setOfferPrice(Math.round(faceValue * (1 - rate / 100)));
-  }, [discountRate, faceValue]);
+  const priced = useMemo(
+    () => priceReceivable({ faceValue, tenorDays, band }),
+    [faceValue, tenorDays, band],
+  );
 
+  const rate = parseFloat(discountRate) || priced.recommendedDiscount;
+  const offerPrice = Math.round(faceValue * (1 - rate / 100));
   const margin = faceValue - offerPrice;
   const marginPct = offerPrice > 0 ? (margin / offerPrice) * 100 : 0;
+
+  const applyRecommended = () => onDiscountChange(String(priced.recommendedDiscount));
 
   return (
     <div className="space-y-4">
       <div className="p-4 bg-brand-blue-light/60 rounded-xl border border-primary/10">
         <h4 className="text-sm font-semibold mb-3 flex items-center gap-2 text-primary">
           <Wallet size={16} />
-          Calculate purchase offer
+          Purchase engine — tenor discount
         </h4>
 
-        <label className="block text-xs text-muted-foreground mb-1.5">Discount rate</label>
-        <select
+        <div className="flex items-start gap-2 text-xs text-muted-foreground mb-3 p-2.5 rounded-lg bg-card/80 border">
+          <CalendarClock size={14} className="mt-0.5 shrink-0 text-primary" />
+          <div>
+            <p>{priced.explanation}</p>
+            <button type="button" onClick={applyRecommended} className="text-primary font-medium mt-1 hover:underline">
+              Apply recommended {priced.recommendedDiscount}%
+            </button>
+            {!priced.withinBand && band && (
+              <p className="text-amber-700 mt-1">Outside programme band ({band.discountMin}%–{band.discountMax}%, max {band.maxTenorDays}d)</p>
+            )}
+          </div>
+        </div>
+
+        <label className="block text-xs text-muted-foreground mb-1.5">Negotiated discount rate (%)</label>
+        <input
+          type="number"
+          step="0.01"
+          min={0}
+          max={25}
           value={discountRate}
           onChange={e => onDiscountChange(e.target.value)}
-          className="w-full px-3 py-2.5 border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary/20 mb-3"
-        >
-          {PRESETS.map(p => (
-            <option key={p.value} value={p.value}>{p.label}</option>
-          ))}
-        </select>
+          className="w-full px-3 py-2.5 border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary/20 mb-3 font-mono"
+        />
 
         <div className="p-3 bg-card rounded-lg border space-y-2 text-sm">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Tenor</span>
+            <span className="font-mono font-medium">{tenorDays} days</span>
+          </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Face value</span>
             <span className="font-mono font-medium">{formatCurrency(faceValue)}</span>
@@ -79,10 +99,8 @@ export default function OfferCalculator({
           Assignment summary
         </h4>
         <p className="text-xs text-muted-foreground leading-relaxed">
-          On acceptance, a deed of assignment moves the receivable from{' '}
-          <strong className="text-foreground">{supplierName || 'Supplier'}</strong> to AFIX Capital SPV.
-          Buyer <strong className="text-foreground">{buyerName || 'Buyer'}</strong> will be asked to consent
-          so settlement is directed to the trust account.
+          {supplierName || 'Supplier'} · {buyerName || 'Buyer'} — accepting this offer triggers buyer
+          assignment consent, then SPV true-sale trail and escrow legs.
         </p>
       </div>
     </div>

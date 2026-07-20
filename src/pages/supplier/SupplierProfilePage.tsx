@@ -1,13 +1,14 @@
 import { useAuth } from '@/contexts/AuthContext';
+import { useData } from '@/hooks/usePlatformData';
 import PageHeader from '@/components/layout/PageHeader';
 import ProfileEditor from '@/components/shared/ProfileEditor';
-import { demoOrganisations } from '@/data/seed';
 import { Building2, Mail, Hash, Calendar } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 
 export default function SupplierProfilePage() {
   const { user } = useAuth();
-  const org = demoOrganisations.find(o => o.id === user?.organisationId);
+  const { organisations } = useData();
+  const org = organisations.find((o: any) => o.id === user?.organisationId);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -31,7 +32,7 @@ export default function SupplierProfilePage() {
           <div className="pt-2 space-y-2 text-sm">
             <div className="flex items-center gap-2 text-muted-foreground">
               <Calendar size={14} />
-              <span>Member since {user?.createdAt ? formatDate(user.createdAt) : 'N/A'}</span>
+              <span>Organisation account</span>
             </div>
           </div>
         </div>

@@ -1,11 +1,10 @@
 import { useState } from 'react';
-import { useData } from '@/contexts/DataContext';
+import { useQuery } from '@tanstack/react-query';
+import { useData } from '@/hooks/usePlatformData';
+import { api } from '@/lib/apiClient';
 import PageHeader from '@/components/layout/PageHeader';
 import DataTable from '@/components/shared/DataTable';
 import StatusBadge from '@/components/shared/StatusBadge';
-import { Organisation } from '@/types';
-import { demoUsers } from '@/data/seed';
-import { User } from '@/types';
 import { toast } from 'sonner';
 
 type Tab = 'organisations' | 'users' | 'invite';
@@ -16,84 +15,61 @@ export default function UsersPage() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState('supplier');
 
+  const usersQ = useQuery({
+    queryKey: ['admin-users'],
+    queryFn: async () => (await api.get('/admin/users')).data.data,
+  });
+
   const orgColumns = [
-    { key: 'name', header: 'Organisation', render: (o: Organisation) => <span className="font-medium">{o.name}</span> },
-    { key: 'type', header: 'Type', render: (o: Organisation) => <span className="capitalize">{o.type}</span> },
-    { key: 'sector', header: 'Sector', render: (o: Organisation) => o.sector || '—' },
-    { key: 'reg', header: 'Registration #', render: (o: Organisation) => <span className="font-mono text-xs">{o.registrationNumber}</span> },
-    { key: 'status', header: 'Status', render: (o: Organisation) => <StatusBadge status={o.status} /> },
+    { key: 'name', header: 'Organisation', render: (o: any) => <span className="font-medium">{o.name}</span> },
+    { key: 'type', header: 'Type', render: (o: any) => <span className="capitalize">{o.orgType || o.type}</span> },
+    { key: 'party', header: 'Uzima Party ID', render: (o: any) => <span className="font-mono text-xs">{o.uzimaPartyId}</span> },
+    { key: 'reg', header: 'Registration #', render: (o: any) => <span className="font-mono text-xs">{o.registrationNo || '—'}</span> },
+    { key: 'status', header: 'Status', render: (o: any) => <StatusBadge status={o.status} /> },
   ];
 
   const userColumns = [
-    { key: 'name', header: 'Name', render: (u: User) => <span className="font-medium">{u.name}</span> },
-    { key: 'email', header: 'Email', render: (u: User) => <span className="text-muted-foreground">{u.email}</span> },
-    { key: 'role', header: 'Role', render: (u: User) => <span className="capitalize">{u.role}</span> },
-    { key: 'org', header: 'Organisation', render: (u: User) => u.organisationName },
+    { key: 'name', header: 'Name', render: (u: any) => <span className="font-medium">{u.fullName || u.name}</span> },
+    { key: 'email', header: 'Email', render: (u: any) => <span className="text-muted-foreground">{u.email}</span> },
+    { key: 'role', header: 'Role', render: (u: any) => <span className="capitalize">{u.role}</span> },
+    { key: 'status', header: 'Status', render: (u: any) => <StatusBadge status={u.status || 'active'} /> },
   ];
 
-  const handleInvite = (e: React.FormEvent) => {
+  const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast.success(`Invite sent to ${inviteEmail} as ${inviteRole} (demo)`);
-    setInviteEmail('');
+    try {
+      const { data } = await api.post('/admin/users/invite', {
+        email: inviteEmail,
+        role: inviteRole,
+        orgId: organisations.find((o: any) => (o.orgType || o.type) === inviteRole)?.id,
+      });
+      toast.success(`User created · temp password: ${data.temporaryPassword}`);
+      setInviteEmail('');
+      usersQ.refetch();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Invite failed');
+    }
   };
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Users & Organisations" subtitle="Manage platform participants" />
-
-      <div className="flex gap-1 border-b">
-        {(['organisations', 'users', 'invite'] as Tab[]).map(t => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors capitalize ${tab === t ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
-          >
-            {t === 'invite' ? 'Invite User' : t}
-          </button>
+      <PageHeader title="Users & Organisations" subtitle="Platform directory" />
+      <div className="scroll-x-pad border-b">
+        {(['organisations', 'users', 'invite'] as Tab[]).map((t) => (
+          <button key={t} type="button" onClick={() => setTab(t)} className={`px-4 py-2.5 text-sm capitalize border-b-2 whitespace-nowrap shrink-0 min-h-[44px] ${tab === t ? 'border-primary text-primary' : 'border-transparent'}`}>{t}</button>
         ))}
       </div>
-
-      {tab === 'organisations' && (
-        <DataTable columns={orgColumns} data={organisations} emptyMessage="No organisations registered" />
-      )}
-
-      {tab === 'users' && (
-        <DataTable columns={userColumns} data={demoUsers} emptyMessage="No users found" />
-      )}
-
+      {tab === 'organisations' && <DataTable columns={orgColumns} data={organisations} emptyMessage="No organisations" />}
+      {tab === 'users' && <DataTable columns={userColumns} data={usersQ.data || []} emptyMessage="No users" />}
       {tab === 'invite' && (
-        <form onSubmit={handleInvite} className="max-w-md border rounded-lg p-6 space-y-4">
-          <h3 className="font-semibold">Invite New User</h3>
-          <div>
-            <label className="block text-sm font-medium mb-1.5">Email</label>
-            <input
-              type="email"
-              required
-              value={inviteEmail}
-              onChange={e => setInviteEmail(e.target.value)}
-              placeholder="user@company.co.ke"
-              className="w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1.5">Role</label>
-            <select
-              value={inviteRole}
-              onChange={e => setInviteRole(e.target.value)}
-              className="w-full px-3 py-2.5 border rounded-lg text-sm appearance-none bg-card focus:outline-none focus:ring-2 focus:ring-primary/20"
-            >
-              <option value="supplier">Supplier</option>
-              <option value="buyer">Buyer</option>
-              <option value="spv">SPV</option>
-              <option value="admin">Admin</option>
-            </select>
-          </div>
-          <button
-            type="submit"
-            className="px-6 py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-semibold hover:bg-primary/90 transition-colors"
-          >
-            Send Invite
-          </button>
+        <form onSubmit={handleInvite} className="max-w-md space-y-3 border rounded-2xl p-5">
+          <input className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} required />
+          <select className="w-full border rounded-lg px-3 py-2 text-sm" value={inviteRole} onChange={(e) => setInviteRole(e.target.value)}>
+            <option value="supplier">Supplier</option>
+            <option value="buyer">Buyer</option>
+            <option value="spv">SPV</option>
+          </select>
+          <button type="submit" className="w-full sm:w-auto px-4 py-2.5 min-h-[44px] rounded-xl bg-primary text-primary-foreground text-sm">Send invite</button>
         </form>
       )}
     </div>

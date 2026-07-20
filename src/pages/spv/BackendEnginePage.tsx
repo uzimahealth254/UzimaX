@@ -1,155 +1,110 @@
-import { useState } from 'react';
-import { useData } from '@/contexts/DataContext';
+import { useMemo } from 'react';
+import { useData } from '@/hooks/usePlatformData';
 import PageHeader from '@/components/layout/PageHeader';
-import { formatCurrency } from '@/lib/utils';
-
-type Tab = 'trust' | 'settlement' | 'reconciliation' | 'distributions';
-
-const mockTrustAccounts = [
-  { id: 'trust-001', name: 'Collection Account', bank: 'KCB Bank', balance: 45600000, currency: 'KES' },
-  { id: 'trust-002', name: 'Distribution Account', bank: 'Equity Bank', balance: 12300000, currency: 'KES' },
-  { id: 'trust-003', name: 'Reserve Account', bank: 'Stanbic Bank', balance: 8900000, currency: 'KES' },
-];
-
-const mockSettlement = [
-  { id: 'stl-001', type: 'Buyer Payment', reference: 'PAY-KBC-20260115', amount: 5200000, status: 'completed', date: '2026-01-15' },
-  { id: 'stl-002', type: 'Investor Disbursement', reference: 'DIS-INV-20260118', amount: 4800000, status: 'completed', date: '2026-01-18' },
-  { id: 'stl-003', type: 'Buyer Payment', reference: 'PAY-EQB-20260120', amount: 3100000, status: 'pending', date: '2026-01-20' },
-  { id: 'stl-004', type: 'Fee Disbursement', reference: 'FEE-SPV-20260122', amount: 150000, status: 'completed', date: '2026-01-22' },
-];
-
-const mockReconciliation = [
-  { id: 'rec-001', period: 'Jan 2026 Wk 1', expected: 8200000, received: 8200000, variance: 0, status: 'matched' },
-  { id: 'rec-002', period: 'Jan 2026 Wk 2', expected: 6500000, received: 6300000, variance: -200000, status: 'variance' },
-  { id: 'rec-003', period: 'Jan 2026 Wk 3', expected: 7100000, received: 7100000, variance: 0, status: 'matched' },
-];
-
-const mockDistributions = [
-  { id: 'dist-001', package: 'AFIX USP Series 1', investor: 'Fund Alpha', amount: 12500000, yield: '8.2%', date: '2026-01-10' },
-  { id: 'dist-002', package: 'AFIX USP Series 2', investor: 'Fund Beta', amount: 8700000, yield: '7.8%', date: '2026-01-15' },
-  { id: 'dist-003', package: 'AFIX USP Series 1', investor: 'Fund Gamma', amount: 6300000, yield: '8.5%', date: '2026-01-20' },
-];
+import DataTable from '@/components/shared/DataTable';
+import { formatCurrency, formatDate } from '@/lib/utils';
 
 export default function BackendEnginePage() {
-  const [tab, setTab] = useState<Tab>('trust');
-  const { packages } = useData();
+  const { wallet, walletTxs, escrowLegs, packages, payments, organisations, assignments } = useData();
 
-  const tabs: { id: Tab; label: string }[] = [
-    { id: 'trust', label: 'Trust Accounts' },
-    { id: 'settlement', label: 'Settlement' },
-    { id: 'reconciliation', label: 'Reconciliation' },
-    { id: 'distributions', label: 'Distributions' },
-  ];
+  const trustAccounts = useMemo(() => {
+    const orgs = organisations || [];
+    return orgs
+      .filter((o: any) => ['spv', 'platform', 'buyer'].includes(o.orgType || o.type))
+      .map((o: any) => ({
+        id: o.id,
+        name: o.name,
+        type: o.orgType || o.type,
+      }));
+  }, [organisations]);
+
+  const settlement = (escrowLegs || []).slice(0, 20);
+  const distributions = (packages || []).filter((p: any) => ['listed', 'placed', 'settled'].includes(p.status));
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Backend Engine" subtitle="Financial operations and settlement management" />
+    <div className="space-y-5 sm:space-y-6 animate-fade-in">
+      <PageHeader
+        title="Settlement engine"
+        subtitle="Live wallets, escrow legs, and package distributions from Postgres"
+      />
 
-      <div className="flex gap-1 border-b">
-        {tabs.map(t => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === t.id ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {tab === 'trust' && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {mockTrustAccounts.map(account => (
-            <div key={account.id} className="border rounded-lg p-5">
-              <p className="text-sm font-medium">{account.name}</p>
-              <p className="text-xs text-muted-foreground mb-3">{account.bank}</p>
-              <p className="text-2xl font-bold font-mono">{formatCurrency(account.balance)}</p>
-              <p className="text-xs text-muted-foreground mt-1">{account.currency}</p>
+      <div>
+        <h3 className="font-semibold text-sm mb-3">Trust / org accounts</h3>
+        <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+          {trustAccounts.map((a: any) => (
+            <div key={a.id} className="border rounded-2xl p-4">
+              <p className="font-medium text-sm break-words">{a.name}</p>
+              <p className="text-xs text-muted-foreground capitalize mt-1">{a.type}</p>
             </div>
           ))}
+          {wallet && (
+            <div className="border rounded-2xl p-4 border-primary/30">
+              <p className="font-medium text-sm">Your wallet</p>
+              <p className="text-xl font-mono mt-2">{formatCurrency(Number(wallet.balance))}</p>
+              <p className="text-xs text-muted-foreground">{(walletTxs || []).length} ledger entries</p>
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
-      {tab === 'settlement' && (
-        <div className="border rounded-lg overflow-hidden">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Reference</th>
-                <th>Type</th>
-                <th>Amount</th>
-                <th>Date</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {mockSettlement.map(s => (
-                <tr key={s.id}>
-                  <td className="font-mono text-xs">{s.reference}</td>
-                  <td>{s.type}</td>
-                  <td className="font-mono">{formatCurrency(s.amount)}</td>
-                  <td className="text-muted-foreground">{s.date}</td>
-                  <td><span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${s.status === 'completed' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{s.status}</span></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <div>
+        <h3 className="font-semibold text-sm mb-3">Escrow settlement queue ({settlement.length})</h3>
+        <DataTable
+          data={settlement}
+          emptyMessage="No escrow legs"
+          getRowKey={(e: any) => e.id}
+          columns={[
+            { key: 'leg', header: 'Leg', primary: true, render: (e: any) => e.type || e.legType },
+            { key: 'amt', header: 'Amount', render: (e: any) => <span className="font-mono">{formatCurrency(Number(e.amount))}</span> },
+            { key: 'status', header: 'Status', render: (e: any) => <span className="capitalize">{e.status}</span> },
+            { key: 'iou', header: 'IOU', hideOnMobile: true, render: (e: any) => <span className="font-mono text-xs">{e.iouRegistryId || '—'}</span> },
+          ]}
+        />
+      </div>
 
-      {tab === 'reconciliation' && (
-        <div className="border rounded-lg overflow-hidden">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Period</th>
-                <th>Expected</th>
-                <th>Received</th>
-                <th>Variance</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {mockReconciliation.map(r => (
-                <tr key={r.id}>
-                  <td className="font-medium">{r.period}</td>
-                  <td className="font-mono">{formatCurrency(r.expected)}</td>
-                  <td className="font-mono">{formatCurrency(r.received)}</td>
-                  <td className={`font-mono ${r.variance < 0 ? 'text-red-600' : 'text-emerald-600'}`}>{formatCurrency(r.variance)}</td>
-                  <td><span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${r.status === 'matched' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{r.status}</span></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
+        <div>
+          <h3 className="font-semibold text-sm mb-3">Assignments ({assignments.length})</h3>
+          <div className="border rounded-2xl divide-y max-h-64 overflow-y-auto scroll-touch">
+            {assignments.slice(0, 15).map((a: any) => (
+              <div key={a.id} className="px-4 py-3 text-sm flex justify-between gap-2">
+                <span className="font-mono text-xs truncate min-w-0">{a.iouRegistryId}</span>
+                <span className="font-mono shrink-0">{formatCurrency(a.amount)}</span>
+              </div>
+            ))}
+            {assignments.length === 0 && <p className="p-4 text-sm text-muted-foreground">No assignments</p>}
+          </div>
         </div>
-      )}
+        <div>
+          <h3 className="font-semibold text-sm mb-3">Listed / placed packages</h3>
+          <div className="border rounded-2xl divide-y max-h-64 overflow-y-auto scroll-touch">
+            {distributions.map((p: any) => (
+              <div key={p.id} className="px-4 py-3 text-sm space-y-1">
+                <div className="flex justify-between gap-2">
+                  <span className="font-medium truncate">{p.name || p.packageRef}</span>
+                  <span className="capitalize text-xs shrink-0">{p.status}</span>
+                </div>
+                <p className="font-mono text-xs">{formatCurrency(p.totalFaceValue)} · {p.nseReference || 'no NSE ref'}</p>
+                <p className="text-[10px] text-muted-foreground">{formatDate(p.createdAt)}</p>
+              </div>
+            ))}
+            {distributions.length === 0 && <p className="p-4 text-sm text-muted-foreground">No listed packages yet</p>}
+          </div>
+        </div>
+      </div>
 
-      {tab === 'distributions' && (
-        <div className="border rounded-lg overflow-hidden">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Package</th>
-                <th>Investor</th>
-                <th>Amount</th>
-                <th>Yield</th>
-                <th>Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {mockDistributions.map(d => (
-                <tr key={d.id}>
-                  <td className="font-medium">{d.package}</td>
-                  <td>{d.investor}</td>
-                  <td className="font-mono">{formatCurrency(d.amount)}</td>
-                  <td className="font-mono text-emerald-600">{d.yield}</td>
-                  <td className="text-muted-foreground">{d.date}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <div>
+        <h3 className="font-semibold text-sm mb-3">Recent payment updates ({(payments || []).length})</h3>
+        <div className="border rounded-2xl divide-y">
+          {(payments || []).slice(0, 10).map((p: any) => (
+            <div key={p.id} className="px-4 py-3 text-sm flex justify-between gap-2">
+              <span className="font-mono text-xs truncate min-w-0">{p.iouRegistryId || p.invoiceId?.slice?.(0, 8)}</span>
+              <span className="font-mono shrink-0">{formatCurrency(p.amount)}</span>
+            </div>
+          ))}
+          {(payments || []).length === 0 && <p className="p-4 text-sm text-muted-foreground">No AfyaX payment updates yet</p>}
         </div>
-      )}
+      </div>
     </div>
   );
 }

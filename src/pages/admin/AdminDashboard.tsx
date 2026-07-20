@@ -1,4 +1,4 @@
-import { useData } from '@/contexts/DataContext';
+import { useData } from '@/hooks/usePlatformData';
 import { useAuth } from '@/contexts/AuthContext';
 import PageHeader from '@/components/layout/PageHeader';
 import StatCard from '@/components/shared/StatCard';
@@ -30,7 +30,7 @@ export default function AdminDashboard() {
     <div className="space-y-6 animate-fade-in">
       <PageHeader
         title={`Welcome, ${user?.name.split(' ')[0]}`}
-        subtitle="AFIX Platform — Admin Dashboard"
+        subtitle="Uzima Platform — Admin Dashboard"
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useData } from '@/contexts/DataContext';
-import { useActor } from '@/hooks/useActor';
+import { useData } from '@/hooks/usePlatformData';
 import PageHeader from '@/components/layout/PageHeader';
 import DataTable from '@/components/shared/DataTable';
 import StatusBadge from '@/components/shared/StatusBadge';
@@ -12,8 +11,7 @@ import { toast } from 'sonner';
 
 export default function InvoiceRegisterPage() {
   const { user } = useAuth();
-  const { invoices, updateInvoiceStatus } = useData();
-  const actor = useActor();
+  const { invoices, refetchAll } = useData();
   const [search, setSearch] = useState('');
   const [syncing, setSyncing] = useState(false);
 
@@ -25,13 +23,13 @@ export default function InvoiceRegisterPage() {
 
   const handleSync = async () => {
     setSyncing(true);
-    await new Promise(r => setTimeout(r, 1500));
-    const listedInvoices = myInvoices.filter(inv => inv.status === 'listed');
-    listedInvoices.slice(0, 3).forEach(inv => {
-      updateInvoiceStatus(inv.id, 'verified', actor);
-    });
-    setSyncing(false);
-    toast.success(`Synced ${listedInvoices.slice(0, 3).length} invoices — marked as verified`);
+    try {
+      refetchAll();
+      await new Promise(r => setTimeout(r, 400));
+      toast.success(`Register refreshed · ${myInvoices.length} invoices`);
+    } finally {
+      setSyncing(false);
+    }
   };
 
   const columns = [
@@ -52,7 +50,7 @@ export default function InvoiceRegisterPage() {
           <button
             onClick={handleSync}
             disabled={syncing}
-            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+            className="w-full sm:w-auto min-h-[44px] justify-center flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
           >
             <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
             {syncing ? 'Syncing...' : 'Sync & Verify'}
