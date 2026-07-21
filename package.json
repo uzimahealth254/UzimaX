@@ -43,7 +43,8 @@
     "test": "vitest run server/__tests__/unit.test.ts",
     "test:integration": "vitest run server/__tests__/api.integration.test.ts",
     "test:all": "vitest run",
-    "optimize:og": "node scripts/optimize-og-image.mjs"
+    "optimize:og": "node scripts/optimize-og-image.mjs",
+    "compose:og": "node scripts/compose-og-image.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1090.0",
