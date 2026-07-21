@@ -19,7 +19,7 @@ const DOC_TYPES = [
 
 type Doc = { id: string; docType: string; fileUrl: string; uploadedAt: string };
 
-export default function DocumentsPage() {
+export default function DocumentsPage({ embedded = false }: { embedded?: boolean }) {
   const qc = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
   const [docType, setDocType] = useState('board_resolution');
@@ -66,84 +66,123 @@ export default function DocumentsPage() {
   };
 
   return (
-    <div className="space-y-5 sm:space-y-6 animate-fade-in">
-      <PageHeader
-        title="Documents"
-        subtitle="Board resolutions, certificates, and generated transaction PDFs"
-      />
+    <div className={embedded ? 'space-y-3' : 'portal-page animate-fade-in'}>
+      {!embedded && (
+        <PageHeader
+          title="Documents"
+          subtitle="Resolutions, certificates, and transaction PDFs"
+        />
+      )}
 
-      <div className="border rounded-2xl p-4 sm:p-5 space-y-4">
-        <p className="text-sm font-medium">Upload</p>
-        <div className="flex flex-col sm:flex-row flex-wrap gap-3 sm:items-end">
-          <div className="flex-1 min-w-0 sm:min-w-[200px]">
-            <label className="text-xs text-muted-foreground">Document type</label>
+      <section className={embedded ? 'space-y-3' : 'portal-section'}>
+        {!embedded && (
+          <header className="portal-section__head">
+            <div>
+              <h2 className="portal-section__title">Library</h2>
+              <p className="portal-section__desc">{docs.length} document{docs.length === 1 ? '' : 's'}</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+              <select
+                value={docType}
+                onChange={(e) => setDocType(e.target.value)}
+                className="field-input appearance-none !min-h-[34px] !py-1.5 text-xs w-full sm:w-48"
+              >
+                {DOC_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                disabled={uploading}
+                onClick={() => inputRef.current?.click()}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 min-h-[34px] rounded-lg bg-[#0E1F1A] text-white text-xs font-bold disabled:opacity-50"
+              >
+                <Upload size={13} />
+                {uploading ? '…' : 'Upload'}
+              </button>
+              <input
+                ref={inputRef}
+                type="file"
+                className="hidden"
+                accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void onUpload(f);
+                }}
+              />
+            </div>
+          </header>
+        )}
+        {embedded && (
+          <div className="flex flex-wrap items-center gap-2">
             <select
               value={docType}
               onChange={(e) => setDocType(e.target.value)}
-              className="block w-full border rounded-lg px-3 py-2.5 text-sm"
+              className="field-input appearance-none !min-h-[34px] !py-1.5 text-xs w-full sm:w-48"
             >
               {DOC_TYPES.map((t) => (
                 <option key={t.value} value={t.value}>{t.label}</option>
               ))}
             </select>
+            <button
+              type="button"
+              disabled={uploading}
+              onClick={() => inputRef.current?.click()}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 min-h-[34px] rounded-lg bg-[#0E1F1A] text-white text-xs font-bold disabled:opacity-50"
+            >
+              <Upload size={13} />
+              {uploading ? '…' : 'Upload'}
+            </button>
+            <input
+              ref={inputRef}
+              type="file"
+              className="hidden"
+              accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void onUpload(f);
+              }}
+            />
           </div>
-          <button
-            type="button"
-            disabled={uploading}
-            onClick={() => inputRef.current?.click()}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 min-h-[44px] rounded-xl bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50 w-full sm:w-auto"
-          >
-            <Upload size={16} />
-            {uploading ? 'Uploading…' : 'Choose file'}
-          </button>
-          <input
-            ref={inputRef}
-            type="file"
-            className="hidden"
-            accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) void onUpload(f);
-            }}
-          />
+        )}
+        <div className={embedded ? '' : '[&_.surface-card]:border-0 [&_.surface-card]:rounded-none'}>
+          {isLoading ? (
+            <p className="px-3 py-4 text-xs text-[#5A6B7D]">Loading…</p>
+          ) : (
+            <DataTable
+              data={docs}
+              emptyMessage="No documents yet"
+              getRowKey={(d) => d.id}
+              columns={[
+                {
+                  key: 'type',
+                  header: 'Type',
+                  primary: true,
+                  render: (d) => <span className="capitalize">{d.docType.replace(/_/g, ' ')}</span>,
+                },
+                {
+                  key: 'when',
+                  header: 'Uploaded',
+                  render: (d) => <span className="font-mono text-xs">{formatDate(d.uploadedAt)}</span>,
+                },
+                {
+                  key: 'file',
+                  header: 'File',
+                  render: (d) => (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); void openDoc(d); }}
+                      className="inline-flex items-center gap-1 text-[#0E1F1A] text-xs font-bold min-h-[32px]"
+                    >
+                      Open <ExternalLink size={11} />
+                    </button>
+                  ),
+                },
+              ]}
+            />
+          )}
         </div>
-      </div>
-
-      {isLoading ? (
-        <p className="text-sm text-muted-foreground p-4">Loading…</p>
-      ) : (
-        <DataTable
-          data={docs}
-          emptyMessage="No documents yet"
-          getRowKey={(d) => d.id}
-          columns={[
-            {
-              key: 'type',
-              header: 'Type',
-              primary: true,
-              render: (d) => <span className="capitalize">{d.docType.replace(/_/g, ' ')}</span>,
-            },
-            {
-              key: 'when',
-              header: 'Uploaded',
-              render: (d) => <span className="font-mono text-xs">{formatDate(d.uploadedAt)}</span>,
-            },
-            {
-              key: 'file',
-              header: 'File',
-              render: (d) => (
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); void openDoc(d); }}
-                  className="inline-flex items-center gap-1 text-primary text-xs font-medium min-h-[40px]"
-                >
-                  Open <ExternalLink size={12} />
-                </button>
-              ),
-            },
-          ]}
-        />
-      )}
+      </section>
     </div>
   );
 }

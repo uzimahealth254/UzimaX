@@ -16,11 +16,27 @@ export function assertSecurityConfig(): void {
     if (!refresh || refresh.length < minLen || refresh === 'dev-refresh') {
       throw new Error('FATAL: JWT_REFRESH_SECRET must be set to a strong value (≥32 chars) in production');
     }
-    if (process.env.ALLOW_DEMO_OTP === 'true') {
-      console.warn('[security] ALLOW_DEMO_OTP=true in production — disable for real deployments');
+    const cors = (process.env.CORS_ORIGINS || '').trim();
+    if (!cors) {
+      throw new Error('FATAL: CORS_ORIGINS must be set to an exact allow-list in production');
     }
-    if (process.env.EMAIL_PROVIDER === 'stub' && process.env.ALLOW_DEMO_OTP !== 'true') {
-      console.warn('[security] EMAIL_PROVIDER=stub — OTPs cannot be delivered; configure Resend/SMTP');
+    if (!process.env.AFYAX_WEBHOOK_SECRET || process.env.AFYAX_WEBHOOK_SECRET.length < 16) {
+      throw new Error('FATAL: AFYAX_WEBHOOK_SECRET must be set in production (payment webhooks)');
+    }
+    if (process.env.ALLOW_DEMO_OTP === 'true') {
+      throw new Error('FATAL: ALLOW_DEMO_OTP must be false in production');
+    }
+    if (process.env.ALLOW_BODY_REFRESH === 'true') {
+      throw new Error('FATAL: ALLOW_BODY_REFRESH must be false in production (cookie refresh only)');
+    }
+    if (process.env.ENABLE_SIMULATED_WALLET === 'true') {
+      throw new Error('FATAL: ENABLE_SIMULATED_WALLET must be false in production');
+    }
+    if (process.env.ALLOW_PROD_SEED === '1') {
+      throw new Error('FATAL: ALLOW_PROD_SEED must not be set on a running production API');
+    }
+    if (process.env.EMAIL_PROVIDER === 'stub') {
+      console.warn('[security] EMAIL_PROVIDER=stub — invites/OTP/reset cannot be delivered; configure Resend/SMTP');
     }
   } else {
     if (!jwt) {

@@ -126,26 +126,73 @@ paths:
         "200":
           description: Organisation
   /api/v1/invoices:
+    post:
+      summary: Create invoice (portal JWT dual-origination OR AfyaX API key)
+      tags: [Invoices]
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [faceValue, issueDate, dueDate]
+              properties:
+                buyerOrgId: { type: string, format: uuid }
+                supplierOrgId: { type: string, format: uuid }
+                buyerPartyId: { type: string }
+                supplierPartyId: { type: string }
+                faceValue: { type: number }
+                currency: { type: string }
+                issueDate: { type: string, format: date }
+                dueDate: { type: string, format: date }
+                installmentSchedule:
+                  type: array
+                  items:
+                    type: object
+      responses:
+        "201":
+          description: Invoice created (returns invoiceId + iouRegistryId for API key)
     get:
-      summary: List invoices (org-scoped)
+      summary: List invoices for caller org/role
       tags: [Invoices]
       responses:
         "200":
           description: Invoice list
-    post:
-      summary: Create invoice (buyer or supplier portal)
+  /api/v1/invoices/{id}/status:
+    get:
+      summary: Invoice status (JWT or AfyaX API key with invoices:read)
       tags: [Invoices]
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
       responses:
-        "201":
-          description: Created
+        "200":
+          description: Status payload
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  iouRegistryId: { type: string }
+                  status: { type: string }
+                  listingStatus: { type: string }
   /api/v1/external/invoices:
     post:
-      summary: Create invoice via API key (buyer org bound)
+      summary: AfyaX alias for POST /invoices (API key invoices:write)
       tags: [Invoices]
       security: [apiKeyAuth: []]
       responses:
         "201":
-          description: Created
+          description: Created with invoiceId + iouRegistryId
   /api/v1/invoices/{id}:
     get:
       summary: Invoice detail + status history (IDOR protected)

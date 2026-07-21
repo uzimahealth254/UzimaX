@@ -1,6 +1,6 @@
 /**
  * Critical-path smoke checks against a running API (npm run dev:api).
- * Usage: npx tsx scripts/smoke-uzima.ts
+ * Usage: npx tsx scripts/smoke-IOU Exchange.ts
  */
 const BASE = process.env.API_URL || 'http://localhost:8787/api/v1';
 const PASS = process.env.DEMO_PASSWORD || 'Uzima2026!';
@@ -24,9 +24,9 @@ async function main() {
   await json('GET', '/health');
 
   console.log('Buyer login…');
-  const buyer = await json('POST', '/auth/login', { email: 'buyer@uzima.co.ke', password: PASS });
+  const buyer = await json('POST', '/auth/login', { email: 'buyer@ioux.africa', password: PASS });
   console.log('Supplier login…');
-  const supplier = await json('POST', '/auth/login', { email: 'supplier@uzima.co.ke', password: PASS });
+  const supplier = await json('POST', '/auth/login', { email: 'supplier@ioux.africa', password: PASS });
 
   const orgs = await json('GET', '/organisations', undefined, buyer.accessToken);
   const supplierOrg = orgs.data.find((o: { orgType: string; name: string }) => o.orgType === 'supplier' && o.name.includes('Savannah'));
@@ -54,8 +54,12 @@ async function main() {
   console.log('AfyaX party lookup…');
   await json('GET', `/parties/${buyer.user.uzimaPartyId}`, undefined, undefined, 'uzima_afyax_demo_key_9c2e1b7f');
 
-  console.log('Wallet…');
-  await json('GET', '/wallets/me', undefined, supplier.accessToken);
+  if (process.env.ENABLE_SIMULATED_WALLET === 'true' || process.env.VITE_ENABLE_WALLET === 'true') {
+    console.log('Wallet…');
+    await json('GET', '/wallets/me', undefined, supplier.accessToken);
+  } else {
+    console.log('Wallet skipped (simulated wallet disabled)');
+  }
 
   console.log('OK — smoke passed');
 }

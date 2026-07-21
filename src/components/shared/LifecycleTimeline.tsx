@@ -47,20 +47,20 @@ export default function LifecycleTimeline({ currentStatus }: { currentStatus: In
               <span
                 className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold border-2 ${
                   isComplete
-                    ? 'bg-accent border-accent text-white'
+                    ? 'bg-accent border-accent text-accent-foreground'
                     : isCurrent
-                      ? 'bg-primary border-primary text-white'
+                      ? 'bg-primary border-primary text-primary-foreground'
                       : 'bg-card border-border text-muted-foreground'
                 }`}
               >
                 {idx + 1}
               </span>
               <div className="min-w-0 flex-1">
-                <p className={`font-medium ${isCurrent ? 'text-primary' : 'text-foreground'}`}>{step.label}</p>
+                <p className={`font-medium ${isCurrent ? 'text-foreground' : 'text-foreground'}`}>{step.label}</p>
                 <p className="text-[10px] text-muted-foreground">{step.owner}</p>
               </div>
-              {isCurrent && <span className="text-[10px] font-semibold text-primary shrink-0">Current</span>}
-              {isComplete && !isCurrent && <span className="text-[10px] text-accent shrink-0">Done</span>}
+              {isCurrent && <span className="text-[10px] font-semibold text-foreground shrink-0">Current</span>}
+              {isComplete && !isCurrent && <span className="text-[10px] text-accent-foreground shrink-0 font-semibold">Done</span>}
             </li>
           );
         })}
@@ -82,15 +82,15 @@ export default function LifecycleTimeline({ currentStatus }: { currentStatus: In
                 <div
                   className={`relative z-10 w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold border-2 ${
                     isComplete
-                      ? 'bg-accent border-accent text-white'
+                      ? 'bg-accent border-accent text-accent-foreground'
                       : isCurrent
-                        ? 'bg-primary border-primary text-white ring-4 ring-primary/15'
+                        ? 'bg-primary border-primary text-primary-foreground ring-4 ring-primary/15'
                         : 'bg-card border-border text-muted-foreground'
                   }`}
                 >
                   {idx + 1}
                 </div>
-                <p className={`text-[11px] mt-2 font-medium text-center ${isCurrent ? 'text-primary' : 'text-foreground'}`}>
+                <p className={`text-[11px] mt-2 font-medium text-center ${isCurrent ? 'text-foreground' : 'text-foreground'}`}>
                   {step.label}
                 </p>
                 <p className="text-[10px] text-muted-foreground">{step.owner}</p>

@@ -3,9 +3,11 @@ import { useQuery } from '@tanstack/react-query';
 import { useData } from '@/hooks/usePlatformData';
 import { api } from '@/lib/apiClient';
 import PageHeader from '@/components/layout/PageHeader';
+import StatCard from '@/components/shared/StatCard';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { exportToCsv } from '@/lib/exportUtils';
 import { toast } from 'sonner';
+import { ArrowDownCircle, ArrowUpCircle, AlertTriangle, Download } from 'lucide-react';
 
 /** Period reconciliation from API + live escrow/payments detail */
 export default function ReconciliationPage() {
@@ -65,87 +67,145 @@ export default function ReconciliationPage() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="portal-page animate-fade-in">
       <PageHeader
         title="Reconciliation & settlement"
         subtitle="Period match of escrow legs vs payable records · variance flags"
         actions={
-          <button type="button" onClick={exportReport} className="px-4 py-2 text-sm rounded-xl border font-medium">
+          <button
+            type="button"
+            onClick={exportReport}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#D3F36B] text-[#0E1F1A] text-xs font-bold hover:bg-[#C5E85A] min-h-[36px]"
+          >
+            <Download size={12} />
             Export CSV
           </button>
         }
       />
 
-      <div className="flex flex-wrap gap-3 items-end">
-        <div>
-          <label className="text-xs text-muted-foreground">From</label>
-          <input type="date" value={from} onChange={e => setFrom(e.target.value)} className="block border rounded-lg px-3 py-2 text-sm" />
-        </div>
-        <div>
-          <label className="text-xs text-muted-foreground">To</label>
-          <input type="date" value={to} onChange={e => setTo(e.target.value)} className="block border rounded-lg px-3 py-2 text-sm" />
-        </div>
-        {apiReport.data && (
-          <p className="text-xs text-muted-foreground pb-2">
-            API summary · variance {formatCurrency(apiReport.data.variance)} · pending escrow {apiReport.data.pendingEscrow}
-          </p>
-        )}
-      </div>
-
-      <div className="grid sm:grid-cols-3 gap-4">
-        <div className="border rounded-2xl p-4">
-          <p className="text-xs text-muted-foreground">Disbursed (period)</p>
-          <p className="font-mono text-lg font-semibold">{formatCurrency(report.sumD)}</p>
-        </div>
-        <div className="border rounded-2xl p-4">
-          <p className="text-xs text-muted-foreground">Collected (period)</p>
-          <p className="font-mono text-lg font-semibold">{formatCurrency(report.sumC)}</p>
-        </div>
-        <div className={`border rounded-2xl p-4 ${Math.abs(report.variance) > 0 ? 'border-amber-300 bg-amber-50/50' : ''}`}>
-          <p className="text-xs text-muted-foreground">Variance (collect − disburse)</p>
-          <p className="font-mono text-lg font-semibold">{formatCurrency(report.variance)}</p>
-          {Math.abs(report.variance) > 0 && <p className="text-xs text-amber-700 mt-1">Flag: investigate open legs / timing</p>}
-        </div>
-      </div>
-
-      <div className="grid md:grid-cols-2 gap-4">
-        <div className="border rounded-2xl p-4">
-          <h3 className="text-sm font-semibold mb-2">Pending disbursements ({report.pendingDisb.length})</h3>
-          <ul className="space-y-2 text-sm max-h-48 overflow-y-auto">
-            {report.pendingDisb.slice(0, 20).map(l => (
-              <li key={l.id} className="flex justify-between gap-2">
-                <span className="font-mono text-xs truncate">{l.iouRegistryId}</span>
-                <span className="font-mono">{formatCurrency(l.amount)}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div className="border rounded-2xl p-4">
-          <h3 className="text-sm font-semibold mb-2">Pending collections ({report.pendingColl.length})</h3>
-          <ul className="space-y-2 text-sm max-h-48 overflow-y-auto">
-            {report.pendingColl.slice(0, 20).map(l => (
-              <li key={l.id} className="flex justify-between gap-2">
-                <span className="font-mono text-xs truncate">{l.iouRegistryId}</span>
-                <span className="font-mono">{formatCurrency(l.amount)} · due {formatDate(l.dueDate)}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
-
-      <div className="border rounded-2xl p-4">
-        <h3 className="text-sm font-semibold mb-3">Settled invoice match check</h3>
-        <div className="space-y-2 max-h-64 overflow-y-auto">
-          {report.matchFlags.slice(0, 30).map(({ inv, ok }) => (
-            <div key={inv.id} className="flex items-center justify-between text-sm border-b pb-2">
-              <span className="font-mono text-xs">{inv.iouRegistryId}</span>
-              <span className={ok ? 'text-emerald-700 text-xs font-medium' : 'text-amber-700 text-xs font-medium'}>
-                {ok ? 'Matched' : 'Variance / incomplete'}
-              </span>
+      <section className="portal-section">
+        <header className="portal-section__head">
+          <div>
+            <h2 className="portal-section__title">Reporting period</h2>
+            <p className="portal-section__desc">Filter escrow activity by date range</p>
+          </div>
+          <div className="flex flex-wrap items-end gap-2 w-full sm:w-auto">
+            <div>
+              <label className="text-[10px] font-semibold text-[#5A6B7D]">From</label>
+              <input
+                type="date"
+                value={from}
+                onChange={e => setFrom(e.target.value)}
+                className="field-input mt-1 !min-h-[34px] text-xs block"
+              />
             </div>
-          ))}
+            <div>
+              <label className="text-[10px] font-semibold text-[#5A6B7D]">To</label>
+              <input
+                type="date"
+                value={to}
+                onChange={e => setTo(e.target.value)}
+                className="field-input mt-1 !min-h-[34px] text-xs block"
+              />
+            </div>
+          </div>
+        </header>
+        {apiReport.data && (
+          <div className="portal-section__body--pad pt-0">
+            <p className="text-[11px] text-[#5A6B7D]">
+              API summary · variance {formatCurrency(apiReport.data.variance)} · pending escrow {apiReport.data.pendingEscrow}
+            </p>
+          </div>
+        )}
+      </section>
+
+      {Math.abs(report.variance) > 0 && (
+        <div className="portal-callout flex items-start gap-2">
+          <AlertTriangle size={14} className="shrink-0 mt-0.5 text-[#8A6A00]" />
+          <p>
+            Variance of {formatCurrency(report.variance)} detected — investigate open legs and timing mismatches.
+          </p>
         </div>
+      )}
+
+      <div className="portal-metrics portal-metrics--3">
+        <StatCard label="Disbursed (period)" value={formatCurrency(report.sumD)} icon={ArrowDownCircle} accent="forest" />
+        <StatCard label="Collected (period)" value={formatCurrency(report.sumC)} icon={ArrowUpCircle} accent="lime" />
+        <StatCard
+          label="Variance"
+          value={formatCurrency(report.variance)}
+          icon={AlertTriangle}
+          accent={Math.abs(report.variance) > 0 ? 'gold' : 'lime'}
+          change={Math.abs(report.variance) > 0 ? 'Investigate open legs' : undefined}
+        />
       </div>
+
+      <div className="portal-grid-2">
+        <section className="portal-section">
+          <header className="portal-section__head">
+            <h2 className="portal-section__title">Pending disbursements</h2>
+            <p className="portal-section__desc">{report.pendingDisb.length} open</p>
+          </header>
+          <div className="portal-section__body--pad pt-0 max-h-48 overflow-y-auto space-y-2">
+            {report.pendingDisb.slice(0, 20).length === 0 ? (
+              <p className="text-xs text-[#5A6B7D]">None pending</p>
+            ) : (
+              report.pendingDisb.slice(0, 20).map(l => (
+                <div key={l.id} className="flex justify-between gap-2 text-xs">
+                  <span className="font-mono text-[11px] truncate text-[#0E1F1A]">{l.iouRegistryId}</span>
+                  <span className="font-mono font-semibold shrink-0">{formatCurrency(l.amount)}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
+
+        <section className="portal-section">
+          <header className="portal-section__head">
+            <h2 className="portal-section__title">Pending collections</h2>
+            <p className="portal-section__desc">{report.pendingColl.length} open</p>
+          </header>
+          <div className="portal-section__body--pad pt-0 max-h-48 overflow-y-auto space-y-2">
+            {report.pendingColl.slice(0, 20).length === 0 ? (
+              <p className="text-xs text-[#5A6B7D]">None pending</p>
+            ) : (
+              report.pendingColl.slice(0, 20).map(l => (
+                <div key={l.id} className="flex justify-between gap-2 text-xs">
+                  <span className="font-mono text-[11px] truncate text-[#0E1F1A]">{l.iouRegistryId}</span>
+                  <span className="font-mono font-semibold shrink-0 text-right">
+                    {formatCurrency(l.amount)} · due {formatDate(l.dueDate)}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
+      </div>
+
+      <section className="portal-section">
+        <header className="portal-section__head">
+          <div>
+            <h2 className="portal-section__title">Settled invoice match check</h2>
+            <p className="portal-section__desc">Payment vs collection alignment</p>
+          </div>
+        </header>
+        <div className="divide-y divide-[#0E1F1A]/8 max-h-64 overflow-y-auto">
+          {report.matchFlags.slice(0, 30).length === 0 ? (
+            <div className="portal-empty px-3 py-5">
+              <p className="text-xs font-medium text-[#5A6B7D]">No settled invoices to check</p>
+            </div>
+          ) : (
+            report.matchFlags.slice(0, 30).map(({ inv, ok }) => (
+              <div key={inv.id} className="flex items-center justify-between px-3 py-2.5 text-xs">
+                <span className="font-mono text-[11px] text-[#0E1F1A]">{inv.iouRegistryId}</span>
+                <span className={`text-[11px] font-bold ${ok ? 'text-[#0E1F1A]' : 'text-[#8A6A00]'}`}>
+                  {ok ? 'Matched' : 'Variance / incomplete'}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+      </section>
     </div>
   );
 }

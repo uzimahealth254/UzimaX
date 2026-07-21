@@ -4,6 +4,7 @@ export type InvoiceStatus =
   | 'draft'
   | 'listed'
   | 'awaiting_opt_in'
+  | 'awaiting_buyer_verification'
   | 'verified'
   | 'offer_received'
   | 'offer_accepted'
@@ -34,7 +35,7 @@ export interface User {
   organisationName: string;
   avatarUrl?: string;
   createdAt: string;
-  /** API key for buyer integrations (demo) */
+  /** Deprecated client field — API keys are managed server-side and shown once on create */
   apiKey?: string;
 }
 
@@ -150,6 +151,8 @@ export interface AssignmentConsent {
   status: ConsentStatus;
   requestedAt: string;
   respondedAt?: string;
+  signatoryId?: string | null;
+  signedAt?: string | null;
 }
 
 export interface SecuritisationPackage {

@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/hooks/usePlatformData';
 import { useActor } from '@/hooks/useActor';
 import PageHeader from '@/components/layout/PageHeader';
 import StatusBadge from '@/components/shared/StatusBadge';
-import EmptyState from '@/components/shared/EmptyState';
+import ConfirmationModal from '@/components/shared/ConfirmationModal';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { computeTenorDays, priceReceivable } from '@/lib/pricing';
 import { toast } from 'sonner';
 import { HandCoins } from 'lucide-react';
 
@@ -15,115 +16,189 @@ export default function OptInInboxPage() {
   const actor = useActor();
   const [declineId, setDeclineId] = useState<string | null>(null);
   const [reason, setReason] = useState('');
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
 
   const mine = optIns.filter(o => o.supplierId === user?.organisationId);
   const pending = mine.filter(o => o.status === 'pending');
   const history = mine.filter(o => o.status !== 'pending');
 
-  const accept = (id: string) => {
-    respondToOptIn(id, true, undefined, actor);
-    toast.success('Opted in — receivable assigned to Uzima Capital SPV');
+  const confirmOpt = useMemo(
+    () => pending.find(o => o.id === confirmId) || null,
+    [pending, confirmId],
+  );
+
+  const preview = useMemo(() => {
+    if (!confirmOpt?.amount) return null;
+    const tenorDays = confirmOpt.issueDate && confirmOpt.dueDate
+      ? computeTenorDays(confirmOpt.issueDate, confirmOpt.dueDate)
+      : 90;
+    return priceReceivable({ faceValue: Number(confirmOpt.amount), tenorDays });
+  }, [confirmOpt]);
+
+  const accept = async () => {
+    if (!confirmId) return;
+    setBusyId(confirmId);
+    try {
+      await Promise.resolve(respondToOptIn(confirmId, true, undefined, actor));
+      toast.success('Opt-in recorded — receivable assigned to SPV');
+      setConfirmId(null);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Opt-in failed');
+    } finally {
+      setBusyId(null);
+    }
   };
 
-  const decline = () => {
+  const decline = async () => {
     if (!declineId) return;
-    respondToOptIn(declineId, false, reason || 'Declined by supplier', actor);
-    setDeclineId(null);
-    setReason('');
-    toast.message('Opt-in declined — buyer notified');
+    setBusyId(declineId);
+    try {
+      await Promise.resolve(respondToOptIn(declineId, false, reason || 'Declined by supplier', actor));
+      setDeclineId(null);
+      setReason('');
+      toast.message('Opt-in declined — buyer notified');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Decline failed');
+    } finally {
+      setBusyId(null);
+    }
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="portal-page animate-fade-in">
       <PageHeader
         title="Opt-in / Sell inbox"
         subtitle="Buyer-posted IOUs waiting for you to sell the receivable to the SPV"
       />
 
       {pending.length === 0 ? (
-        <EmptyState
-          icon={HandCoins}
-          title="No pending opt-ins"
-          description="When a buyer posts an approved invoice, it appears here for you to accept or decline."
-        />
+        <div className="portal-empty">
+          <HandCoins size={20} className="mx-auto text-[#5A6B7D] mb-2" />
+          <p className="text-xs font-bold text-[#0E1F1A]">No pending opt-ins</p>
+          <p className="text-[11px] text-[#5A6B7D] mt-0.5">
+            When a buyer posts an invoice naming you, it appears here to sell.
+          </p>
+        </div>
       ) : (
-        <div className="space-y-3">
-          {pending.map(o => (
-            <div key={o.id} className="glass rounded-2xl border border-white/50 p-4 md:p-5 space-y-3">
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div>
-                  <p className="font-semibold text-foreground">{o.buyerName}</p>
-                  <p className="text-xs font-mono text-muted-foreground">{o.iouRegistryId}</p>
+        <div className="space-y-2">
+          {pending.map(o => {
+            const busy = busyId === o.id;
+            const tenorDays = o.issueDate && o.dueDate ? computeTenorDays(o.issueDate, o.dueDate) : 90;
+            const quote = priceReceivable({ faceValue: Number(o.amount) || 0, tenorDays });
+            return (
+              <section key={o.id} className="portal-section">
+                <div className="px-3 py-2.5 space-y-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-[#0E1F1A] truncate">{o.buyerName}</p>
+                      <p className="text-[11px] font-mono text-[#5A6B7D] truncate">{o.iouRegistryId}</p>
+                    </div>
+                    <StatusBadge status={o.status} />
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                    <div className="rounded-md bg-[#f7faf6] border border-[#0E1F1A]/6 p-2">
+                      <p className="text-[10px] font-semibold text-[#5A6B7D]">Face value</p>
+                      <p className="font-mono font-bold text-[#0E1F1A] mt-0.5">{formatCurrency(o.amount)}</p>
+                    </div>
+                    <div className="rounded-md bg-[#f7faf6] border border-[#0E1F1A]/6 p-2">
+                      <p className="text-[10px] font-semibold text-[#5A6B7D]">Indicative proceeds</p>
+                      <p className="font-mono font-bold text-[#0E1F1A] mt-0.5">{formatCurrency(quote.offerPrice)}</p>
+                      <p className="text-[10px] text-[#5A6B7D] mt-0.5">~{quote.recommendedDiscount}% discount · {quote.tenorDays}d</p>
+                    </div>
+                    <div className="rounded-md bg-[#f7faf6] border border-[#0E1F1A]/6 p-2 col-span-2 sm:col-span-1">
+                      <p className="text-[10px] font-semibold text-[#5A6B7D]">Notified</p>
+                      <p className="font-medium text-[#0E1F1A] mt-0.5">{formatDate(o.notifiedAt)}</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 pt-1 border-t border-[#0E1F1A]/8">
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => setConfirmId(o.id)}
+                      className="inline-flex items-center justify-center px-3 py-1.5 min-h-[34px] rounded-lg bg-[#0E1F1A] text-white text-xs font-bold hover:bg-[#1A3A2E] disabled:opacity-50"
+                    >
+                      {busy ? '…' : 'Opt in & sell'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => setDeclineId(o.id)}
+                      className="inline-flex items-center justify-center px-3 py-1.5 min-h-[34px] rounded-lg border border-[#0E1F1A]/15 text-xs font-semibold text-[#0E1F1A] hover:bg-[#f7faf6] disabled:opacity-50"
+                    >
+                      Decline
+                    </button>
+                  </div>
                 </div>
-                <StatusBadge status={o.status} />
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-                <div>
-                  <p className="text-muted-foreground text-xs">Face value</p>
-                  <p className="font-semibold">{formatCurrency(o.amount)}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground text-xs">Notified</p>
-                  <p>{formatDate(o.notifiedAt)}</p>
-                </div>
-                <div className="sm:col-span-2 md:col-span-1">
-                  <p className="text-muted-foreground text-xs">On accept</p>
-                  <p className="text-sm">Assignment → Uzima Capital SPV</p>
-                </div>
-              </div>
-              <div className="flex flex-col sm:flex-row gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => accept(o.id)}
-                  className="w-full sm:w-auto px-4 py-2.5 min-h-[44px] rounded-xl bg-primary text-primary-foreground text-sm font-medium"
-                >
-                  Opt in &amp; sell
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDeclineId(o.id)}
-                  className="w-full sm:w-auto px-4 py-2.5 min-h-[44px] rounded-xl border text-sm font-medium"
-                >
-                  Decline
-                </button>
-              </div>
-            </div>
-          ))}
+              </section>
+            );
+          })}
         </div>
       )}
 
       {history.length > 0 && (
-        <div className="space-y-3">
-          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">History</h3>
-          {history.map(o => (
-            <div key={o.id} className="flex items-center justify-between gap-3 border rounded-xl px-4 py-3 text-sm">
-              <div>
-                <p className="font-medium">{o.iouRegistryId}</p>
-                <p className="text-muted-foreground text-xs">{o.buyerName} · {formatCurrency(o.amount)}</p>
-              </div>
-              <StatusBadge status={o.status} />
+        <section className="portal-section">
+          <header className="portal-section__head">
+            <div>
+              <h2 className="portal-section__title">History</h2>
+              <p className="portal-section__desc">{history.length} completed</p>
             </div>
-          ))}
-        </div>
+          </header>
+          <div className="divide-y divide-[#0E1F1A]/8 max-h-48 overflow-y-auto">
+            {history.map(o => (
+              <div key={o.id} className="px-3 py-2 flex items-center justify-between gap-2 text-xs">
+                <div className="min-w-0">
+                  <p className="font-semibold text-[#0E1F1A] font-mono truncate">{o.iouRegistryId}</p>
+                  <p className="text-[11px] text-[#5A6B7D] truncate">{o.buyerName} · {formatCurrency(o.amount)}</p>
+                </div>
+                <StatusBadge status={o.status} />
+              </div>
+            ))}
+          </div>
+        </section>
       )}
+
+      <ConfirmationModal
+        open={!!confirmId}
+        title="Confirm opt-in & sell?"
+        description={
+          preview
+            ? `If you sell, you'll receive ~${formatCurrency(preview.offerPrice)} now (${preview.recommendedDiscount}% discount on ${formatCurrency(confirmOpt?.amount || 0)}, ${preview.tenorDays}d tenor). This assigns the receivable to the SPV and cannot be undone from this inbox.`
+            : 'This assigns the receivable to the SPV and cannot be undone from this inbox.'
+        }
+        confirmLabel="Confirm sell"
+        onCancel={() => setConfirmId(null)}
+        onConfirm={accept}
+      />
 
       {declineId && (
         <div className="fixed inset-0 z-[85] flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => { setDeclineId(null); setReason(''); }} />
-          <div className="relative glass-strong rounded-t-3xl sm:rounded-2xl p-5 w-full max-w-md space-y-3 safe-pad-bottom">
-            <div className="sm:hidden w-10 h-1 rounded-full bg-muted mx-auto" />
-            <h2 className="font-semibold">Decline opt-in?</h2>
-            <p className="text-sm text-muted-foreground">The buyer will be notified. Optionally leave a reason.</p>
+          <div className="absolute inset-0 bg-slate-900/40" onClick={() => { setDeclineId(null); setReason(''); }} />
+          <div className="relative bg-white border border-[#0E1F1A]/10 rounded-t-xl sm:rounded-xl p-4 w-full max-w-md space-y-3 safe-pad-bottom">
+            <h2 className="text-sm font-bold text-[#0E1F1A]">Decline opt-in?</h2>
+            <p className="text-xs text-[#5A6B7D]">The buyer will be notified. Optionally leave a reason.</p>
             <textarea
               value={reason}
               onChange={e => setReason(e.target.value)}
               rows={2}
               placeholder="Reason (optional)"
-              className="w-full px-3 py-2.5 border rounded-lg text-sm min-h-[44px]"
+              className="field-input"
             />
             <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
-              <button type="button" className="w-full sm:w-auto min-h-[48px] px-4 py-2.5 rounded-xl border text-sm" onClick={() => { setDeclineId(null); setReason(''); }}>Cancel</button>
-              <button type="button" className="w-full sm:w-auto min-h-[48px] px-4 py-2.5 rounded-xl bg-destructive text-destructive-foreground text-sm" onClick={decline}>Decline</button>
+              <button
+                type="button"
+                className="min-h-[36px] px-3 py-2 rounded-lg border border-[#0E1F1A]/15 text-xs font-semibold"
+                onClick={() => { setDeclineId(null); setReason(''); }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="min-h-[36px] px-3 py-2 rounded-lg bg-red-600 text-white text-xs font-bold"
+                onClick={decline}
+              >
+                Decline
+              </button>
             </div>
           </div>
         </div>

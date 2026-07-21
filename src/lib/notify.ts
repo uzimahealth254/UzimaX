@@ -1,6 +1,5 @@
 /**
- * Notification hooks — email / SMS ready for provider credentials (Phase 1–2).
- * Without keys, messages are logged to console + optional local outbox.
+ * Optional client-side notify hooks (outbox). Server email is authoritative via Resend/SMTP.
  */
 
 export type NotifyChannel = 'email' | 'sms' | 'in_app';
@@ -13,7 +12,8 @@ export interface NotifyPayload {
   meta?: Record<string, string>;
 }
 
-const OUTBOX_KEY = 'uzima-notify-outbox';
+const OUTBOX_KEY = 'ioux-notify-outbox';
+const apiBase = () => import.meta.env.VITE_API_URL || 'http://localhost:8787';
 
 function pushOutbox(entry: NotifyPayload & { at: string; status: string }) {
   try {
@@ -26,14 +26,11 @@ function pushOutbox(entry: NotifyPayload & { at: string; status: string }) {
   }
 }
 
-/** Email hook — wires to Resend/SMTP when VITE_NOTIFY_EMAIL_ENABLED=true and API proxies */
 export async function sendEmailHook(payload: Omit<NotifyPayload, 'channel'>): Promise<{ ok: boolean; mode: string }> {
   const enabled = import.meta.env.VITE_NOTIFY_EMAIL_ENABLED === 'true';
-  const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8787';
-
   if (enabled) {
     try {
-      const res = await fetch(`${apiBase}/api/v1/notify/email`, {
+      const res = await fetch(`${apiBase()}/api/v1/notify/email`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -46,17 +43,13 @@ export async function sendEmailHook(payload: Omit<NotifyPayload, 'channel'>): Pr
       /* fall through */
     }
   }
-
-  console.info('[Uzima email hook — configure SMTP/RESEND]', payload);
   pushOutbox({ ...payload, channel: 'email', at: new Date().toISOString(), status: 'stub' });
   return { ok: true, mode: 'stub' };
 }
 
-/** SMS stub — Africa's Talking when keys present on API */
 export async function sendSmsStub(payload: { to: string; body: string }): Promise<{ ok: boolean; mode: string }> {
-  const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8787';
   try {
-    const res = await fetch(`${apiBase}/api/v1/notify/sms`, {
+    const res = await fetch(`${apiBase()}/api/v1/notify/sms`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -68,8 +61,7 @@ export async function sendSmsStub(payload: { to: string; body: string }): Promis
   } catch {
     /* stub */
   }
-  console.info('[Uzima SMS stub]', payload);
-  pushOutbox({ ...payload, channel: 'sms', subject: undefined, at: new Date().toISOString(), status: 'stub' });
+  pushOutbox({ ...payload, channel: 'sms', at: new Date().toISOString(), status: 'stub' });
   return { ok: true, mode: 'stub' };
 }
 

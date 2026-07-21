@@ -1,54 +1,50 @@
-# AFIX Handover Package — UzimaX
+# Uzima Handover — UzimaX
 
-**Product:** AFIX private-sector trade receivables / securitisation  
-**Plan:** AFIX-SYS-PLAN-001 · Phases 1–3 functional system  
-**IP:** UzimaX upon payment for corresponding phases  
+**Product:** Uzima private-sector trade receivables / securitisation  
+**Architecture:** UZIMA-ARCH-001  
+**IP:** UzimaX  
 
-## Delivered stack
+## Stack
 
 | Layer | Location |
 |-------|----------|
-| Portal (Vite + React) | `src/` |
-| Buyer / ops API (Express) | `server/` |
+| Portal (Vite + React + react-query) | `src/` |
+| API (Express + Drizzle + Postgres) | `server/` |
 | OpenAPI | `docs/openapi.yaml` |
-| Postman | `docs/afix-buyer-api.postman_collection.json` |
-| User notes | `docs/USER_GUIDE.md` |
-| IOU scheme draft | `docs/IOU_REGISTRY_SCHEME.md` |
-| Deploy | `render.yaml` (portal + `afix-api`) |
+| Deploy | `render.yaml` (`uzima-api`, `uzima-portal`, `uzima-db`) |
 
-## Environments
+## Critical environment variables
 
-| Var | Purpose |
-|-----|---------|
-| `VITE_API_BASE_URL` | Portal → API |
-| `VITE_NOTIFY_EMAIL_ENABLED` | Enable live email via API |
-| `PORT` | API port (default 8787) |
-| `DATABASE_URL` | Future Postgres (not required for demo) |
-| `SMTP_*` / `RESEND_API_KEY` | Email |
-| `AFRICAS_TALKING_*` | SMS |
+| Var | Service | Purpose |
+|-----|---------|---------|
+| `DATABASE_URL` | API | Postgres connection |
+| `JWT_SECRET` / `JWT_REFRESH_SECRET` | API | Auth signing (≥32 chars) |
+| `CORS_ORIGINS` | API | `https://www.ioux.africa,https://ioux.africa,https://app.ioux.africa` |
+| `VITE_API_URL` | Portal **build** | `https://api.ioux.africa` |
+| `PORTAL_URL` | API | `https://app.ioux.africa` (links in emails) |
+| `EMAIL_PROVIDER` + `RESEND_API_KEY` | API | OTP / invite email (not stub in prod) |
+| `EMAIL_FROM` | API | `IOU Exchange <no-reply@ioux.africa>` |
+| `AFYAX_WEBHOOK_SECRET` | API | Payment webhook HMAC |
+| `REDIS_URL` | API | Optional distributed rate limits |
+| `ALLOW_DEMO_OTP` | API | Must be `false` in production |
 
-## Board trail demo (non-technical)
+## Production checklist
+
+1. Deploy from `render.yaml` or equivalent  
+2. Schema applied (`drizzle-kit push` in API build)  
+3. Run `npm run db:seed` **once**, then rotate API keys  
+4. Configure Resend (or SMTP) for OTP delivery  
+5. Confirm portal login works against live API  
+6. Walk buyer IOU → supplier opt-in → SPV assignment  
+
+## Demo walk (board)
 
 1. Buyer posts IOU → Supplier opt-in → Assignment on SPV  
 2. Admin → Workflow → Export audit CSV  
-3. Admin → Reconciliation → show period variance  
-4. SPV → Packaging → NSE Listing path  
+3. Admin → Reconciliation → period variance  
+4. SPV → Packaging → NSE listing path  
 
-## Ops notes
+## Local vs production
 
-- Demo data lives in portal seed + `server/data/store.json`  
-- `GET /api/v1/sync` is **open for demo** — lock down before production  
-- Portal merges API uploads on load; dual-run both `dev` and `dev:api` for ERP demos  
-- Idle session timeout ~30 minutes in portal  
-
-## Still external / optional
-
-- Live bank rails / escrow trust accounts  
-- NSE exchange onboarding  
-- Keycloak / OAuth production identity  
-- Formal legal opinions & trust deeds  
-- Sule-final IOU legal text  
-
-## Contacts
-
-Prepared by Alfred · Client: CPF Githuku & team · IP: UzimaX
+- Local: Docker Postgres + `ALLOW_DEMO_OTP=true` + seed password  
+- Production: managed Postgres, demo OTP off, simulated wallets off, real email  

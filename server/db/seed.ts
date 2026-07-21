@@ -21,19 +21,31 @@ async function clearAll() {
 }
 
 async function main() {
-  console.log('Seeding Uzima database...');
+  const url = process.env.DATABASE_URL || '';
+  const isHosted = /supabase\.co|pooler\.supabase|render\.com|neon\.tech/i.test(url);
+  if (process.env.NODE_ENV === 'production' && process.env.ALLOW_PROD_SEED !== '1') {
+    throw new Error(
+      'Refusing to seed when NODE_ENV=production. Use npm run create-admin for the first admin, or set ALLOW_PROD_SEED=1 only for intentional demo wipe.',
+    );
+  }
+  if (isHosted && process.env.ALLOW_PROD_SEED !== '1') {
+    throw new Error(
+      'Refusing to seed hosted database. Set ALLOW_PROD_SEED=1 only if you intentionally want demo data on prod.',
+    );
+  }
+  console.log('Seeding IOU Exchange database...');
   await clearAll();
   const hash = await bcrypt.hash(DEMO_PASSWORD, 12);
 
   const [platform] = await db.insert(s.organisations).values({
-    name: 'Uzima Platform',
+    name: 'IOU Exchange Platform',
     orgType: 'platform',
     uzimaPartyId: generateUzimaPartyId('platform'),
     registrationNo: 'KE-PLT-001',
   }).returning();
 
   const [spv] = await db.insert(s.organisations).values({
-    name: 'Uzima Capital SPV',
+    name: 'IOU Exchange Capital SPV',
     orgType: 'spv',
     uzimaPartyId: generateUzimaPartyId('spv'),
     registrationNo: 'KE-SPV-001',
@@ -75,23 +87,23 @@ async function main() {
   }).returning();
 
   const [admin] = await db.insert(s.users).values({
-    email: 'admin@uzima.co.ke', fullName: 'Sarah Kimani', role: 'admin', orgId: platform.id, passwordHash: hash, isSignatory: true,
+    email: 'admin@ioux.africa', fullName: 'Sarah Kimani', role: 'admin', orgId: platform.id, passwordHash: hash, isSignatory: true,
   }).returning();
 
   const [spvUser] = await db.insert(s.users).values({
-    email: 'spv@uzima.co.ke', fullName: 'David Ochieng', role: 'spv', orgId: spv.id, passwordHash: hash, isSignatory: true,
+    email: 'spv@ioux.africa', fullName: 'David Ochieng', role: 'spv', orgId: spv.id, passwordHash: hash, isSignatory: true,
   }).returning();
 
   const [buyerUser] = await db.insert(s.users).values({
-    email: 'buyer@uzima.co.ke', fullName: 'Grace Wanjiku', role: 'buyer', orgId: buyer1.id, passwordHash: hash, isSignatory: true,
+    email: 'buyer@ioux.africa', fullName: 'Grace Wanjiku', role: 'buyer', orgId: buyer1.id, passwordHash: hash, isSignatory: true,
   }).returning();
 
   const [supUser] = await db.insert(s.users).values({
-    email: 'supplier@uzima.co.ke', fullName: 'James Mwangi', role: 'supplier', orgId: sup1.id, passwordHash: hash, isSignatory: true,
+    email: 'supplier@ioux.africa', fullName: 'James Mwangi', role: 'supplier', orgId: sup1.id, passwordHash: hash, isSignatory: true,
   }).returning();
 
   await db.insert(s.users).values({
-    email: 'supplier2@uzima.co.ke', fullName: 'Peter Njoroge', role: 'supplier', orgId: sup2.id, passwordHash: hash,
+    email: 'supplier2@ioux.africa', fullName: 'Peter Njoroge', role: 'supplier', orgId: sup2.id, passwordHash: hash,
   });
 
   await db.insert(s.signatories).values([
@@ -114,6 +126,8 @@ async function main() {
   await db.insert(s.feeConfigurations).values([
     { feeType: 'platform_spread', rateBps: 50, appliesTo: 'all', description: '50bps platform spread' },
     { feeType: 'transaction_pct', rateBps: 25, appliesTo: 'spv', description: '25bps on assignment' },
+    { feeType: 'per_payment_pct', rateBps: 10, appliesTo: 'spv', description: '10bps on each buyer repayment' },
+    { feeType: 'flat_fee', flatAmount: '500', appliesTo: 'supplier', description: 'KES 500 flat per assignment' },
   ]);
 
   await db.insert(s.programmes).values([
@@ -126,7 +140,7 @@ async function main() {
       discountBandMaxBps: 650,
     },
     {
-      name: 'Uzima Open Market Pool',
+      name: 'IOU Exchange Open Market Pool',
       maxExposure: '1000000000',
       maxTenorDays: 180,
       discountBandMinBps: 400,
@@ -304,10 +318,10 @@ async function main() {
   console.log('\n✅ Seed complete\n');
   console.log('Demo password:', DEMO_PASSWORD);
   console.log('Users:');
-  console.log('  admin@uzima.co.ke (admin)');
-  console.log('  buyer@uzima.co.ke (buyer)');
-  console.log('  supplier@uzima.co.ke (supplier)');
-  console.log('  spv@uzima.co.ke (spv)');
+  console.log('  admin@ioux.africa (admin)');
+  console.log('  buyer@ioux.africa (buyer)');
+  console.log('  supplier@ioux.africa (supplier)');
+  console.log('  spv@ioux.africa (spv)');
   console.log('\nAPI keys (shown once — store securely, never commit to frontend):');
   console.log('  Buyer (KBC):', buyerKey);
   console.log('  AfyaX:', afyaxKey);

@@ -5,9 +5,10 @@ interface AuthContextType {
   user: UzimaUser | null;
   isAuthenticated: boolean;
   loading: boolean;
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string; role?: string }>;
   logout: () => void;
-  updateProfile: (updates: Partial<Pick<UzimaUser, 'name' | 'email'>>) => void;
+  refreshUser: () => Promise<void>;
+  updateProfile: (updates: Partial<Pick<UzimaUser, 'name' | 'email' | 'mustChangePassword'>>) => void;
   showIdleWarning: boolean;
   dismissIdleWarning: () => void;
 }
@@ -26,6 +27,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [showIdleWarning, setShowIdleWarning] = useState(false);
 
+  const refreshUser = useCallback(async () => {
+    if (!getAccessToken()) {
+      setUser(null);
+      return;
+    }
+    const me = await fetchMe();
+    setUser(me);
+  }, []);
+
   useEffect(() => {
     (async () => {
       if (!getAccessToken()) {
@@ -33,15 +43,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
       try {
-        const me = await fetchMe();
-        setUser(me);
+        await refreshUser();
       } catch {
         setTokens(null, null);
+        setUser(null);
       } finally {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [refreshUser]);
 
   const logout = useCallback(() => {
     void logoutApi();
@@ -74,15 +84,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const data = await loginApi(email, password);
       setUser(data.user);
-      return { success: true };
+      return { success: true, role: data.user.role };
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      const ax = err as { response?: { data?: { message?: string } }; message?: string; code?: string };
+      const msg = ax.response?.data?.message
+        || (ax.code === 'ERR_NETWORK' ? 'Cannot reach the IOU Exchange API. Check your connection or try again later.' : null)
+        || ax.message
         || 'Login failed';
       return { success: false, error: msg };
     }
   }, []);
 
-  const updateProfile = useCallback((updates: Partial<Pick<UzimaUser, 'name' | 'email'>>) => {
+  const updateProfile = useCallback((updates: Partial<Pick<UzimaUser, 'name' | 'email' | 'mustChangePassword'>>) => {
     setUser((prev) => (prev ? { ...prev, ...updates } : prev));
   }, []);
 
@@ -93,6 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       login,
       logout,
+      refreshUser,
       updateProfile,
       showIdleWarning,
       dismissIdleWarning: () => setShowIdleWarning(false),

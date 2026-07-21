@@ -14,7 +14,11 @@ let redis: import('ioredis').default | null = null;
 
 export async function initRateLimitStore() {
   const url = process.env.REDIS_URL;
+  const isProd = process.env.NODE_ENV === 'production';
   if (!url) {
+    if (isProd) {
+      throw new Error('FATAL: REDIS_URL is required in production for rate limiting (UZIMA-ARCH-001 §3.7)');
+    }
     console.info('[rate-limit] in-memory (set REDIS_URL for Redis)');
     return;
   }
@@ -24,6 +28,9 @@ export async function initRateLimitStore() {
     await redis.connect();
     console.info('[rate-limit] Redis connected');
   } catch (e) {
+    if (isProd) {
+      throw new Error(`FATAL: Redis required in production but connection failed: ${e}`);
+    }
     console.warn('[rate-limit] Redis unavailable, using memory', e);
     redis = null;
   }

@@ -13,6 +13,10 @@ dist/**
 .env
 .env.*
 !.env.example
+!.env.production.example
+.supabase-db-password.tmp
+scripts/.tmp*
+scripts/.tmp-ops-secrets.json
 storage
 storage/**
 

@@ -1,5 +1,5 @@
 import {
-  authenticate, authorize, apiKeyAuth, requireScope,
+  authenticate, authorize, apiKeyAuth, requireScope, authenticateAny,
   signAccessToken, signRefreshToken, verifyRefreshToken, loadUser,
 } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
@@ -12,6 +12,7 @@ import {
   respondToBuyerVerification,
   listInvoicesForOrg,
   releaseEscrowLeg,
+  collectEscrowLeg,
   applyPaymentUpdate,
   getOrCreateWallet,
   createAssignment,
@@ -20,13 +21,15 @@ import { computeTenorDays, priceReceivable } from '../lib/pricing.js';
 import { writeAudit } from '../middleware/audit.js';
 import { storeFile, readStoredFile, orgIdFromStorageKey } from '../services/storage.js';
 import { issueOtp, verifyOtp } from '../services/otp.js';
-import { generateAssignmentLetter } from '../services/pdf.js';
+import { generateAssignmentLetter, generatePackageSummary } from '../services/pdf.js';
+import { templates, emailSubjects, sendEmail } from '../services/email.js';
+import { notifyOrgUsers, notifyUser } from '../services/notificationService.js';
 import { getAdminAnalytics, getProgrammeUtilisation, getBuyerCreditRisk } from '../services/analytics.js';
 import {
   assertInvoiceAccess, assertOrgMatch, assertBuyerOrg, assertSupplierOrg,
 } from '../middleware/access.js';
 import {
-  assertStrongPassword, bodyRefreshAllowed, generateTempPassword,
+  assertStrongPassword, bodyRefreshAllowed, generateTempPassword, generateApiKey,
   REFRESH_COOKIE, refreshCookieOptions, simulatedWalletAllowed,
   verifyWebhookSignature,
 } from '../lib/security.js';
@@ -36,7 +39,7 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { Router } from 'express';
 import multer from 'multer';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../db/client.js';
 import * as s from '../db/schema.js';
@@ -44,7 +47,7 @@ export const authRouter = Router();
 export const apiRouter = Router();
 
 async function persistRefreshToken(userId: string, refreshToken: string) {
-  const refreshHash = await bcrypt.hash(refreshToken, 10);
+  const refreshHash = await bcrypt.hash(refreshToken, 12);
   await db.insert(s.refreshTokens).values({
     userId,
     tokenHash: refreshHash,
@@ -118,6 +121,7 @@ authRouter.post('/login', validate(z.object({
         organisationId: user.orgId,
         organisationName: org?.name || null,
         uzimaPartyId: org?.uzimaPartyId || null,
+        mustChangePassword: !!user.mustChangePassword,
       },
     };
     if (bodyRefreshAllowed()) body.refreshToken = refreshToken;
@@ -173,7 +177,37 @@ authRouter.get('/me', authenticate, async (req, res, next) => {
       organisationId: user.orgId,
       organisationName: org?.name || null,
       uzimaPartyId: org?.uzimaPartyId || null,
+      mustChangePassword: !!user.mustChangePassword,
     });
+  } catch (e) { next(e); }
+});
+
+authRouter.post('/change-password', authenticate, validate(z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(12),
+})), async (req, res, next) => {
+  try {
+    assertStrongPassword(req.body.newPassword);
+    const user = await loadUser(req.user!.userId);
+    if (!user) throw new AppError(401, 'unauthorized', 'User not found');
+    if (!(await bcrypt.compare(req.body.currentPassword, user.passwordHash))) {
+      throw new AppError(400, 'invalid_password', 'Current password is incorrect');
+    }
+    const passwordHash = await bcrypt.hash(req.body.newPassword, 12);
+    await db.update(s.users).set({
+      passwordHash,
+      mustChangePassword: false,
+      updatedAt: new Date(),
+    }).where(eq(s.users.id, user.id));
+    await db.delete(s.refreshTokens).where(eq(s.refreshTokens.userId, user.id));
+    await notifyUser(user.id, {
+      type: 'password_changed',
+      title: 'Password updated',
+      body: 'Your IOU Exchange password was changed successfully',
+      emailHtml: templates.passwordChanged(user.fullName || undefined),
+      emailSubject: emailSubjects.passwordChanged(),
+    });
+    res.json({ ok: true });
   } catch (e) { next(e); }
 });
 
@@ -237,8 +271,15 @@ authRouter.post('/reset-password', validate(z.object({
     if (!user) throw new AppError(400, 'invalid_reset', 'Invalid reset request');
     await verifyOtp(user.id, 'password_reset', req.body.otp);
     const passwordHash = await bcrypt.hash(req.body.newPassword, 12);
-    await db.update(s.users).set({ passwordHash }).where(eq(s.users.id, user.id));
+    await db.update(s.users).set({ passwordHash, mustChangePassword: false }).where(eq(s.users.id, user.id));
     await db.delete(s.refreshTokens).where(eq(s.refreshTokens.userId, user.id));
+    await notifyUser(user.id, {
+      type: 'password_changed',
+      title: 'Password updated',
+      body: 'Your IOU Exchange password was changed successfully',
+      emailHtml: templates.passwordChanged(user.fullName || undefined),
+      emailSubject: emailSubjects.passwordChanged(),
+    });
     res.json({ ok: true });
   } catch (e) { next(e); }
 });
@@ -303,10 +344,60 @@ const invoiceCreateSchema = z.object({
     dueDate: z.string(),
     amount: z.number(),
   })).optional(),
+  supportingDocs: z.array(z.object({
+    id: z.string().uuid().optional(),
+    name: z.string(),
+    url: z.string().optional(),
+    fileUrl: z.string().optional(),
+    docType: z.string().optional(),
+  }).passthrough()).optional(),
+  commitmentToPay: z.boolean().optional(),
+  bankStandingOrderRef: z.string().max(128).optional(),
 });
 
-apiRouter.post('/invoices', authenticate, validate(invoiceCreateSchema), async (req, res, next) => {
+apiRouter.post('/invoices', authenticateAny, validate(invoiceCreateSchema), async (req, res, next) => {
   try {
+    if (req.apiClient) {
+      if (!(req.apiClient.scopes.includes('invoices:write') || req.apiClient.scopes.includes('*'))) {
+        throw new AppError(403, 'forbidden', 'Missing scopes: invoices:write');
+      }
+      const body = req.body;
+      const client = req.apiClient;
+      let buyerOrgId = body.buyerOrgId as string | undefined;
+      let supplierOrgId = body.supplierOrgId as string | undefined;
+      if (body.buyerPartyId) {
+        const [b] = await db.select().from(s.organisations).where(eq(s.organisations.uzimaPartyId, body.buyerPartyId)).limit(1);
+        if (!b) throw new AppError(400, 'buyer_not_found', 'buyerPartyId not found');
+        buyerOrgId = b.id;
+      }
+      if (body.supplierPartyId) {
+        const [sp] = await db.select().from(s.organisations).where(eq(s.organisations.uzimaPartyId, body.supplierPartyId)).limit(1);
+        if (!sp) throw new AppError(400, 'supplier_not_found', 'supplierPartyId not found');
+        supplierOrgId = sp.id;
+      }
+      const [keyOrg] = await db.select().from(s.organisations).where(eq(s.organisations.id, client.orgId)).limit(1);
+      const isPlatform = keyOrg?.orgType === 'platform' || client.scopes.includes('*');
+      if (!isPlatform) buyerOrgId = client.orgId;
+      if (!buyerOrgId || !supplierOrgId) throw new AppError(400, 'validation_error', 'buyer and supplier required');
+      const result = await createBuyerOriginatedInvoice({
+        buyerOrgId, supplierOrgId,
+        invoiceNumber: body.invoiceNumber, poReference: body.poReference,
+        faceValue: body.faceValue || body.amount,
+        currency: body.currency, issueDate: body.issueDate, dueDate: body.dueDate,
+        description: body.description, interestRate: body.interestRate,
+        installmentSchedule: body.installmentSchedule, origin: 'api_upload',
+        supportingDocs: body.supportingDocs,
+        commitmentToPay: body.commitmentToPay,
+        bankStandingOrderRef: body.bankStandingOrderRef,
+      });
+      return res.status(201).json({
+        invoiceId: result.invoice.id,
+        id: result.invoice.id,
+        iouRegistryId: result.invoice.iouRegistryId,
+        status: result.invoice.status,
+      });
+    }
+
     const user = req.user!;
     const body = req.body;
     const face = body.faceValue || body.amount;
@@ -331,6 +422,9 @@ apiRouter.post('/invoices', authenticate, validate(invoiceCreateSchema), async (
         buyerOrgId, supplierOrgId, invoiceNumber: body.invoiceNumber, poReference: body.poReference,
         faceValue: face, currency: body.currency, issueDate: body.issueDate, dueDate: body.dueDate,
         description: body.description, interestRate: body.interestRate, installmentSchedule: body.installmentSchedule,
+        supportingDocs: body.supportingDocs,
+        commitmentToPay: body.commitmentToPay ?? true,
+        bankStandingOrderRef: body.bankStandingOrderRef,
       }, user.userId);
       return res.status(201).json(result.invoice);
     }
@@ -341,7 +435,9 @@ apiRouter.post('/invoices', authenticate, validate(invoiceCreateSchema), async (
       const result = await createSupplierOriginatedInvoice({
         buyerOrgId, supplierOrgId, invoiceNumber: body.invoiceNumber,
         faceValue: face, currency: body.currency, issueDate: body.issueDate, dueDate: body.dueDate,
-        description: body.description,
+        description: body.description, supportingDocs: body.supportingDocs,
+        commitmentToPay: body.commitmentToPay,
+        bankStandingOrderRef: body.bankStandingOrderRef,
       }, user.userId);
       return res.status(201).json(result.invoice);
     }
@@ -384,8 +480,11 @@ apiRouter.post('/external/invoices', apiKeyAuth, requireScope('invoices:write'),
       currency: body.currency, issueDate: body.issueDate, dueDate: body.dueDate,
       description: body.description, interestRate: body.interestRate,
       installmentSchedule: body.installmentSchedule, origin: 'api_upload',
+      commitmentToPay: body.commitmentToPay,
+      bankStandingOrderRef: body.bankStandingOrderRef,
     });
     res.status(201).json({
+      invoiceId: result.invoice.id,
       id: result.invoice.id,
       iouRegistryId: result.invoice.iouRegistryId,
       status: result.invoice.status,
@@ -409,10 +508,16 @@ apiRouter.get('/invoices/:id', authenticate, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-apiRouter.get('/invoices/:id/status', authenticate, async (req, res, next) => {
+apiRouter.get('/invoices/:id/status', authenticateAny, async (req, res, next) => {
   try {
+    if (req.apiClient) {
+      if (!(req.apiClient.scopes.includes('invoices:read') || req.apiClient.scopes.includes('*') || req.apiClient.scopes.includes('invoices:write'))) {
+        throw new AppError(403, 'forbidden', 'Missing scopes: invoices:read');
+      }
+    }
     const [inv] = await db.select().from(s.invoices).where(eq(s.invoices.id, req.params.id)).limit(1);
-    assertInvoiceAccess(req.user!, inv);
+    if (!inv) throw new AppError(404, 'not_found', 'Invoice not found');
+    if (req.user) assertInvoiceAccess(req.user, inv);
     res.json({ id: inv.id, iouRegistryId: inv.iouRegistryId, status: inv.status, listingStatus: inv.listingStatus });
   } catch (e) { next(e); }
 });
@@ -426,10 +531,10 @@ apiRouter.get('/ious/:iouRegistryId', authenticate, async (req, res, next) => {
 });
 
 // Opt-ins
-apiRouter.get('/opt-ins', authenticate, async (req, res, next) => {
+apiRouter.get('/opt-ins', authenticate, authorize('supplier', 'admin', 'spv'), async (req, res, next) => {
   try {
     const orgId = req.user!.orgId!;
-    const rows = req.user!.role === 'admin'
+    const rows = req.user!.role === 'admin' || req.user!.role === 'spv'
       ? await db.select().from(s.optIns)
       : await db.select().from(s.optIns).where(eq(s.optIns.supplierOrgId, orgId));
     res.json({ data: rows });
@@ -450,10 +555,10 @@ apiRouter.post('/opt-ins/:id/respond', authenticate, authorize('supplier', 'admi
 });
 
 // Buyer verifications
-apiRouter.get('/buyer-verifications', authenticate, async (req, res, next) => {
+apiRouter.get('/buyer-verifications', authenticate, authorize('buyer', 'admin', 'spv'), async (req, res, next) => {
   try {
     const orgId = req.user!.orgId!;
-    const rows = req.user!.role === 'admin'
+    const rows = req.user!.role === 'admin' || req.user!.role === 'spv'
       ? await db.select().from(s.buyerVerifications)
       : await db.select().from(s.buyerVerifications).where(eq(s.buyerVerifications.buyerOrgId, orgId));
     res.json({ data: rows });
@@ -474,7 +579,7 @@ apiRouter.post('/buyer-verifications/:id/respond', authenticate, authorize('buye
 });
 
 // Assignments
-apiRouter.get('/assignments', authenticate, async (req, res, next) => {
+apiRouter.get('/assignments', authenticate, authorize('buyer', 'supplier', 'spv', 'admin'), async (req, res, next) => {
   try {
     const role = req.user!.role;
     if (role === 'admin' || role === 'spv') {
@@ -491,7 +596,7 @@ apiRouter.get('/assignments', authenticate, async (req, res, next) => {
 });
 
 // Offers
-apiRouter.get('/offers', authenticate, async (req, res, next) => {
+apiRouter.get('/offers', authenticate, authorize('buyer', 'supplier', 'spv', 'admin'), async (req, res, next) => {
   try {
     const role = req.user!.role;
     if (role === 'admin' || role === 'spv') {
@@ -539,6 +644,17 @@ apiRouter.post('/offers', authenticate, authorize('spv', 'admin'), validate(z.ob
       expiresAt: new Date(Date.now() + 7 * 86400000),
     }).returning();
     await db.update(s.invoices).set({ status: 'offer_received', updatedAt: new Date() }).where(eq(s.invoices.id, inv.id));
+    const iou = inv.iouRegistryId || inv.id;
+    const discountPct = `${(bps / 100).toFixed(2)}%`;
+    await notifyOrgUsers(inv.supplierOrgId, {
+      type: 'offer_received',
+      title: `Purchase offer on ${iou}`,
+      body: `Discount ${discountPct} · purchase price KES ${purchasePrice.toLocaleString()}`,
+      referenceType: 'offer',
+      referenceId: offer.id,
+      emailHtml: templates.offerReceived(iou, discountPct, `KES ${purchasePrice.toLocaleString()}`),
+      emailSubject: emailSubjects.offerReceived(iou),
+    });
     res.status(201).json(offer);
   } catch (e) { next(e); }
 });
@@ -564,19 +680,52 @@ apiRouter.post('/offers/:id/respond', authenticate, authorize('supplier', 'admin
         spvOrgId: offer.spvOrgId,
         status: 'pending',
       }).returning();
+      const iou = inv.iouRegistryId || inv.id;
+      await notifyOrgUsers(offer.spvOrgId, {
+        type: 'offer_accepted',
+        title: `Offer accepted: ${iou}`,
+        body: 'Supplier accepted your purchase offer — request buyer consent if needed',
+        referenceType: 'offer',
+        referenceId: offer.id,
+        emailHtml: templates.offerAccepted(iou),
+        emailSubject: emailSubjects.offerAccepted(iou),
+      });
+      await notifyOrgUsers(inv.buyerOrgId, {
+        type: 'consent_required',
+        title: `Consent required: ${iou}`,
+        body: 'An authorised signatory must complete OTP-verified assignment consent',
+        referenceType: 'consent',
+        referenceId: consent.id,
+        emailHtml: templates.consentRequired(iou, `KES ${Number(inv.faceValue).toLocaleString()}`),
+        emailSubject: emailSubjects.consentRequired(iou),
+      });
       return res.json({ offer, consent });
     }
+    const iou = inv.iouRegistryId || inv.id;
+    await notifyOrgUsers(offer.spvOrgId, {
+      type: 'offer_declined',
+      title: `Offer declined: ${iou}`,
+      body: 'Supplier declined the purchase offer',
+      referenceType: 'offer',
+      referenceId: offer.id,
+      emailHtml: templates.offerDeclined(iou),
+      emailSubject: emailSubjects.offerDeclined(iou),
+    });
     res.json({ offer });
   } catch (e) { next(e); }
 });
 
 // Consents
-apiRouter.get('/consents', authenticate, async (req, res, next) => {
+apiRouter.get('/consents', authenticate, authorize('buyer', 'spv', 'admin'), async (req, res, next) => {
   try {
-    const rows = req.user!.role === 'buyer'
-      ? await db.select().from(s.assignmentConsents).where(eq(s.assignmentConsents.buyerOrgId, req.user!.orgId!))
-      : await db.select().from(s.assignmentConsents);
-    res.json({ data: rows });
+    const role = req.user!.role;
+    if (role === 'buyer') {
+      return res.json({
+        data: await db.select().from(s.assignmentConsents).where(eq(s.assignmentConsents.buyerOrgId, req.user!.orgId!)),
+      });
+    }
+    // SPV / admin — full consent registry
+    res.json({ data: await db.select().from(s.assignmentConsents) });
   } catch (e) { next(e); }
 });
 
@@ -603,6 +752,16 @@ apiRouter.post('/consents', authenticate, authorize('spv', 'admin'), validate(z.
       resourceType: 'assignment_consent',
       resourceId: consent.id,
     });
+    const iou = inv.iouRegistryId || inv.id;
+    await notifyOrgUsers(inv.buyerOrgId, {
+      type: 'consent_required',
+      title: `Consent required: ${iou}`,
+      body: 'An authorised signatory must complete OTP-verified assignment consent',
+      referenceType: 'consent',
+      referenceId: consent.id,
+      emailHtml: templates.consentRequired(iou, `KES ${Number(inv.faceValue).toLocaleString()}`),
+      emailSubject: emailSubjects.consentRequired(iou),
+    });
     res.status(201).json(consent);
   } catch (e) { next(e); }
 });
@@ -613,12 +772,56 @@ apiRouter.post('/consents/:id/request-otp', authenticate, authorize('buyer', 'ad
     if (!consent) throw new AppError(404, 'not_found', 'Consent not found');
     assertBuyerOrg(req.user!, consent.buyerOrgId);
     if (consent.status !== 'pending') throw new AppError(400, 'invalid_state', 'Consent already signed');
+
+    if (req.user!.role !== 'admin') {
+      const [sig] = await db.select().from(s.signatories).where(and(
+        eq(s.signatories.userId, req.user!.userId),
+        eq(s.signatories.orgId, consent.buyerOrgId),
+        eq(s.signatories.isActive, true),
+      )).limit(1);
+      if (!sig) throw new AppError(403, 'forbidden', 'Active signatory required to sign consent');
+    }
+
     const hint = await issueOtp({
       userId: req.user!.userId,
       purpose: `consent:${consent.id}`,
       email: req.user!.email,
     });
     res.json({ otpSent: true, consentId: consent.id, ...hint });
+  } catch (e) { next(e); }
+});
+
+apiRouter.post('/consents/:id/decline', authenticate, authorize('buyer', 'admin'), validate(z.object({
+  reason: z.string().max(500).optional(),
+})), async (req, res, next) => {
+  try {
+    const [consent] = await db.select().from(s.assignmentConsents).where(eq(s.assignmentConsents.id, req.params.id)).limit(1);
+    if (!consent) throw new AppError(404, 'not_found', 'Consent not found');
+    assertBuyerOrg(req.user!, consent.buyerOrgId);
+    if (consent.status !== 'pending') throw new AppError(400, 'invalid_state', 'Consent is not pending');
+    await db.update(s.assignmentConsents).set({
+      status: 'declined',
+      signedAt: new Date(),
+    }).where(eq(s.assignmentConsents.id, consent.id));
+    await writeAudit({
+      actorId: req.user!.userId,
+      action: 'consent.declined',
+      resourceType: 'assignment_consent',
+      resourceId: consent.id,
+      details: { reason: req.body.reason || null },
+    });
+    const [inv] = await db.select().from(s.invoices).where(eq(s.invoices.id, consent.invoiceId)).limit(1);
+    const iou = inv?.iouRegistryId || consent.invoiceId;
+    await notifyOrgUsers(consent.spvOrgId, {
+      type: 'consent_declined',
+      title: `Consent declined: ${iou}`,
+      body: req.body.reason || 'Buyer declined assignment consent',
+      referenceType: 'consent',
+      referenceId: consent.id,
+      emailHtml: templates.consentDeclined(iou, req.body.reason),
+      emailSubject: emailSubjects.consentDeclined(iou),
+    });
+    res.json({ id: consent.id, status: 'declined' });
   } catch (e) { next(e); }
 });
 
@@ -631,6 +834,17 @@ apiRouter.post('/consents/:id/confirm-sign', authenticate, authorize('buyer', 'a
     assertBuyerOrg(req.user!, consent.buyerOrgId);
     if (consent.status !== 'pending') throw new AppError(400, 'invalid_state', 'Consent already signed');
 
+    let signatoryId: string | null = null;
+    if (req.user!.role !== 'admin') {
+      const [sig] = await db.select().from(s.signatories).where(and(
+        eq(s.signatories.userId, req.user!.userId),
+        eq(s.signatories.orgId, consent.buyerOrgId),
+        eq(s.signatories.isActive, true),
+      )).limit(1);
+      if (!sig) throw new AppError(403, 'forbidden', 'Active signatory required to sign consent');
+      signatoryId = sig.id;
+    }
+
     await verifyOtp(req.user!.userId, `consent:${consent.id}`, req.body.otp);
 
     const hash = crypto.createHash('sha256').update(`${consent.id}:${req.user!.userId}:${Date.now()}`).digest('hex');
@@ -638,6 +852,7 @@ apiRouter.post('/consents/:id/confirm-sign', authenticate, authorize('buyer', 'a
       status: 'signed',
       otpVerified: true,
       signatureHash: hash,
+      signatoryId,
       signedAt: new Date(),
     }).where(eq(s.assignmentConsents.id, consent.id));
 
@@ -672,6 +887,31 @@ apiRouter.post('/consents/:id/confirm-sign', authenticate, authorize('buyer', 'a
       console.warn('[pdf] assignment letter failed', e);
     }
 
+    {
+      const [inv] = await db.select().from(s.invoices).where(eq(s.invoices.id, consent.invoiceId)).limit(1);
+      const iou = inv?.iouRegistryId || consent.invoiceId;
+      await notifyOrgUsers(consent.spvOrgId, {
+        type: 'consent_signed',
+        title: `Consent signed: ${iou}`,
+        body: 'OTP-verified assignment consent is on file',
+        referenceType: 'consent',
+        referenceId: consent.id,
+        emailHtml: templates.consentSigned(iou),
+        emailSubject: emailSubjects.consentSigned(iou),
+      });
+      if (inv) {
+        await notifyOrgUsers(inv.supplierOrgId, {
+          type: 'consent_signed',
+          title: `Consent signed: ${iou}`,
+          body: 'Buyer consent recorded — assignment can proceed',
+          referenceType: 'consent',
+          referenceId: consent.id,
+          emailHtml: templates.consentSigned(iou),
+          emailSubject: emailSubjects.consentSigned(iou),
+        });
+      }
+    }
+
     res.json({ consent: { ...consent, status: 'signed', signatureHash: hash }, assignment: asgn });
   } catch (e) { next(e); }
 });
@@ -681,21 +921,43 @@ apiRouter.post('/consents/:id/sign', authenticate, authorize('buyer', 'admin'), 
   otp: z.string().min(4),
 })), async (req, res, next) => {
   try {
-    // Delegate to confirm-sign logic via internal re-dispatch pattern
     const [consent] = await db.select().from(s.assignmentConsents).where(eq(s.assignmentConsents.id, req.params.id)).limit(1);
     if (!consent) throw new AppError(404, 'not_found', 'Consent not found');
     assertBuyerOrg(req.user!, consent.buyerOrgId);
     if (consent.status !== 'pending') throw new AppError(400, 'invalid_state', 'Consent already signed');
+    let signatoryId: string | null = null;
+    if (req.user!.role !== 'admin') {
+      const [sig] = await db.select().from(s.signatories).where(and(
+        eq(s.signatories.userId, req.user!.userId),
+        eq(s.signatories.orgId, consent.buyerOrgId),
+        eq(s.signatories.isActive, true),
+      )).limit(1);
+      if (!sig) throw new AppError(403, 'forbidden', 'Active signatory required to sign consent');
+      signatoryId = sig.id;
+    }
     await verifyOtp(req.user!.userId, `consent:${consent.id}`, req.body.otp);
     const hash = crypto.createHash('sha256').update(`${consent.id}:${req.user!.userId}:${Date.now()}`).digest('hex');
     await db.update(s.assignmentConsents).set({
-      status: 'signed', otpVerified: true, signatureHash: hash, signedAt: new Date(),
+      status: 'signed', otpVerified: true, signatureHash: hash, signatoryId, signedAt: new Date(),
     }).where(eq(s.assignmentConsents.id, consent.id));
     const [offer] = await db.select().from(s.purchaseOffers).where(eq(s.purchaseOffers.invoiceId, consent.invoiceId)).limit(1);
     const asgn = await createAssignment({
       invoiceId: consent.invoiceId, type: 'offer_consent', actorId: req.user!.userId,
       offerId: offer?.id, consentId: consent.id, discountBps: offer?.discountRateBps,
     });
+    const [inv] = await db.select().from(s.invoices).where(eq(s.invoices.id, consent.invoiceId)).limit(1);
+    if (inv) {
+      const iou = inv.iouRegistryId || inv.id;
+      await notifyOrgUsers(consent.spvOrgId, {
+        type: 'consent_signed',
+        title: `Consent signed: ${iou}`,
+        body: 'OTP-verified assignment consent is on file',
+        referenceType: 'consent',
+        referenceId: consent.id,
+        emailHtml: templates.consentSigned(iou),
+        emailSubject: emailSubjects.consentSigned(iou),
+      });
+    }
     res.json({ consent: { ...consent, status: 'signed', signatureHash: hash }, assignment: asgn });
   } catch (e) { next(e); }
 });
@@ -714,17 +976,27 @@ apiRouter.post('/escrow/:id/release', authenticate, authorize('spv', 'admin'), a
   } catch (e) { next(e); }
 });
 
-// Wallets
-apiRouter.get('/wallets/me', authenticate, async (req, res, next) => {
+apiRouter.post('/escrow/:id/collect', authenticate, authorize('spv', 'admin'), async (req, res, next) => {
   try {
-    if (!req.user!.orgId) throw new AppError(400, 'no_org', 'User has no organisation');
-    const wallet = await getOrCreateWallet(req.user!.orgId);
-    const txs = await db.select().from(s.walletTransactions).where(eq(s.walletTransactions.walletId, wallet.id));
-    res.json({ wallet, transactions: txs });
+    const leg = await collectEscrowLeg(req.params.id, req.user!.userId);
+    res.json(leg);
   } catch (e) { next(e); }
 });
 
-apiRouter.post('/wallets/me/deposit', authenticate, validate(z.object({
+// Wallets (simulated ledger — gated by ENABLE_SIMULATED_WALLET)
+apiRouter.get('/wallets/me', authenticate, authorize('buyer', 'supplier', 'spv', 'admin'), async (req, res, next) => {
+  try {
+    if (!simulatedWalletAllowed()) {
+      throw new AppError(403, 'forbidden', 'Simulated wallet is disabled in this environment');
+    }
+    if (!req.user!.orgId) throw new AppError(400, 'no_org', 'User has no organisation');
+    const wallet = await getOrCreateWallet(req.user!.orgId);
+    const txs = await db.select().from(s.walletTransactions).where(eq(s.walletTransactions.walletId, wallet.id));
+    res.json({ wallet, transactions: txs, simulated: true });
+  } catch (e) { next(e); }
+});
+
+apiRouter.post('/wallets/me/deposit', authenticate, authorize('buyer', 'supplier', 'spv', 'admin'), validate(z.object({
   amount: z.number().positive().max(50_000_000),
   description: z.string().max(200).optional(),
 })), async (req, res, next) => {
@@ -752,7 +1024,7 @@ apiRouter.post('/wallets/me/deposit', authenticate, validate(z.object({
   } catch (e) { next(e); }
 });
 
-apiRouter.post('/wallets/me/withdraw', authenticate, validate(z.object({
+apiRouter.post('/wallets/me/withdraw', authenticate, authorize('buyer', 'supplier', 'spv', 'admin'), validate(z.object({
   amount: z.number().positive().max(50_000_000),
   description: z.string().max(200).optional(),
 })), async (req, res, next) => {
@@ -783,7 +1055,16 @@ apiRouter.post('/wallets/me/withdraw', authenticate, validate(z.object({
 // Packages
 apiRouter.get('/packages', authenticate, authorize('spv', 'admin'), async (_req, res, next) => {
   try {
-    res.json({ data: await db.select().from(s.packages) });
+    const pkgs = await db.select().from(s.packages);
+    const items = await db.select().from(s.packageItems);
+    const asgns = await db.select().from(s.assignments);
+    const asgnById = Object.fromEntries(asgns.map((a) => [a.id, a]));
+    const data = pkgs.map((p) => {
+      const pItems = items.filter((i) => i.packageId === p.id);
+      const invoiceIds = pItems.map((i) => asgnById[i.assignmentId]?.invoiceId).filter(Boolean);
+      return { ...p, invoiceIds };
+    });
+    res.json({ data });
   } catch (e) { next(e); }
 });
 
@@ -794,33 +1075,106 @@ apiRouter.post('/packages', authenticate, authorize('spv', 'admin'), validate(z.
   try {
     const asgns = await db.select().from(s.assignments);
     const selected = asgns.filter((a) => req.body.assignmentIds.includes(a.id));
+    if (!selected.length) throw new AppError(400, 'validation_error', 'No valid assignments');
+    const invIds = selected.map((a) => a.invoiceId);
+    const invs = await db.select().from(s.invoices);
+    const invById = Object.fromEntries(invs.map((i) => [i.id, i]));
+    const offers = await db.select().from(s.purchaseOffers);
     const totalFace = selected.reduce((sum, a) => sum + Number(a.faceValue), 0);
     const totalPurchase = selected.reduce((sum, a) => sum + Number(a.purchasePrice || 0), 0);
+    let weightedTenor = 0;
+    let weightedDiscountBps = 0;
+    if (totalFace > 0) {
+      for (const a of selected) {
+        const inv = invById[a.invoiceId];
+        const w = Number(a.faceValue) / totalFace;
+        if (inv?.issueDate && inv?.dueDate) {
+          weightedTenor += w * computeTenorDays(inv.issueDate, inv.dueDate);
+        }
+        const offer = offers.find((o) => o.invoiceId === a.invoiceId && o.status === 'accepted')
+          || offers.find((o) => o.id === a.offerId);
+        if (offer?.discountRateBps != null) weightedDiscountBps += w * Number(offer.discountRateBps);
+        else if (a.purchasePrice != null && Number(a.faceValue) > 0) {
+          const disc = (1 - Number(a.purchasePrice) / Number(a.faceValue)) * 10000;
+          weightedDiscountBps += w * disc;
+        }
+      }
+    }
     const [pkg] = await db.insert(s.packages).values({
       packageRef: req.body.packageRef,
       status: 'draft',
       totalFaceValue: String(totalFace),
       totalPurchasePrice: String(totalPurchase),
+      weightedAvgTenor: Math.round(weightedTenor) || null,
+      weightedAvgDiscountBps: Math.round(weightedDiscountBps) || null,
       createdBy: req.user!.userId,
     }).returning();
     await db.insert(s.packageItems).values(selected.map((a) => ({ packageId: pkg.id, assignmentId: a.id })));
     for (const a of selected) {
       await db.update(s.invoices).set({ status: 'packaged', updatedAt: new Date() }).where(eq(s.invoices.id, a.invoiceId));
     }
-    res.status(201).json(pkg);
+    // Attach invoiceIds for client mapping (not persisted on packages row)
+    const response = { ...pkg, invoiceIds: invIds };
+    try {
+      const spvOrgId = selected[0]?.spvOrgId || req.user!.orgId!;
+      const summary = await generatePackageSummary({
+        orgId: spvOrgId,
+        packageRef: pkg.packageRef,
+        packageId: pkg.id,
+        status: pkg.status,
+        totalFaceValue: totalFace,
+        totalPurchasePrice: totalPurchase,
+        itemCount: selected.length,
+      });
+      await db.insert(s.orgDocuments).values({
+        orgId: spvOrgId,
+        docType: 'package_summary',
+        fileUrl: summary.url,
+        uploadedBy: req.user!.userId,
+      });
+      await notifyOrgUsers(spvOrgId, {
+        type: 'document_ready',
+        title: 'Package summary ready',
+        body: `Package ${pkg.packageRef} summary PDF is available`,
+        referenceType: 'package',
+        referenceId: pkg.id,
+        emailHtml: templates.documentReady('package summary'),
+        emailSubject: emailSubjects.document(`package summary (${pkg.packageRef})`),
+      });
+    } catch (e) {
+      console.warn('[pdf] package summary failed', e);
+    }
+    res.status(201).json(response);
   } catch (e) { next(e); }
 });
 
 apiRouter.patch('/packages/:id/status', authenticate, authorize('spv', 'admin'), validate(z.object({
-  status: z.enum(['draft', 'structured', 'listed', 'placed', 'settled']),
+  // "listed" kept as alias for readiness; never means exchange-listed
+  status: z.enum(['draft', 'structured', 'ready_for_submission', 'listed', 'placed', 'settled']),
 })), async (req, res, next) => {
   try {
-    const nseReference = req.body.status === 'listed' ? `NSE-USP-${Date.now()}` : undefined;
+    const status = req.body.status === 'listed' ? 'ready_for_submission' : req.body.status;
+    // Internal workflow reference only — not an NSE listing confirmation
+    const nseReference = status === 'ready_for_submission' ? `INT-READY-${Date.now()}` : undefined;
     const [pkg] = await db.update(s.packages).set({
-      status: req.body.status,
+      status,
       nseReference: nseReference || undefined,
       updatedAt: new Date(),
     }).where(eq(s.packages.id, req.params.id)).returning();
+    if (pkg && status === 'ready_for_submission') {
+      const spvOrgId = req.user!.orgId;
+      if (spvOrgId) {
+        await notifyOrgUsers(spvOrgId, {
+          type: 'package_ready',
+          title: `Package ready: ${pkg.packageRef}`,
+          body: 'Internal readiness only — not an NSE listing confirmation',
+          referenceType: 'package',
+          referenceId: pkg.id,
+          emailHtml: templates.packageReady(pkg.packageRef),
+          emailSubject: emailSubjects.packageReady(pkg.packageRef),
+        });
+      }
+    }
     res.json(pkg);
   } catch (e) { next(e); }
 });
@@ -1015,18 +1369,24 @@ apiRouter.post('/programmes', authenticate, authorize('admin'), validate(z.objec
   name: z.string().min(1),
   buyerOrgId: z.string().uuid().optional().nullable(),
   maxExposure: z.number().positive(),
+  buyerSublimit: z.number().positive().optional().nullable(),
   maxTenorDays: z.number().int().positive().optional(),
   discountBandMinBps: z.number().int().optional(),
   discountBandMaxBps: z.number().int().optional(),
+  effectiveFrom: z.string().optional().nullable(),
+  expiresAt: z.string().optional().nullable(),
 })), async (req, res, next) => {
   try {
     const [row] = await db.insert(s.programmes).values({
       name: req.body.name,
       buyerOrgId: req.body.buyerOrgId || null,
       maxExposure: String(req.body.maxExposure),
+      buyerSublimit: req.body.buyerSublimit != null ? String(req.body.buyerSublimit) : null,
       maxTenorDays: req.body.maxTenorDays ?? 180,
       discountBandMinBps: req.body.discountBandMinBps ?? 300,
       discountBandMaxBps: req.body.discountBandMaxBps ?? 900,
+      effectiveFrom: req.body.effectiveFrom || null,
+      expiresAt: req.body.expiresAt || null,
       status: 'active',
     }).returning();
     res.status(201).json(row);
@@ -1036,14 +1396,20 @@ apiRouter.post('/programmes', authenticate, authorize('admin'), validate(z.objec
 apiRouter.patch('/programmes/:id', authenticate, authorize('admin'), validate(z.object({
   name: z.string().optional(),
   maxExposure: z.number().optional(),
+  buyerSublimit: z.number().optional().nullable(),
   maxTenorDays: z.number().int().optional(),
   discountBandMinBps: z.number().int().optional(),
   discountBandMaxBps: z.number().int().optional(),
+  effectiveFrom: z.string().optional().nullable(),
+  expiresAt: z.string().optional().nullable(),
   status: z.enum(['active', 'paused', 'closed']).optional(),
 })), async (req, res, next) => {
   try {
     const patch: Record<string, unknown> = { ...req.body };
     if (req.body.maxExposure != null) patch.maxExposure = String(req.body.maxExposure);
+    if (req.body.buyerSublimit !== undefined) {
+      patch.buyerSublimit = req.body.buyerSublimit != null ? String(req.body.buyerSublimit) : null;
+    }
     const [row] = await db.update(s.programmes).set(patch).where(eq(s.programmes.id, req.params.id)).returning();
     if (!row) throw new AppError(404, 'not_found', 'Programme not found');
     res.json(row);
@@ -1070,21 +1436,33 @@ apiRouter.post('/notifications/:id/read', authenticate, async (req, res, next) =
   } catch (e) { next(e); }
 });
 
-// Organisations (for forms) — non-admin get limited public fields only
+// Organisations (for forms) — non-admin get limited fields; own org includes KYC metadata
 apiRouter.get('/organisations', authenticate, async (req, res, next) => {
   try {
     const rows = await db.select().from(s.organisations);
     if (req.user!.role === 'admin') {
       return res.json({ data: rows });
     }
+    const ownId = req.user!.orgId;
     res.json({
-      data: rows.map((o) => ({
-        id: o.id,
-        name: o.name,
-        orgType: o.orgType,
-        uzimaPartyId: o.uzimaPartyId,
-        status: o.status,
-      })),
+      data: rows.map((o) => {
+        const base = {
+          id: o.id,
+          name: o.name,
+          orgType: o.orgType,
+          uzimaPartyId: o.uzimaPartyId,
+          status: o.status,
+          registrationNo: o.registrationNo,
+        };
+        if (o.id === ownId) {
+          return {
+            ...base,
+            metadata: o.metadata || {},
+            contactEmail: (o.metadata as any)?.contactEmail || null,
+          };
+        }
+        return base;
+      }),
     });
   } catch (e) { next(e); }
 });
@@ -1130,14 +1508,24 @@ apiRouter.post('/admin/users/invite', authenticate, authorize('admin'), validate
       role: req.body.role,
       orgId: req.body.orgId || null,
       passwordHash,
+      mustChangePassword: true,
       status: 'active',
     }).returning();
-    const { sendEmail } = await import('../services/email.js');
-    await sendEmail({
+    const { sendEmail: sendInviteEmail, templates: emailTemplates, emailSubjects: subjects } = await import('../services/email.js');
+    const [org] = req.body.orgId
+      ? await db.select().from(s.organisations).where(eq(s.organisations.id, req.body.orgId)).limit(1)
+      : [null];
+    await sendInviteEmail({
       to: email,
-      subject: 'You are invited to Uzima',
-      html: `<p>Welcome to Uzima. Your temporary password is <strong>${tempPass}</strong>. Sign in and change it after login.</p>`,
-      text: `Welcome to Uzima. Temporary password: ${tempPass}`,
+      subject: subjects.invite(),
+      html: emailTemplates.invite({
+        name: req.body.fullName,
+        role: req.body.role,
+        orgName: org?.name,
+        tempPassword: tempPass,
+        email,
+      }),
+      text: `Welcome to IOU Exchange. Temporary password: ${tempPass}. Sign in at ${process.env.PORTAL_URL || 'https://app.ioux.africa'}/login and change it immediately.`,
     });
     await writeAudit({
       actorId: req.user!.userId,
@@ -1187,7 +1575,7 @@ apiRouter.get('/payment-schedule', authenticate, async (req, res, next) => {
           dueDate: i.dueDate,
           status,
           paidAt: i.status === 'settled' ? i.updatedAt : null,
-          payee: 'Uzima Capital SPV',
+          payee: 'IOU Exchange Capital SPV',
         };
       });
     res.json({ data: rows });
@@ -1235,7 +1623,7 @@ apiRouter.get('/admin/reconciliation', authenticate, authorize('admin'), validat
   } catch (e) { next(e); }
 });
 
-apiRouter.get('/buyers/:orgId/credit-risk', authenticate, async (req, res, next) => {
+apiRouter.get('/buyers/:orgId/credit-risk', authenticate, authorize('buyer', 'spv', 'admin'), async (req, res, next) => {
   try {
     if (req.user!.role === 'buyer' && req.user!.orgId !== req.params.orgId) {
       throw new AppError(403, 'forbidden', 'Cannot view other buyer risk');
@@ -1257,11 +1645,21 @@ apiRouter.post('/webhooks/payment-update', apiKeyAuth, requireScope('payments:wr
 })), async (req, res, next) => {
   try {
     const raw = (req as typeof req & { rawBody?: string }).rawBody || JSON.stringify(req.body);
-    verifyWebhookSignature(
-      raw,
-      req.headers['x-afyax-signature'] as string | undefined,
-      req.headers['x-afyax-timestamp'] as string | undefined,
-    );
+    try {
+      verifyWebhookSignature(
+        raw,
+        req.headers['x-afyax-signature'] as string | undefined,
+        req.headers['x-afyax-timestamp'] as string | undefined,
+      );
+    } catch (sigErr) {
+      console.warn('[webhook] payment-update signature rejected', {
+        ip: req.ip,
+        hasSignature: Boolean(req.headers['x-afyax-signature']),
+        hasTimestamp: Boolean(req.headers['x-afyax-timestamp']),
+        message: sigErr instanceof Error ? sigErr.message : String(sigErr),
+      });
+      throw sigErr;
+    }
     if (req.body.idempotencyKey) {
       const [dup] = await db.select().from(s.paymentUpdates).where(
         eq(s.paymentUpdates.afyaxReference, req.body.idempotencyKey),
@@ -1290,18 +1688,251 @@ apiRouter.post('/pricing/quote', authenticate, validate(z.object({
 });
 
 // Payment updates list
-apiRouter.get('/payment-updates', authenticate, async (req, res, next) => {
+apiRouter.get('/payment-updates', authenticate, authorize('buyer', 'supplier', 'spv', 'admin'), async (req, res, next) => {
   try {
     const role = req.user!.role;
     if (role === 'admin' || role === 'spv') {
       return res.json({ data: await db.select().from(s.paymentUpdates) });
     }
     const orgId = req.user!.orgId!;
-    const invs = await db.select().from(s.invoices).where(
+    let invs = await db.select().from(s.invoices).where(
       role === 'buyer' ? eq(s.invoices.buyerOrgId, orgId) : eq(s.invoices.supplierOrgId, orgId),
     );
+    // Suppliers only see repayment activity on sold / assigned receivables
+    if (role === 'supplier') {
+      const sold = new Set(['assigned', 'packaged', 'disbursed', 'matured', 'settled', 'sold']);
+      invs = invs.filter((i) => sold.has(i.status) || i.listingStatus === 'sold');
+    }
     const ids = new Set(invs.map((i) => i.id));
     const rows = (await db.select().from(s.paymentUpdates)).filter((p) => ids.has(p.invoiceId));
     res.json({ data: rows });
+  } catch (e) { next(e); }
+});
+
+// API keys (buyer / admin) — raw key shown once
+apiRouter.get('/api-keys', authenticate, authorize('buyer', 'admin'), async (req, res, next) => {
+  try {
+    const orgId = req.user!.role === 'admin' && req.query.orgId
+      ? String(req.query.orgId)
+      : req.user!.orgId;
+    if (!orgId) throw new AppError(400, 'no_org', 'Organisation required');
+    const rows = await db.select({
+      id: s.apiKeys.id,
+      label: s.apiKeys.label,
+      keyPrefix: s.apiKeys.keyPrefix,
+      scopes: s.apiKeys.scopes,
+      isActive: s.apiKeys.isActive,
+      lastUsed: s.apiKeys.lastUsed,
+      createdAt: s.apiKeys.createdAt,
+    }).from(s.apiKeys).where(eq(s.apiKeys.orgId, orgId));
+    res.json({ data: rows });
+  } catch (e) { next(e); }
+});
+
+apiRouter.post('/api-keys', authenticate, authorize('buyer', 'admin'), validate(z.object({
+  label: z.string().min(1).max(80).optional(),
+  scopes: z.array(z.string()).optional(),
+})), async (req, res, next) => {
+  try {
+    const orgId = req.user!.orgId;
+    if (!orgId) throw new AppError(400, 'no_org', 'Organisation required');
+    const { raw, prefix } = generateApiKey();
+    const keyHash = await bcrypt.hash(raw, 12);
+    const [row] = await db.insert(s.apiKeys).values({
+      orgId,
+      keyHash,
+      keyPrefix: prefix,
+      label: req.body.label || 'AfyaX / ERP key',
+      scopes: req.body.scopes || ['invoices:write', 'parties:write', 'payments:write'],
+      isActive: true,
+    }).returning();
+    await writeAudit({
+      actorId: req.user!.userId,
+      action: 'api_key.created',
+      resourceType: 'api_key',
+      resourceId: row.id,
+      details: { label: row.label, prefix },
+    });
+    const [org] = await db.select().from(s.organisations).where(eq(s.organisations.id, orgId)).limit(1);
+    await notifyOrgUsers(orgId, {
+      type: 'api_key_created',
+      title: 'API key provisioned',
+      body: `Key prefix ${prefix} — full key shown once in the portal`,
+      referenceType: 'api_key',
+      referenceId: row.id,
+      emailHtml: templates.apiKeyCreated(prefix, org?.name),
+      emailSubject: emailSubjects.apiKey(),
+    });
+    res.status(201).json({
+      id: row.id,
+      label: row.label,
+      keyPrefix: row.keyPrefix,
+      scopes: row.scopes,
+      apiKey: raw,
+      message: 'Copy this key now — it will not be shown again',
+    });
+  } catch (e) { next(e); }
+});
+
+apiRouter.post('/api-keys/:id/revoke', authenticate, authorize('buyer', 'admin'), async (req, res, next) => {
+  try {
+    const [row] = await db.select().from(s.apiKeys).where(eq(s.apiKeys.id, req.params.id)).limit(1);
+    if (!row) throw new AppError(404, 'not_found', 'API key not found');
+    if (req.user!.role !== 'admin' && row.orgId !== req.user!.orgId) {
+      throw new AppError(403, 'forbidden', 'Cannot revoke another organisation key');
+    }
+    await db.update(s.apiKeys).set({ isActive: false }).where(eq(s.apiKeys.id, row.id));
+    await writeAudit({
+      actorId: req.user!.userId,
+      action: 'api_key.revoked',
+      resourceType: 'api_key',
+      resourceId: row.id,
+    });
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+});
+
+// Admin create organisation (KYC fields)
+apiRouter.post('/organisations', authenticate, authorize('admin'), validate(z.object({
+  name: z.string().min(1),
+  orgType: z.enum(['buyer', 'supplier', 'spv', 'platform']),
+  registrationNo: z.string().optional(),
+  kraPin: z.string().optional(),
+  address: z.string().optional(),
+  contactEmail: z.string().email().optional(),
+  contactPhone: z.string().optional(),
+  ppbRegistration: z.string().optional(),
+  ppbLicence: z.string().optional(),
+  cmaReference: z.string().optional(),
+  kycStatus: z.enum(['pending', 'verified', 'rejected']).optional(),
+})), async (req, res, next) => {
+  try {
+    const body = req.body;
+    const uzimaPartyId = generateUzimaPartyId(body.orgType);
+    const [row] = await db.insert(s.organisations).values({
+      name: body.name,
+      orgType: body.orgType,
+      registrationNo: body.registrationNo || null,
+      uzimaPartyId,
+      status: 'active',
+      metadata: {
+        kraPin: body.kraPin || null,
+        address: body.address || null,
+        contactEmail: body.contactEmail || null,
+        contactPhone: body.contactPhone || null,
+        ppbRegistration: body.ppbRegistration || null,
+        ppbLicence: body.ppbLicence || null,
+        cmaReference: body.cmaReference || null,
+        kycStatus: body.kycStatus || 'pending',
+      },
+    }).returning();
+    await writeAudit({
+      actorId: req.user!.userId,
+      action: 'organisation.created',
+      resourceType: 'organisation',
+      resourceId: row.id,
+      details: { orgType: body.orgType, uzimaPartyId },
+    });
+    const html = templates.orgCreated(body.name, body.orgType, uzimaPartyId);
+    const subject = emailSubjects.orgCreated(body.name);
+    // Notify creating admin + optional contact email
+    await notifyUser(req.user!.userId, {
+      type: 'org_created',
+      title: `Organisation created: ${body.name}`,
+      body: `${body.orgType} · ${uzimaPartyId}`,
+      referenceType: 'organisation',
+      referenceId: row.id,
+      emailHtml: html,
+      emailSubject: subject,
+    });
+    if (body.contactEmail) {
+      await sendEmail({
+        to: body.contactEmail,
+        subject,
+        html,
+        text: `Organisation ${body.name} (${body.orgType}) was registered on IOU Exchange. Party ID: ${uzimaPartyId}.`,
+      });
+    }
+    res.status(201).json(row);
+  } catch (e) { next(e); }
+});
+
+apiRouter.patch('/organisations/:id', authenticate, authorize('admin'), validate(z.object({
+  name: z.string().min(1).optional(),
+  status: z.enum(['active', 'suspended', 'inactive']).optional(),
+  kycStatus: z.enum(['pending', 'verified', 'rejected']).optional(),
+  kraPin: z.string().optional(),
+  address: z.string().optional(),
+  contactEmail: z.string().email().optional(),
+  contactPhone: z.string().optional(),
+  ppbRegistration: z.string().optional(),
+  ppbLicence: z.string().optional(),
+  cmaReference: z.string().optional(),
+})), async (req, res, next) => {
+  try {
+    const [existing] = await db.select().from(s.organisations).where(eq(s.organisations.id, req.params.id)).limit(1);
+    if (!existing) throw new AppError(404, 'not_found', 'Organisation not found');
+    const meta = { ...(existing.metadata as Record<string, unknown> || {}) };
+    const body = req.body;
+    if (body.kycStatus != null) meta.kycStatus = body.kycStatus;
+    if (body.kraPin != null) meta.kraPin = body.kraPin;
+    if (body.address != null) meta.address = body.address;
+    if (body.contactEmail != null) meta.contactEmail = body.contactEmail;
+    if (body.contactPhone != null) meta.contactPhone = body.contactPhone;
+    if (body.ppbRegistration != null) meta.ppbRegistration = body.ppbRegistration;
+    if (body.ppbLicence != null) meta.ppbLicence = body.ppbLicence;
+    if (body.cmaReference != null) meta.cmaReference = body.cmaReference;
+    const patch: Record<string, unknown> = { metadata: meta, updatedAt: new Date() };
+    if (body.name) patch.name = body.name;
+    if (body.status) patch.status = body.status;
+    const [row] = await db.update(s.organisations).set(patch).where(eq(s.organisations.id, existing.id)).returning();
+    if (body.kycStatus && body.kycStatus !== (existing.metadata as any)?.kycStatus) {
+      await notifyOrgUsers(row.id, {
+        type: 'kyc_updated',
+        title: `KYC ${body.kycStatus}`,
+        body: `Organisation KYC status is now ${body.kycStatus}`,
+        referenceType: 'organisation',
+        referenceId: row.id,
+        emailHtml: templates.kycStatusUpdated(row.name, body.kycStatus),
+        emailSubject: emailSubjects.kyc(row.name),
+      });
+    }
+    await writeAudit({
+      actorId: req.user!.userId,
+      action: 'organisation.updated',
+      resourceType: 'organisation',
+      resourceId: row.id,
+      details: { kycStatus: body.kycStatus || null },
+    });
+    res.json(row);
+  } catch (e) { next(e); }
+});
+
+apiRouter.get('/system/health', authenticate, authorize('admin'), async (_req, res, next) => {
+  try {
+    let dbStatus: 'up' | 'down' = 'up';
+    try {
+      await db.select({ id: s.organisations.id }).from(s.organisations).limit(1);
+    } catch {
+      dbStatus = 'down';
+    }
+    let lastWebhook: string | null = null;
+    try {
+      const [latest] = await db.select().from(s.paymentUpdates).orderBy(desc(s.paymentUpdates.receivedAt)).limit(1);
+      lastWebhook = latest?.receivedAt ? new Date(latest.receivedAt).toISOString() : null;
+    } catch { /* */ }
+    let unread = 0;
+    try {
+      unread = (await db.select().from(s.notifications).where(eq(s.notifications.isRead, false))).length;
+    } catch { /* */ }
+    res.json({
+      status: dbStatus === 'up' ? 'ok' : 'degraded',
+      service: 'uzima-api',
+      version: '2.0.0',
+      db: dbStatus,
+      lastAfyaXWebhookAt: lastWebhook,
+      unreadNotifications: unread,
+      time: new Date().toISOString(),
+    });
   } catch (e) { next(e); }
 });

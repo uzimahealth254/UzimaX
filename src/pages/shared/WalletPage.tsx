@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/hooks/usePlatformData';
 import { api } from '@/lib/apiClient';
 import PageHeader from '@/components/layout/PageHeader';
@@ -7,6 +8,7 @@ import { formatCurrency, formatDate } from '@/lib/utils';
 import { toast } from 'sonner';
 
 export default function WalletPage() {
+  const { user } = useAuth();
   const { wallet, walletTxs, refetchAll } = useData();
   const qc = useQueryClient();
   const [amount, setAmount] = useState('100000');
@@ -32,57 +34,80 @@ export default function WalletPage() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Wallet (simulation)" subtitle="Ledger balances — no live bank rails" />
-      <div className="border rounded-2xl p-4 sm:p-6 space-y-4">
-        <div>
-          <p className="text-xs text-muted-foreground">Available balance</p>
-          <p className="text-3xl font-mono font-semibold mt-1">{formatCurrency(Number(wallet?.balance || 0))}</p>
-          <p className="text-xs text-muted-foreground mt-2">{wallet?.currency || 'KES'} · simulated</p>
-        </div>
-        <div className="flex flex-wrap gap-3 items-end">
-          <div>
-            <label className="text-xs text-muted-foreground">Amount (KES)</label>
-            <input
-              type="number"
-              className="block border rounded-lg px-3 py-2.5 text-sm font-mono w-full sm:w-40 min-h-[44px]"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-            />
-          </div>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => act('deposit')}
-            className="flex-1 sm:flex-none px-4 py-2.5 min-h-[44px] rounded-xl bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
-          >
-            Deposit
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => act('withdraw')}
-            className="flex-1 sm:flex-none px-4 py-2.5 min-h-[44px] rounded-xl border text-sm font-medium disabled:opacity-50"
-          >
-            Withdraw
-          </button>
-        </div>
+    <div className="portal-page animate-fade-in">
+      <PageHeader
+        title="Ledger (simulated)"
+        subtitle={`${user?.organisationName || 'Organisation'} ledger · settlement preview`}
+      />
+
+      <div className="portal-callout">
+        Ledger balances for programme visibility. Live bank rails are not connected here.
       </div>
-      <div className="border rounded-2xl divide-y">
-        <div className="p-4 font-semibold text-sm">Transactions</div>
-        {(walletTxs || []).length === 0 && <p className="p-4 text-sm text-muted-foreground">No transactions yet</p>}
-        {(walletTxs || []).slice(0, 50).map((t: any) => (
-          <div key={t.id} className="px-4 py-3 flex justify-between text-sm gap-3">
+
+      <div className="portal-grid-2">
+        <section className="portal-section">
+          <header className="portal-section__head">
             <div>
-              <p className="font-medium capitalize">{t.type}</p>
-              <p className="text-xs text-muted-foreground">{t.description || t.reference}</p>
-              <p className="text-[10px] text-muted-foreground">{formatDate(t.createdAt)}</p>
+              <h2 className="portal-section__title">Balance</h2>
+              <p className="portal-section__desc">{wallet?.currency || 'KES'}</p>
             </div>
-            <p className={`font-mono ${t.type === 'credit' ? 'text-emerald-700' : 'text-red-700'}`}>
-              {t.type === 'credit' ? '+' : '-'}{formatCurrency(Number(t.amount))}
-            </p>
+          </header>
+          <div className="portal-section__body--pad space-y-3">
+            <p className="text-2xl font-mono font-bold text-[#0E1F1A] leading-none">{formatCurrency(Number(wallet?.balance || 0))}</p>
+            <div className="flex flex-wrap gap-2 items-end pt-2 border-t border-[#0E1F1A]/8">
+              <div className="flex-1 min-w-[7rem]">
+                <label className="text-[10px] font-semibold text-[#5A6B7D]">Amount</label>
+                <input
+                  type="number"
+                  className="field-input font-mono mt-1 !min-h-[36px] !py-1.5"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                />
+              </div>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => act('deposit')}
+                className="px-3 py-1.5 min-h-[36px] rounded-lg bg-[#0E1F1A] text-white text-xs font-bold hover:bg-[#1A3A2E] disabled:opacity-50"
+              >
+                Deposit
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => act('withdraw')}
+                className="px-3 py-1.5 min-h-[36px] rounded-lg border border-[#0E1F1A]/15 text-xs font-bold text-[#0E1F1A] hover:bg-[#f7faf6] disabled:opacity-50"
+              >
+                Withdraw
+              </button>
+            </div>
           </div>
-        ))}
+        </section>
+
+        <section className="portal-section">
+          <header className="portal-section__head">
+            <h2 className="portal-section__title">Recent transactions</h2>
+          </header>
+          <div className="divide-y divide-[#0E1F1A]/8 max-h-56 overflow-y-auto">
+            {(walletTxs || []).length === 0 && (
+              <p className="px-3 py-4 text-xs text-[#5A6B7D]">No transactions yet</p>
+            )}
+            {(walletTxs || []).slice(0, 50).map((t: any) => (
+              <div key={t.id} className="px-3 py-2 flex justify-between text-xs gap-2">
+                <div className="min-w-0">
+                  <p className="font-semibold capitalize text-[#0E1F1A]">{t.type}</p>
+                  <p className="text-[11px] text-[#5A6B7D] truncate">{t.description || t.reference}</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className={`font-mono font-bold ${t.type === 'credit' ? 'text-[#1A3A2E]' : 'text-red-600'}`}>
+                    {t.type === 'credit' ? '+' : '-'}{formatCurrency(Number(t.amount))}
+                  </p>
+                  <p className="text-[10px] text-[#5A6B7D]">{formatDate(t.createdAt)}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
       </div>
     </div>
   );

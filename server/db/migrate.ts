@@ -14,7 +14,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 async function main() {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error('DATABASE_URL required');
-  const client = postgres(url, { max: 1 });
+  const needsSsl = /supabase\.co|pooler\.supabase/i.test(url);
+  const client = postgres(url, { max: 1, ssl: needsSsl ? 'require' : undefined });
   const db = drizzle(client);
   const folder = path.join(__dirname, 'migrations');
   try {

@@ -26,33 +26,34 @@ export default function ProfileEditor() {
   };
 
   return (
-    <form onSubmit={handleSave} className="border rounded-lg p-5 space-y-4 max-w-md">
-      <h3 className="font-semibold text-sm">Edit Account</h3>
-      <div>
-        <label className="block text-sm font-medium mb-1.5">Full Name</label>
-        <input
-          value={name}
-          onChange={e => setName(e.target.value)}
-          required
-          className="w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-        />
-      </div>
-      <div>
-        <label className="block text-sm font-medium mb-1.5">Email</label>
-        <input
-          type="email"
-          value={email}
-          onChange={e => setEmail(e.target.value)}
-          required
-          className="w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-        />
+    <form onSubmit={handleSave} className="space-y-3 max-w-none">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-semibold text-[#0E1F1A] mb-1">Full name</label>
+          <input
+            value={name}
+            onChange={e => setName(e.target.value)}
+            required
+            className="field-input"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-[#0E1F1A] mb-1">Email</label>
+          <input
+            type="email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            required
+            className="field-input"
+          />
+        </div>
       </div>
       <button
         type="submit"
         disabled={saving}
-        className="w-full sm:w-auto min-h-[44px] px-5 py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-semibold hover:bg-primary/90 disabled:opacity-50"
+        className="min-h-[36px] px-4 py-2 rounded-lg bg-[#0E1F1A] text-white text-xs font-bold hover:bg-[#1A3A2E] disabled:opacity-50"
       >
-        {saving ? 'Saving...' : 'Save Changes'}
+        {saving ? 'Saving…' : 'Save changes'}
       </button>
     </form>
   );

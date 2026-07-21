@@ -4,9 +4,12 @@ import { toast } from 'sonner';
 import { Paperclip, X } from 'lucide-react';
 
 interface DocMeta {
+  id?: string;
   name: string;
   size: number;
   url?: string;
+  fileUrl?: string;
+  docType?: string;
   category?: string;
 }
 
@@ -34,7 +37,14 @@ export default function DocumentAttach({ onChange }: Props) {
       });
       if (!res.ok) throw new Error('Upload failed');
       const data = await res.json();
-      const next = [...docs, { name: file.name, size: file.size, url: data.fileUrl }];
+      const next = [...docs, {
+        id: data.id,
+        name: file.name,
+        size: file.size,
+        url: data.fileUrl,
+        fileUrl: data.fileUrl,
+        docType: data.docType || 'supporting',
+      }];
       setDocs(next);
       onChange?.(next);
       toast.success('Document uploaded');

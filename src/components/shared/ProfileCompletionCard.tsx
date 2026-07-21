@@ -3,7 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { AlertCircle, CheckCircle, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-/** Profile completion nudge — pattern adapted from Malipo Polepole */
+/** Profile completion nudge */
 export default function ProfileCompletionCard({ className }: { className?: string }) {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -24,36 +24,37 @@ export default function ProfileCompletionCard({ className }: { className?: strin
 
   if (percentage >= 100) {
     return (
-      <div className={cn('rounded-xl border border-accent/30 bg-brand-green-light p-4 flex items-center gap-3', className)}>
-        <CheckCircle size={20} className="text-accent shrink-0" />
-        <div>
-          <p className="text-sm font-medium text-foreground">Profile complete</p>
-          <p className="text-xs text-muted-foreground">Your account details are ready for trading.</p>
+      <div className={cn('surface-card border-l-[3px] border-l-[#D3F36B] px-3 py-2 flex items-center gap-2', className)}>
+        <CheckCircle size={16} className="text-[#0E1F1A] shrink-0" />
+        <div className="min-w-0">
+          <p className="text-xs font-bold text-[#0E1F1A]">Profile complete</p>
+          <p className="text-[11px] text-[#5A6B7D]">Account ready for trading.</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className={cn('rounded-xl border border-primary/20 bg-brand-blue-light p-4', className)}>
-      <div className="flex items-start gap-3">
-        <AlertCircle size={20} className="text-primary shrink-0 mt-0.5" />
+    <div className={cn('surface-card border-l-[3px] border-l-[#F0C419] px-3 py-2.5', className)}>
+      <div className="flex items-start gap-2">
+        <AlertCircle size={16} className="text-[#8A6A00] shrink-0 mt-0.5" />
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2 mb-1">
-            <p className="text-sm font-semibold">Complete your profile</p>
-            <span className="text-xs font-mono text-primary">{percentage}%</span>
+            <p className="text-xs font-bold text-[#0E1F1A]">Complete your profile</p>
+            <span className="text-[11px] font-mono font-bold text-[#0E1F1A]">{percentage}%</span>
           </div>
-          <div className="h-1.5 bg-white/80 rounded-full overflow-hidden mb-2">
-            <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${percentage}%` }} />
+          <div className="h-1 bg-[#0E1F1A]/10 rounded-full overflow-hidden mb-1.5">
+            <div className="h-full bg-[#D3F36B] rounded-full transition-all" style={{ width: `${percentage}%` }} />
           </div>
           {missing.length > 0 && (
-            <p className="text-xs text-muted-foreground mb-3">Missing: {missing.join(', ')}</p>
+            <p className="text-[11px] text-[#5A6B7D] mb-1.5">Missing: {missing.join(', ')}</p>
           )}
           <button
+            type="button"
             onClick={() => navigate(profilePath)}
-            className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+            className="inline-flex items-center gap-1 text-[11px] font-bold text-[#0E1F1A] hover:underline"
           >
-            Go to profile <ArrowRight size={12} />
+            Go to settings <ArrowRight size={11} />
           </button>
         </div>
       </div>

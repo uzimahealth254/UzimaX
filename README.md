@@ -1,64 +1,74 @@
-# Uzima Platform (production architecture)
+# IOU Exchange
 
-Trade receivables / securitisation platform for **UzimaX**.  
-Engineering reference: `docs/UZIMA_ARCH_001.md`
+Working capital for pharmacy trade — portals + API for buyers, suppliers, and SPV.  
+Product site: [www.ioux.africa](https://www.ioux.africa) · Portal: [app.ioux.africa](https://app.ioux.africa) · API: [api.ioux.africa](https://api.ioux.africa)
 
-## Quick start
+Architecture: [`docs/IOU_EXCHANGE_FULL_SYSTEM_GUIDE.md`](docs/IOU_EXCHANGE_FULL_SYSTEM_GUIDE.md) · Go-live: [`docs/IOU_EXCHANGE_PRODUCTION_GOLIVE.md`](docs/IOU_EXCHANGE_PRODUCTION_GOLIVE.md) · API: [`docs/openapi.yaml`](docs/openapi.yaml)
+
+## Local development
 
 ```bash
-# 1. Postgres
 docker compose up -d
-
-# 2. Env
 cp .env.example .env
-
-# 3. Schema + seed
 npm install
-npm run db:setup
-
-# 4. API + portal (two terminals)
-npm run dev:api
-npm run dev
+npm run db:setup          # schema + LOCAL demo seed only
+npm run dev:api           # :8787
+npm run dev               # :5173
 ```
 
-- Portal: http://localhost:5173  
-- API: http://localhost:8787  
+Local demo accounts come from `npm run db:seed` (password = `DEMO_PASSWORD` in `.env`).  
+**Never run `db:seed` against production / Supabase** — it refuses unless `ALLOW_PROD_SEED=1`.
 
-## Demo accounts
+## Production (ioux.africa)
 
-Password: **`Uzima2026!`**
+### Hosts
 
-| Role | Email |
-|------|--------|
-| Buyer | buyer@uzima.co.ke |
-| Supplier | supplier@uzima.co.ke |
-| SPV | spv@uzima.co.ke |
-| Admin | admin@uzima.co.ke |
+| Surface | URL |
+|---------|-----|
+| Marketing website | `https://www.ioux.africa` |
+| Portal (login / roles) | `https://app.ioux.africa` |
+| API | `https://api.ioux.africa` |
 
-### API keys (seed)
+### Render **UzimaX** (API) Environment
 
-- Buyer: `uzima_buyer_kbc_demo_7f3a9c2e`
-- AfyaX: `uzima_afyax_demo_key_9c2e1b7f`
+| Key | Value |
+|-----|--------|
+| `EMAIL_PROVIDER` | `resend` |
+| `RESEND_API_KEY` | from Resend |
+| `EMAIL_FROM` | `IOU Exchange <no-reply@ioux.africa>` |
+| `SUPPORT_EMAIL` | `hello@ioux.africa` |
+| `PORTAL_URL` | `https://app.ioux.africa` |
+| `CORS_ORIGINS` | `https://www.ioux.africa,https://ioux.africa,https://app.ioux.africa` |
+| `ALLOW_DEMO_OTP` | `false` |
+| `ENABLE_SIMULATED_WALLET` | `false` |
+| `VITE_SHOW_DEMO` | `false` |
+| `VITE_ENABLE_WALLET` | `false` |
+| `VITE_ENABLE_ENGINE` | `false` |
+| `COOKIE_SECURE` | `true` |
 
-## Architecture
+Portal build: `VITE_API_URL=https://api.ioux.africa`.
 
-- **Postgres** single source of truth (Drizzle ORM)
-- **JWT** auth + **API keys** for AfyaX
-- **Dual origination:** buyer post → opt-in · supplier post → buyer verify
-- **Wallets:** simulated ledger (no live bank rails)
-- Portal uses **react-query** against the API (no in-memory seed business state)
+### First admin (no demo seed)
 
-## Scripts
+```bash
+ADMIN_EMAIL=ops@ioux.africa ADMIN_PASSWORD='…strong…' npm run create-admin
+```
 
-| Script | Purpose |
-|--------|---------|
-| `npm run db:migrate` | Push schema |
-| `npm run db:seed` | Seed demo data |
-| `npm run dev:api` | API on :8787 |
-| `npm run dev` | Vite portal |
-| `npm run build` | Production portal build |
-| `npm run smoke` | Critical-path API smoke (`scripts/smoke-uzima.ts`) |
+If a local seed was ever applied to hosted DB:
 
-## Deploy
+```bash
+ALLOW_PURGE_DEMO=1 DRY_RUN=1 npm run db:purge-demo   # inspect
+ALLOW_PURGE_DEMO=1 npm run db:purge-demo             # delete seed users/orgs
+```
 
-See `render.yaml` (`uzima-api` + `uzima-portal` + `uzima-db`).
+### Production defaults (enforced in code)
+
+| Setting | Value |
+|---------|--------|
+| `ALLOW_DEMO_OTP` | `false` |
+| `ENABLE_SIMULATED_WALLET` | `false` |
+| `ALLOW_BODY_REFRESH` | `false` |
+| `COOKIE_SECURE` | `true` |
+| `VITE_SHOW_DEMO` | `false` |
+
+There is **no** client-side mock invoice store — portals load from the API only.

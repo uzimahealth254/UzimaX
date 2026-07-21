@@ -9,6 +9,7 @@ interface ApiDataContextType {
   invoices: any[];
   offers: any[];
   consents: any[];
+  signatories: any[];
   packages: any[];
   payments: any[];
   organisations: any[];
@@ -22,6 +23,7 @@ interface ApiDataContextType {
   walletTxs: any[];
   notifications: any[];
   loading: boolean;
+  error: Error | null;
   refetchAll: () => void;
 
   listInvoice: (data: any, actor?: Actor) => Promise<any>;
@@ -33,7 +35,7 @@ interface ApiDataContextType {
   makeOffer: (offer: any, actor?: Actor) => Promise<any>;
   respondToOffer: (offerId: string, accept: boolean, actor?: Actor) => Promise<any>;
   requestConsent: (consent: any, actor?: Actor) => Promise<any>;
-  signConsent: (consentId: string, approve: boolean, actor?: Actor, otp?: string) => Promise<any>;
+  signConsent: (consentId: string, approve: boolean, actor?: Actor, otp?: string, reason?: string) => Promise<any>;
   requestConsentOtp: (consentId: string) => Promise<any>;
   createPackage: (pkg: any, actor?: Actor) => Promise<any>;
   updatePackageStatus: (packageId: string, status: string, actor?: Actor) => Promise<any>;
@@ -52,6 +54,7 @@ function mapInvoice(inv: any) {
     buyerId: inv.buyerOrgId,
     supplierName: inv.supplierName,
     buyerName: inv.buyerName,
+    origin: inv.origin,
   };
 }
 
@@ -135,6 +138,11 @@ export function usePlatformData() {
     queryFn: async () => (await api.get(`/buyers/${user!.organisationId}/credit-risk`)).data,
     enabled: enabled && !!user?.organisationId && (user.role === 'buyer' || user.role === 'spv' || user.role === 'admin'),
   });
+  const signatoriesQ = useQuery({
+    queryKey: ['signatories'],
+    queryFn: async () => (await api.get('/signatories')).data.data,
+    enabled: enabled && user?.role !== 'admin',
+  });
 
   const orgMap = Object.fromEntries((orgsQ.data || []).map((o: any) => [o.id, o.name]));
 
@@ -152,11 +160,15 @@ export function usePlatformData() {
     const { data: inv } = await api.post('/invoices', {
       supplierOrgId: data.supplierId || data.supplierOrgId,
       invoiceNumber: data.invoiceNumber,
+      poReference: data.poReference,
       faceValue: data.amount || data.faceValue,
       currency: data.currency || 'KES',
       issueDate: data.issueDate,
       dueDate: data.dueDate,
       description: data.description,
+      supportingDocs: data.supportingDocs || data.documents || undefined,
+      commitmentToPay: data.commitmentToPay ?? true,
+      bankStandingOrderRef: data.bankStandingOrderRef,
     });
     invalidate();
     return inv;
@@ -171,6 +183,9 @@ export function usePlatformData() {
       issueDate: data.issueDate,
       dueDate: data.dueDate,
       description: data.description,
+      supportingDocs: data.supportingDocs || data.documents || undefined,
+      commitmentToPay: data.commitmentToPay,
+      bankStandingOrderRef: data.bankStandingOrderRef,
     });
     invalidate();
     return inv;
@@ -206,8 +221,12 @@ export function usePlatformData() {
     return data;
   }, [qc]);
 
-  const signConsent = useCallback(async (consentId: string, approve: boolean, _actor?: Actor, otp?: string) => {
-    if (!approve) return;
+  const signConsent = useCallback(async (consentId: string, approve: boolean, _actor?: Actor, otp?: string, reason?: string) => {
+    if (!approve) {
+      const { data } = await api.post(`/consents/${consentId}/decline`, { reason });
+      invalidate();
+      return data;
+    }
     const code = otp;
     if (!code) throw new Error('OTP required');
     const { data } = await api.post(`/consents/${consentId}/confirm-sign`, { otp: code });
@@ -248,7 +267,11 @@ export function usePlatformData() {
   const createPackage = useCallback(async (pkg: any) => {
     let assignmentIds = pkg.assignmentIds || [];
     if ((!assignmentIds.length) && pkg.invoiceIds?.length) {
-      const asgns = (qc.getQueryData(['assignments']) as any[]) || [];
+      let asgns = (qc.getQueryData(['assignments']) as any[]) || [];
+      if (!asgns.length) {
+        const { data } = await api.get('/assignments');
+        asgns = data.data || [];
+      }
       assignmentIds = asgns.filter((a: any) => pkg.invoiceIds.includes(a.invoiceId)).map((a: any) => a.id);
     }
     if (!assignmentIds.length) throw new Error('No assignments to package');
@@ -268,6 +291,12 @@ export function usePlatformData() {
 
   const releaseEscrow = useCallback(async (legId: string) => {
     const { data } = await api.post(`/escrow/${legId}/release`);
+    invalidate();
+    return data;
+  }, [qc]);
+
+  const collectEscrow = useCallback(async (legId: string) => {
+    const { data } = await api.post(`/escrow/${legId}/collect`);
     invalidate();
     return data;
   }, [qc]);
@@ -292,29 +321,40 @@ export function usePlatformData() {
         supplierName: inv?.supplierName || '',
         iouRegistryId: inv?.iouRegistryId || '',
         requestedAt: c.createdAt,
+        signatoryId: c.signatoryId || null,
+        signedAt: c.signedAt || null,
       };
     }),
+    signatories: (signatoriesQ.data || []).map((sig: any) => ({
+      ...sig,
+      orgId: sig.orgId,
+    })),
     packages: (packagesQ.data || []).map((p: any) => ({
       ...p,
       name: p.packageRef,
       totalFaceValue: Number(p.totalFaceValue || 0),
-      weightedAvgDiscount: 0,
+      weightedAvgDiscount: (p.weightedAvgDiscountBps || 0) / 100,
       weightedAvgTenor: p.weightedAvgTenor || 0,
-      invoiceIds: [],
+      invoiceIds: p.invoiceIds || [],
       nseReference: p.nseReference,
     })),
-    payments: (paymentsQ.data || []).map((p: any) => ({
-      id: p.id,
-      invoiceId: p.invoiceId,
-      amount: Number(p.amountPaid),
-      outstandingBalance: Number(p.outstandingBalance),
-      status: Number(p.outstandingBalance) <= 0 ? 'paid' : 'partial',
-      dueDate: p.nextDueDate || p.receivedAt,
-      paidAt: p.receivedAt,
-      method: p.paymentMethod,
-      reference: p.afyaxReference,
-      iouRegistryId: invoices.find((i: any) => i.id === p.invoiceId)?.iouRegistryId || '',
-    })),
+    payments: (paymentsQ.data || []).map((p: any) => {
+      const inv = invoices.find((i: any) => i.id === p.invoiceId);
+      return {
+        id: p.id,
+        invoiceId: p.invoiceId,
+        buyerId: inv?.buyerId || inv?.buyerOrgId,
+        supplierId: inv?.supplierId || inv?.supplierOrgId,
+        amount: Number(p.amountPaid),
+        outstandingBalance: Number(p.outstandingBalance),
+        status: Number(p.outstandingBalance) <= 0 ? 'paid' : 'partial',
+        dueDate: p.nextDueDate || p.receivedAt,
+        paidAt: p.receivedAt,
+        method: p.paymentMethod,
+        reference: p.afyaxReference,
+        iouRegistryId: inv?.iouRegistryId || '',
+      };
+    }),
     organisations: (orgsQ.data || []).map((o: any) => ({
       ...o,
       type: o.orgType,
@@ -338,6 +378,8 @@ export function usePlatformData() {
         supplierName: orgMap[o.supplierOrgId] || '',
         buyerName: inv?.buyerName || '',
         amount: inv?.amount || 0,
+        issueDate: inv?.issueDate || '',
+        dueDate: inv?.dueDate || '',
         iouRegistryId: inv?.iouRegistryId || '',
         notifiedAt: o.createdAt,
       };
@@ -347,7 +389,7 @@ export function usePlatformData() {
       amount: Number(a.faceValue),
       supplierName: orgMap[a.supplierOrgId] || '',
       buyerName: orgMap[a.buyerOrgId] || '',
-      spvName: orgMap[a.spvOrgId] || 'Uzima Capital SPV',
+      spvName: orgMap[a.spvOrgId] || 'IOU Exchange Capital SPV',
       triggeredBy: a.assignmentType === 'opt_in_auto' ? 'supplier_opt_in' : 'consent_signed',
       createdAt: a.assignedAt,
       iouRegistryId: invoices.find((i: any) => i.id === a.invoiceId)?.iouRegistryId || '',
@@ -358,6 +400,9 @@ export function usePlatformData() {
       utilised: Number(p.utilised || 0),
       discountMin: (p.discountBandMinBps || 0) / 100,
       discountMax: (p.discountBandMaxBps || 0) / 100,
+      buyerSublimit: p.buyerSublimit != null ? Number(p.buyerSublimit) : null,
+      effectiveFrom: p.effectiveFrom || null,
+      expiresAt: p.expiresAt || null,
       buyerName: p.buyerOrgId ? orgMap[p.buyerOrgId] : 'Open market',
     })),
     escrowLegs: (escrowQ.data || []).map((e: any) => {
@@ -378,7 +423,8 @@ export function usePlatformData() {
     wallet: walletQ.data?.wallet || null,
     walletTxs: walletQ.data?.transactions || [],
     notifications: notifQ.data || [],
-    loading: invoicesQ.isLoading,
+    loading: invoicesQ.isLoading || orgsQ.isLoading,
+    error: (invoicesQ.error || orgsQ.error) as Error | null,
     refetchAll: invalidate,
     listInvoice,
     postBuyerIOU,
@@ -395,7 +441,7 @@ export function usePlatformData() {
     updatePackageStatus,
     confirmPayment,
     releaseEscrow,
-    collectEscrow: releaseEscrow,
+    collectEscrow,
     addActivityLog: () => undefined,
     creditRisk: creditRiskQ.data || null,
   };

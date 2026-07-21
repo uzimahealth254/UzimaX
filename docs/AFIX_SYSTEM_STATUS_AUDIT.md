@@ -104,7 +104,8 @@ Escrow-style settlement views: pay supplier · collect from buyer at maturity
 ### 2.2 Git remote (important)
 
 ```
-origin → https://github.com/Einzelgaanger/Kenya-Farmers-Training.git
+origin → https://github.com/uzimahealth254/UzimaX.git
+(Previously pointed at an unrelated Kenya-Farmers-Training repo; corrected.)
 ```
 
 This remote name suggests the workspace may be attached to an **unrelated** GitHub repo historically. Reviewer should flag IP/repo hygiene for UzimaX delivery.

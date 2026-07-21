@@ -24,6 +24,7 @@ export const users = pgTable('users', {
   role: text('role').notNull(), // admin | buyer | supplier | spv
   orgId: uuid('org_id').references(() => organisations.id),
   isSignatory: boolean('is_signatory').default(false),
+  mustChangePassword: boolean('must_change_password').default(false),
   status: text('status').notNull().default('active'),
   lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -98,6 +99,10 @@ export const invoices = pgTable('invoices', {
   status: text('status').notNull().default('draft'),
   lineItems: jsonb('line_items'),
   supportingDocs: jsonb('supporting_docs').$type<unknown[]>().default([]),
+  /** Buyer commitment-to-pay captured at origination (workplan v1.6) */
+  commitmentToPay: boolean('commitment_to_pay').notNull().default(false),
+  /** External bank standing-order / settlement reference — not a rail executed by IOU Exchange */
+  bankStandingOrderRef: text('bank_standing_order_ref'),
   metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -253,6 +258,7 @@ export const packages = pgTable('packages', {
   status: text('status').notNull().default('draft'),
   riskBand: text('risk_band'),
   weightedAvgTenor: integer('weighted_avg_tenor'),
+  weightedAvgDiscountBps: integer('weighted_avg_discount_bps'),
   totalFaceValue: numeric('total_face_value', { precision: 15, scale: 2 }),
   totalPurchasePrice: numeric('total_purchase_price', { precision: 15, scale: 2 }),
   nseReference: text('nse_reference'),
@@ -273,9 +279,13 @@ export const programmes = pgTable('programmes', {
   name: text('name').notNull(),
   buyerOrgId: uuid('buyer_org_id').references(() => organisations.id),
   maxExposure: numeric('max_exposure', { precision: 15, scale: 2 }),
+  /** Cap for this buyer within the facility (hard-enforced when set). */
+  buyerSublimit: numeric('buyer_sublimit', { precision: 15, scale: 2 }),
   maxTenorDays: integer('max_tenor_days'),
   discountBandMinBps: integer('discount_band_min_bps'),
   discountBandMaxBps: integer('discount_band_max_bps'),
+  effectiveFrom: date('effective_from'),
+  expiresAt: date('expires_at'),
   status: text('status').default('active'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });

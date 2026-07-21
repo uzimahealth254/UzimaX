@@ -42,12 +42,12 @@ describe('Uzima API critical path', () => {
 
   it('login buyer and supplier', async () => {
     if (!available) return;
-    const buyer = await json('POST', '/auth/login', { email: 'buyer@uzima.co.ke', password: PASS });
+    const buyer = await json('POST', '/auth/login', { email: 'buyer@ioux.africa', password: PASS });
     expect(buyer.status).toBe(200);
     expect(buyer.data.accessToken).toBeTruthy();
     buyerToken = buyer.data.accessToken;
 
-    const supplier = await json('POST', '/auth/login', { email: 'supplier@uzima.co.ke', password: PASS });
+    const supplier = await json('POST', '/auth/login', { email: 'supplier@ioux.africa', password: PASS });
     expect(supplier.status).toBe(200);
     supplierToken = supplier.data.accessToken;
   });

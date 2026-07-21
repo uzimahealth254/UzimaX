@@ -1,11 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/apiClient';
 import PageHeader from '@/components/layout/PageHeader';
+import StatCard from '@/components/shared/StatCard';
 import { formatCurrency } from '@/lib/utils';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { useState } from 'react';
+import { FileText, DollarSign, TrendingUp, Building2, Factory, Landmark, Percent, CheckCircle2, CreditCard } from 'lucide-react';
 
 type Tab = 'volume' | 'pipeline' | 'participants' | 'performance';
+
+const CHART_COLORS = ['#0E1F1A', '#D3F36B', '#F0C419', '#5A6B7D', '#1A3A2E', '#8A6A00'];
 
 export default function AnalyticsPage() {
   const [tab, setTab] = useState<Tab>('volume');
@@ -27,7 +31,6 @@ export default function AnalyticsPage() {
     { id: 'performance', label: 'Performance' },
   ];
 
-  const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#6366f1', '#8b5cf6', '#14b8a6'];
   const pipelineData = Object.entries(data?.pipeline || {}).map(([name, value]) => ({ name, value }));
   const participantData = [
     { type: 'Suppliers', count: data?.participants.suppliers || 0 },
@@ -36,96 +39,94 @@ export default function AnalyticsPage() {
   ];
 
   if (isLoading || !data) {
-    return <div className="p-8 text-sm text-muted-foreground">Loading analytics…</div>;
+    return (
+      <div className="portal-page animate-fade-in">
+        <PageHeader title="Analytics" subtitle="Live aggregations from Postgres" />
+        <p className="text-xs text-[#5A6B7D] px-1">Loading analytics…</p>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="portal-page animate-fade-in">
       <PageHeader title="Analytics" subtitle="Live aggregations from Postgres" />
 
-      <div className="flex gap-1 border-b scroll-x-pad">
-        {tabs.map(t => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setTab(t.id)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap shrink-0 ${tab === t.id ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'}`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <section className="portal-section">
+        <header className="portal-section__head">
+          <div>
+            <h2 className="portal-section__title">Reports</h2>
+            <p className="portal-section__desc">Platform-wide metrics and trends</p>
+          </div>
+          <div className="flex gap-0 border-b border-[#0E1F1A]/10 w-full sm:w-auto overflow-x-auto">
+            {tabs.map(t => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setTab(t.id)}
+                className={`px-3 py-1.5 text-xs font-bold border-b-2 transition-colors whitespace-nowrap shrink-0 min-h-[34px] ${
+                  tab === t.id
+                    ? 'border-[#0E1F1A] text-[#0E1F1A]'
+                    : 'border-transparent text-[#5A6B7D] hover:text-[#0E1F1A]'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </header>
 
-      {tab === 'volume' && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="stat-card border-l-4 border-l-blue-500">
-              <p className="text-sm text-muted-foreground">Total Invoices</p>
-              <p className="text-2xl font-bold font-mono mt-1">{data.totals.invoices}</p>
+        <div className="portal-section__body--pad">
+          {tab === 'volume' && (
+            <div className="space-y-4">
+              <div className="portal-metrics portal-metrics--3">
+                <StatCard label="Total invoices" value={data.totals.invoices} icon={FileText} accent="forest" />
+                <StatCard label="Face value" value={formatCurrency(data.totals.totalFaceValue)} icon={DollarSign} accent="lime" />
+                <StatCard label="Assigned exposure" value={formatCurrency(data.totals.assignedFaceValue)} icon={TrendingUp} accent="gold" />
+              </div>
+              <div className="h-72 rounded-md border border-[#0E1F1A]/8 p-3">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={data.monthlyVolume}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#0E1F1A" strokeOpacity={0.08} />
+                    <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#5A6B7D' }} />
+                    <YAxis tick={{ fontSize: 11, fill: '#5A6B7D' }} />
+                    <Tooltip />
+                    <Bar dataKey="value" fill="#0E1F1A" name="Face value" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
-            <div className="stat-card border-l-4 border-l-primary">
-              <p className="text-sm text-muted-foreground">Face value</p>
-              <p className="text-2xl font-bold font-mono mt-1">{formatCurrency(data.totals.totalFaceValue)}</p>
-            </div>
-            <div className="stat-card border-l-4 border-l-accent">
-              <p className="text-sm text-muted-foreground">Assigned exposure</p>
-              <p className="text-2xl font-bold font-mono mt-1">{formatCurrency(data.totals.assignedFaceValue)}</p>
-            </div>
-          </div>
-          <div className="h-72 border rounded-2xl p-4">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data.monthlyVolume}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="value" fill="#0d9488" name="Face value" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
+          )}
 
-      {tab === 'pipeline' && (
-        <div className="h-80 border rounded-2xl p-4">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie data={pipelineData} dataKey="value" nameKey="name" outerRadius={110} label>
-                {pipelineData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-
-      {tab === 'participants' && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {participantData.map((p) => (
-            <div key={p.type} className="stat-card">
-              <p className="text-sm text-muted-foreground">{p.type}</p>
-              <p className="text-2xl font-bold font-mono mt-1">{p.count}</p>
+          {tab === 'pipeline' && (
+            <div className="h-80 rounded-md border border-[#0E1F1A]/8 p-3">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={pipelineData} dataKey="value" nameKey="name" outerRadius={110} label>
+                    {pipelineData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
             </div>
-          ))}
-        </div>
-      )}
+          )}
 
-      {tab === 'performance' && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="stat-card">
-            <p className="text-sm text-muted-foreground">Avg discount</p>
-            <p className="text-2xl font-bold font-mono mt-1">{data.performance.avgDiscountPct}%</p>
-          </div>
-          <div className="stat-card">
-            <p className="text-sm text-muted-foreground">Payment events</p>
-            <p className="text-2xl font-bold font-mono mt-1">{data.performance.paymentEvents}</p>
-          </div>
-          <div className="stat-card">
-            <p className="text-sm text-muted-foreground">Fully settled events</p>
-            <p className="text-2xl font-bold font-mono mt-1">{data.performance.settlementEvents}</p>
-          </div>
+          {tab === 'participants' && (
+            <div className="portal-metrics portal-metrics--3">
+              <StatCard label="Suppliers" value={participantData[0].count} icon={Factory} accent="forest" />
+              <StatCard label="Buyers" value={participantData[1].count} icon={Building2} accent="lime" />
+              <StatCard label="SPV" value={participantData[2].count} icon={Landmark} accent="gold" />
+            </div>
+          )}
+
+          {tab === 'performance' && (
+            <div className="portal-metrics portal-metrics--3">
+              <StatCard label="Avg discount" value={`${data.performance.avgDiscountPct}%`} icon={Percent} accent="forest" />
+              <StatCard label="Payment events" value={data.performance.paymentEvents} icon={CreditCard} accent="lime" />
+              <StatCard label="Fully settled events" value={data.performance.settlementEvents} icon={CheckCircle2} accent="gold" />
+            </div>
+          )}
         </div>
-      )}
+      </section>
     </div>
   );
 }

@@ -8,10 +8,17 @@ import { formatCurrency } from '@/lib/utils';
 import { Invoice, SecuritisationPackage } from '@/types';
 import { toast } from 'sonner';
 
+type TabId = 'packages' | 'create';
+
+const tabBtn = (active: boolean) =>
+  `px-3 py-2 text-xs font-bold border-b-2 transition-colors whitespace-nowrap shrink-0 min-h-[34px] ${
+    active ? 'border-[#0E1F1A] text-[#0E1F1A]' : 'border-transparent text-[#5A6B7D] hover:text-[#0E1F1A]'
+  }`;
+
 export default function PackagingPage() {
   const { invoices, packages, createPackage, updatePackageStatus } = useData();
   const actor = useActor();
-  const [tab, setTab] = useState<'create' | 'packages'>('packages');
+  const [tab, setTab] = useState<TabId>('packages');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [packageName, setPackageName] = useState('');
 
@@ -44,93 +51,151 @@ export default function PackagingPage() {
     }
   };
 
+  const selectedTotal = invoices.filter(i => selectedIds.includes(i.id)).reduce((s, i) => s + i.amount, 0);
+
   const assignedColumns = [
-    { key: 'select', header: '', render: (inv: Invoice) => (
-      <input
-        type="checkbox"
-        checked={selectedIds.includes(inv.id)}
-        onChange={() => toggleSelect(inv.id)}
-        className="rounded border-gray-300"
-      />
-    )},
-    { key: 'iou', header: 'IOU ID', render: (inv: Invoice) => <span className="font-mono text-xs">{inv.iouRegistryId}</span> },
-    { key: 'supplier', header: 'Supplier', render: (inv: Invoice) => inv.supplierName },
-    { key: 'amount', header: 'Face Value', render: (inv: Invoice) => <span className="font-mono">{formatCurrency(inv.amount)}</span> },
+    {
+      key: 'select',
+      header: '',
+      render: (inv: Invoice) => (
+        <input
+          type="checkbox"
+          checked={selectedIds.includes(inv.id)}
+          onChange={() => toggleSelect(inv.id)}
+          className="rounded border-[#0E1F1A]/20"
+        />
+      ),
+    },
+    { key: 'iou', header: 'IOU ID', primary: true, render: (inv: Invoice) => <span className="font-mono text-xs font-semibold">{inv.iouRegistryId}</span> },
+    { key: 'supplier', header: 'Supplier', render: (inv: Invoice) => <span className="font-medium">{inv.supplierName}</span> },
+    { key: 'amount', header: 'Face value', render: (inv: Invoice) => <span className="font-mono font-semibold">{formatCurrency(inv.amount)}</span> },
   ];
 
   const packageColumns = [
-    { key: 'name', header: 'Package Name', render: (p: SecuritisationPackage) => <span className="font-medium">{p.name}</span> },
-    { key: 'count', header: 'Face', render: (p: SecuritisationPackage) => <span className="font-mono text-xs">{formatCurrency(p.totalFaceValue)}</span> },
+    { key: 'name', header: 'Package name', primary: true, render: (p: SecuritisationPackage) => <span className="font-semibold">{p.name}</span> },
+    { key: 'count', header: 'Face', render: (p: SecuritisationPackage) => <span className="font-mono text-xs font-semibold">{formatCurrency(p.totalFaceValue)}</span> },
     { key: 'face', header: 'Purchase', render: (p: any) => <span className="font-mono">{formatCurrency(Number(p.totalPurchasePrice || 0))}</span> },
-    { key: 'discount', header: 'NSE ref', render: (p: any) => <span className="font-mono text-xs">{p.nseReference || '—'}</span> },
-    { key: 'status', header: 'Status', render: (p: SecuritisationPackage) => <StatusBadge status={p.status} /> },
-    { key: 'action', header: '', render: (p: SecuritisationPackage) => (
-      p.status === 'draft' ? (
-        <button
-          onClick={(e) => { e.stopPropagation(); updatePackageStatus(p.id, 'structured', actor); toast.success('Package structured'); }}
-          className="px-3 py-1 text-xs font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
-        >
-          Structure
-        </button>
-      ) : p.status === 'structured' ? (
-        <button
-          onClick={(e) => { e.stopPropagation(); updatePackageStatus(p.id, 'listed', actor); toast.success('Package listed on NSE USP'); }}
-          className="px-3 py-1 text-xs font-medium bg-emerald-600 text-white rounded-md hover:bg-emerald-700"
-        >
-          List on NSE
-        </button>
-      ) : null
-    )},
+    {
+      key: 'wdisc',
+      header: 'Wtd disc',
+      hideOnMobile: true,
+      render: (p: any) => (
+        <span className="font-mono text-xs">
+          {p.weightedAvgDiscount != null ? `${Number(p.weightedAvgDiscount).toFixed(2)}%` : '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'wtenor',
+      header: 'Wtd tenor',
+      hideOnMobile: true,
+      render: (p: any) => (
+        <span className="font-mono text-xs">{p.weightedAvgTenor != null ? `${p.weightedAvgTenor}d` : '—'}</span>
+      ),
+    },
+    {
+      key: 'discount',
+      header: 'Internal ref (not exchange)',
+      hideOnMobile: true,
+      render: (p: any) => <span className="font-mono text-xs">{p.nseReference || '—'}</span>,
+    },
+    { key: 'status', header: 'Readiness', render: (p: SecuritisationPackage) => <StatusBadge status={p.status} /> },
+    {
+      key: 'action',
+      header: '',
+      render: (p: SecuritisationPackage) => (
+        p.status === 'draft' ? (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); updatePackageStatus(p.id, 'structured', actor); toast.success('Package structured'); }}
+            className="min-h-[32px] px-2.5 py-1 text-[11px] font-bold rounded-md bg-[#0E1F1A] text-white hover:bg-[#1A3A2E]"
+          >
+            Structure
+          </button>
+        ) : p.status === 'structured' ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              updatePackageStatus(p.id, 'ready_for_submission', actor);
+              toast.success('Package marked ready for submission');
+            }}
+            className="min-h-[32px] px-2.5 py-1 text-[11px] font-bold rounded-md bg-[#D3F36B] text-[#0E1F1A] hover:bg-[#C5E85A]"
+          >
+            Mark ready for submission
+          </button>
+        ) : null
+      ),
+    },
   ];
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Packaging & NSE USP" subtitle="Structure and list securitisation packages" />
+    <div className="portal-page animate-fade-in">
+      <PageHeader
+        title="Packaging & Listing"
+        subtitle="Structure securitisation packages and track listing readiness — exchange onboarding is external and not live on NSE"
+      />
 
-      <div className="scroll-x-pad border-b pb-px">
-        <button
-          onClick={() => setTab('packages')}
-          className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap shrink-0 min-h-[44px] ${tab === 'packages' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
-        >
-          My Packages ({packages.length})
-        </button>
-        <button
-          onClick={() => setTab('create')}
-          className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap shrink-0 min-h-[44px] ${tab === 'create' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
-        >
-          Create Package ({assignedInvoices.length} available)
-        </button>
+      <div className="portal-callout">
+        Exchange onboarding and NSE listing are handled outside IOU Exchange. Internal reference codes here are for workflow tracking only, not exchange confirmations.
       </div>
 
-      {tab === 'packages' && (
-        <DataTable columns={packageColumns} data={packages} emptyMessage="No packages created yet" />
-      )}
-
-      {tab === 'create' && (
-        <div className="space-y-4">
-          <div className="max-w-sm">
-            <label className="block text-sm font-medium mb-1.5">Package Name</label>
-            <input
-              value={packageName}
-              onChange={e => setPackageName(e.target.value)}
-              placeholder="Uzima USP Series X"
-              className="w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-            />
+      <section className="portal-section">
+        <header className="portal-section__head flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+          <div className="min-w-0">
+            <h2 className="portal-section__title">{tab === 'packages' ? 'My packages' : 'Create package'}</h2>
+            <p className="portal-section__desc">
+              {tab === 'packages'
+                ? `${packages.length} package${packages.length === 1 ? '' : 's'}`
+                : `${assignedInvoices.length} assigned invoice${assignedInvoices.length === 1 ? '' : 's'} available`}
+            </p>
           </div>
-          <DataTable columns={assignedColumns} data={assignedInvoices} emptyMessage="No assigned invoices available for packaging" />
-          {selectedIds.length > 0 && (
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 bg-secondary/50 rounded-lg">
-              <p className="text-sm flex-1 min-w-0"><span className="font-medium">{selectedIds.length}</span> invoices selected · Total: <span className="font-mono font-medium">{formatCurrency(invoices.filter(i => selectedIds.includes(i.id)).reduce((s, i) => s + i.amount, 0))}</span></p>
-              <button
-                onClick={handleCreatePackage}
-                className="w-full sm:w-auto px-4 py-2.5 min-h-[44px] bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
-              >
-                Create Package
-              </button>
+          <div className="flex gap-0.5 overflow-x-auto scroll-x-pad -mx-1 px-1">
+            <button type="button" onClick={() => setTab('packages')} className={tabBtn(tab === 'packages')}>
+              My packages ({packages.length})
+            </button>
+            <button type="button" onClick={() => setTab('create')} className={tabBtn(tab === 'create')}>
+              Create ({assignedInvoices.length})
+            </button>
+          </div>
+        </header>
+
+        {tab === 'packages' ? (
+          <div className="[&_.surface-card]:border-0 [&_.surface-card]:rounded-none">
+            <DataTable columns={packageColumns} data={packages} emptyMessage="No packages created yet" />
+          </div>
+        ) : (
+          <div className="portal-section__body--pad space-y-3">
+            <div className="max-w-sm">
+              <label className="block text-[10px] font-semibold text-[#5A6B7D] mb-1">Package name</label>
+              <input
+                value={packageName}
+                onChange={e => setPackageName(e.target.value)}
+                placeholder="IOUX USP Series X"
+                className="field-input !min-h-[34px] !py-1.5 text-xs"
+              />
             </div>
-          )}
-        </div>
-      )}
+            <div className="[&_.surface-card]:border-0 [&_.surface-card]:rounded-none -mx-3 sm:-mx-0">
+              <DataTable columns={assignedColumns} data={assignedInvoices} emptyMessage="No assigned invoices available for packaging" />
+            </div>
+            {selectedIds.length > 0 && (
+              <div className="portal-callout flex flex-col sm:flex-row sm:items-center gap-2">
+                <p className="text-xs flex-1 min-w-0">
+                  <span className="font-bold text-[#0E1F1A]">{selectedIds.length}</span> invoices selected · Total:{' '}
+                  <span className="font-mono font-bold">{formatCurrency(selectedTotal)}</span>
+                </p>
+                <button
+                  type="button"
+                  onClick={handleCreatePackage}
+                  className="inline-flex items-center justify-center min-h-[34px] px-3 py-1.5 rounded-lg bg-[#0E1F1A] text-white text-xs font-bold hover:bg-[#1A3A2E]"
+                >
+                  Create package
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </section>
     </div>
   );
 }

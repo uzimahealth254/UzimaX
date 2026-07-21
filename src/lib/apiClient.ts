@@ -76,6 +76,7 @@ export type UzimaUser = {
   organisationId: string | null;
   organisationName: string | null;
   uzimaPartyId?: string | null;
+  mustChangePassword?: boolean;
 };
 
 export async function loginApi(email: string, password: string) {

@@ -8,7 +8,8 @@ if (!url) {
   throw new Error('DATABASE_URL is required');
 }
 
-const client = postgres(url, { max: 10 });
+const needsSsl = /supabase\.co|pooler\.supabase/i.test(url);
+const client = postgres(url, { max: 10, ssl: needsSsl ? 'require' : undefined });
 export const db = drizzle(client, { schema });
 export type Db = typeof db;
 export { client as pgClient };

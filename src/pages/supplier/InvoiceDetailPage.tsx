@@ -22,9 +22,17 @@ export default function InvoiceDetailPage() {
 
   if (!invoice) {
     return (
-      <div className="text-center py-16">
-        <p className="text-muted-foreground">Invoice not found</p>
-        <button onClick={() => navigate(-1)} className="mt-4 text-primary hover:underline text-sm">Go back</button>
+      <div className="portal-page animate-fade-in">
+        <div className="portal-empty">
+          <p className="text-xs font-bold text-[#0E1F1A]">Invoice not found</p>
+          <button
+            type="button"
+            onClick={() => navigate('/supplier/invoices')}
+            className="mt-2 text-[11px] font-bold text-[#0E1F1A] hover:underline"
+          >
+            Back to invoices
+          </button>
+        </div>
       </div>
     );
   }
@@ -37,78 +45,136 @@ export default function InvoiceDetailPage() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
-        <ArrowLeft size={16} /> Back to invoices
+    <div className="portal-page animate-fade-in">
+      <button
+        type="button"
+        onClick={() => navigate('/supplier/invoices')}
+        className="inline-flex items-center gap-1 text-xs font-semibold text-[#5A6B7D] hover:text-[#0E1F1A] min-h-[32px] -mt-1"
+      >
+        <ArrowLeft size={14} /> Back to invoices
       </button>
 
       <PageHeader
         title={invoice.invoiceNumber}
-        subtitle={`IOU Registry: ${invoice.iouRegistryId}`}
+        subtitle={`IOU registry · ${invoice.iouRegistryId}`}
         actions={<StatusBadge status={invoice.status} />}
       />
 
-      {/* Lifecycle */}
-      <div className="border rounded-lg p-4">
-        <h3 className="text-sm font-medium mb-3">Invoice Lifecycle</h3>
-        <LifecycleTimeline currentStatus={invoice.status} />
+      <section className="portal-section">
+        <header className="portal-section__head">
+          <h2 className="portal-section__title">Lifecycle</h2>
+        </header>
+        <div className="portal-section__body--pad">
+          <LifecycleTimeline currentStatus={invoice.status} />
+        </div>
+      </section>
+
+      <div className="portal-grid-2">
+        <section className="portal-section">
+          <header className="portal-section__head">
+            <div className="flex items-center gap-1.5">
+              <FileText size={13} className="text-[#0E1F1A]" />
+              <h2 className="portal-section__title">Invoice details</h2>
+            </div>
+          </header>
+          <div className="portal-section__body--pad space-y-3">
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="rounded-md bg-[#f7faf6] border border-[#0E1F1A]/6 p-2">
+                <p className="text-[10px] font-semibold text-[#5A6B7D]">Amount</p>
+                <p className="font-mono font-bold text-[#0E1F1A] mt-0.5">{formatCurrency(invoice.amount)}</p>
+              </div>
+              <div className="rounded-md bg-[#f7faf6] border border-[#0E1F1A]/6 p-2">
+                <p className="text-[10px] font-semibold text-[#5A6B7D]">Currency</p>
+                <p className="font-medium text-[#0E1F1A] mt-0.5">{invoice.currency}</p>
+              </div>
+              <div className="rounded-md bg-[#f7faf6] border border-[#0E1F1A]/6 p-2">
+                <p className="text-[10px] font-semibold text-[#5A6B7D]">Issue date</p>
+                <p className="font-medium text-[#0E1F1A] mt-0.5">{formatDate(invoice.issueDate)}</p>
+              </div>
+              <div className="rounded-md bg-[#f7faf6] border border-[#0E1F1A]/6 p-2">
+                <p className="text-[10px] font-semibold text-[#5A6B7D]">Due date</p>
+                <p className="font-medium text-[#0E1F1A] mt-0.5">{formatDate(invoice.dueDate)}</p>
+              </div>
+            </div>
+            <div>
+              <p className="text-[10px] font-semibold text-[#5A6B7D]">Description</p>
+              <p className="text-xs text-[#0E1F1A] mt-0.5 leading-snug">{invoice.description}</p>
+            </div>
+          </div>
+        </section>
+
+        <section className="portal-section">
+          <header className="portal-section__head">
+            <div className="flex items-center gap-1.5">
+              <Building2 size={13} className="text-[#0E1F1A]" />
+              <h2 className="portal-section__title">Parties &amp; timeline</h2>
+            </div>
+          </header>
+          <div className="portal-section__body--pad space-y-3 text-xs">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-md bg-[#f7faf6] border border-[#0E1F1A]/6 p-2">
+                <p className="text-[10px] font-semibold text-[#5A6B7D]">Supplier</p>
+                <p className="font-semibold text-[#0E1F1A] mt-0.5">{invoice.supplierName}</p>
+              </div>
+              <div className="rounded-md bg-[#f7faf6] border border-[#0E1F1A]/6 p-2">
+                <p className="text-[10px] font-semibold text-[#5A6B7D]">Buyer</p>
+                <p className="font-semibold text-[#0E1F1A] mt-0.5">{invoice.buyerName}</p>
+              </div>
+            </div>
+            <div className="space-y-1.5 pt-1 border-t border-[#0E1F1A]/8">
+              <div className="flex items-center gap-1.5 text-[#5A6B7D]">
+                <Calendar size={12} />
+                <span className="font-semibold text-[10px] uppercase tracking-wide">Events</span>
+              </div>
+              {invoice.listedAt && (
+                <p className="text-[#0E1F1A]"><span className="text-[#5A6B7D]">Listed · </span>{formatDate(invoice.listedAt)}</p>
+              )}
+              {invoice.verifiedAt && (
+                <p className="text-[#0E1F1A]"><span className="text-[#5A6B7D]">Verified · </span>{formatDate(invoice.verifiedAt)}</p>
+              )}
+              {!invoice.listedAt && !invoice.verifiedAt && (
+                <p className="text-[#5A6B7D]">No lifecycle events yet</p>
+              )}
+            </div>
+          </div>
+        </section>
       </div>
 
-      {/* Details grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="border rounded-lg p-5 space-y-4">
-          <h3 className="font-semibold text-sm flex items-center gap-2"><FileText size={16} /> Invoice Details</h3>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div><p className="text-muted-foreground text-xs">Amount</p><p className="font-mono font-medium">{formatCurrency(invoice.amount)}</p></div>
-            <div><p className="text-muted-foreground text-xs">Currency</p><p>{invoice.currency}</p></div>
-            <div><p className="text-muted-foreground text-xs">Issue Date</p><p>{formatDate(invoice.issueDate)}</p></div>
-            <div><p className="text-muted-foreground text-xs">Due Date</p><p>{formatDate(invoice.dueDate)}</p></div>
-          </div>
-          <div><p className="text-muted-foreground text-xs">Description</p><p className="text-sm mt-0.5">{invoice.description}</p></div>
-        </div>
-
-        <div className="border rounded-lg p-5 space-y-4">
-          <h3 className="font-semibold text-sm flex items-center gap-2"><Building2 size={16} /> Parties</h3>
-          <div className="space-y-3 text-sm">
-            <div><p className="text-muted-foreground text-xs">Supplier</p><p className="font-medium">{invoice.supplierName}</p></div>
-            <div><p className="text-muted-foreground text-xs">Buyer</p><p className="font-medium">{invoice.buyerName}</p></div>
-          </div>
-          <h3 className="font-semibold text-sm flex items-center gap-2 pt-2"><Calendar size={16} /> Timeline</h3>
-          <div className="space-y-2 text-sm">
-            {invoice.listedAt && <div><p className="text-muted-foreground text-xs">Listed</p><p>{formatDate(invoice.listedAt)}</p></div>}
-            {invoice.verifiedAt && <div><p className="text-muted-foreground text-xs">Verified</p><p>{formatDate(invoice.verifiedAt)}</p></div>}
-          </div>
-        </div>
-      </div>
-
-      {/* Offers */}
       {invoiceOffers.length > 0 && (
-        <div className="border rounded-lg">
-          <div className="p-4 border-b">
-            <h3 className="font-semibold text-sm flex items-center gap-2"><DollarSign size={16} /> Purchase Offers</h3>
-          </div>
-          <div className="divide-y">
+        <section className="portal-section">
+          <header className="portal-section__head">
+            <div className="flex items-center gap-1.5">
+              <DollarSign size={13} className="text-[#0E1F1A]" />
+              <div>
+                <h2 className="portal-section__title">Purchase offers</h2>
+                <p className="portal-section__desc">{invoiceOffers.length} offer{invoiceOffers.length === 1 ? '' : 's'}</p>
+              </div>
+            </div>
+          </header>
+          <div className="divide-y divide-[#0E1F1A]/8">
             {invoiceOffers.map(offer => (
-              <div key={offer.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div key={offer.id} className="px-3 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium">{offer.spvName}</p>
-                  <p className="text-xs text-muted-foreground break-words">
-                    {offer.discountRate}% discount · {offer.tenor} day tenor · Offer: {formatCurrency(offer.offerPrice)}
+                  <p className="text-xs font-bold text-[#0E1F1A]">{offer.spvName}</p>
+                  <p className="text-[11px] text-[#5A6B7D]">
+                    {offer.discountRate}% discount · {offer.tenor} day tenor · {formatCurrency(offer.offerPrice)}
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 shrink-0">
                   <StatusBadge status={offer.status} />
                   {offer.status === 'pending' && (
-                    <div className="flex gap-2 w-full sm:w-auto sm:ml-2">
+                    <div className="flex gap-1.5">
                       <button
+                        type="button"
                         onClick={() => setConfirmModal({ offerId: offer.id, accept: true })}
-                        className="flex-1 sm:flex-none min-h-[40px] px-3 py-2 text-xs font-medium bg-accent text-white rounded-md hover:bg-accent/90 transition-colors"
+                        className="min-h-[32px] px-2.5 py-1 text-[11px] font-bold rounded-md bg-[#0E1F1A] text-white hover:bg-[#1A3A2E]"
                       >
                         Accept
                       </button>
                       <button
+                        type="button"
                         onClick={() => setConfirmModal({ offerId: offer.id, accept: false })}
-                        className="flex-1 sm:flex-none min-h-[40px] px-3 py-2 text-xs font-medium border rounded-md hover:bg-secondary transition-colors"
+                        className="min-h-[32px] px-2.5 py-1 text-[11px] font-semibold rounded-md border border-[#0E1F1A]/15 text-[#0E1F1A] hover:bg-[#f7faf6]"
                       >
                         Reject
                       </button>
@@ -118,13 +184,17 @@ export default function InvoiceDetailPage() {
               </div>
             ))}
           </div>
-        </div>
+        </section>
       )}
 
       <ConfirmationModal
         open={!!confirmModal}
-        title={confirmModal?.accept ? 'Accept Offer' : 'Reject Offer'}
-        description={confirmModal?.accept ? 'Are you sure you want to accept this offer? This action cannot be undone.' : 'Are you sure you want to reject this offer?'}
+        title={confirmModal?.accept ? 'Accept offer?' : 'Reject offer?'}
+        description={
+          confirmModal?.accept
+            ? 'Accepting this offer cannot be undone.'
+            : 'This offer will be rejected.'
+        }
         confirmLabel={confirmModal?.accept ? 'Accept' : 'Reject'}
         variant={confirmModal?.accept ? 'default' : 'destructive'}
         onConfirm={handleOfferResponse}

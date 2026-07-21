@@ -3,20 +3,24 @@ import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
+import type { Server } from 'http';
 import { authRouter, apiRouter } from './routes/api.js';
 import { apiRateLimit, authRateLimit, initRateLimitStore } from './middleware/rateLimit.js';
 import { AppError } from './lib/errors.js';
 import { writeAudit } from './middleware/audit.js';
 import { assertSecurityConfig } from './lib/security.js';
+import { pgClient } from './db/client.js';
 
 assertSecurityConfig();
 
 const app = express();
 const PORT = Number(process.env.PORT) || 8787;
+const isProd = process.env.NODE_ENV === 'production';
 
 app.set('trust proxy', 1);
+app.disable('x-powered-by');
 
-const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173,http://localhost:3000')
+const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173,http://localhost:5174,http://localhost:3000')
   .split(',')
   .map((o) => o.trim())
   .filter(Boolean);
@@ -24,13 +28,16 @@ const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173,http:
 app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginResourcePolicy: { policy: 'cross-origin' },
-  hsts: process.env.NODE_ENV === 'production' ? { maxAge: 31536000, includeSubDomains: true } : false,
+  hsts: isProd ? { maxAge: 31536000, includeSubDomains: true, preload: true } : false,
 }));
 
 app.use(cors({
   origin: (origin, cb) => {
     if (!origin) return cb(null, true);
     if (allowedOrigins.includes(origin)) return cb(null, true);
+    if (!isProd && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+      return cb(null, true);
+    }
     return cb(null, false);
   },
   credentials: true,
@@ -46,7 +53,6 @@ app.use(cookieParser());
 app.use('/api/v1', apiRateLimit);
 app.use('/api/v1/auth', authRateLimit);
 
-/** Audit all mutating API calls (fire-and-forget after response) */
 app.use('/api/v1', (req, res, next) => {
   if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return next();
   if (req.path === '/health' || req.path.startsWith('/auth/login') || req.path.startsWith('/auth/refresh')) {
@@ -68,13 +74,26 @@ app.use('/api/v1', (req, res, next) => {
   next();
 });
 
-app.get('/api/v1/health', (_req, res) => {
-  res.json({
-    status: 'ok',
-    service: 'uzima-api',
-    version: '2.0.0',
-    time: new Date().toISOString(),
-  });
+app.get('/api/v1/health', async (_req, res) => {
+  try {
+    await pgClient`SELECT 1 as ok`;
+    res.json({
+      status: 'ok',
+      service: 'uzima-api',
+      version: '2.0.0',
+      db: 'up',
+      time: new Date().toISOString(),
+    });
+  } catch (e) {
+    console.error('[health] database unreachable', e);
+    res.status(503).json({
+      status: 'degraded',
+      service: 'uzima-api',
+      version: '2.0.0',
+      db: 'down',
+      time: new Date().toISOString(),
+    });
+  }
 });
 
 app.use('/api/v1/auth', authRouter);
@@ -86,17 +105,43 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
       error: err.code,
       message: err.message,
     };
-    if (process.env.NODE_ENV !== 'production' && err.details) {
-      body.details = err.details;
-    }
+    if (!isProd && err.details) body.details = err.details;
     return res.status(err.statusCode).json(body);
   }
   console.error(err);
   res.status(500).json({ error: 'internal_error', message: 'Internal server error' });
 });
 
+let server: Server | null = null;
+
+async function shutdown(signal: string) {
+  console.info(`[shutdown] ${signal} received`);
+  if (server) {
+    await new Promise<void>((resolve) => {
+      server!.close(() => resolve());
+      setTimeout(resolve, 10_000).unref();
+    });
+  }
+  try {
+    await pgClient.end({ timeout: 5 });
+  } catch (e) {
+    console.warn('[shutdown] pg close', e);
+  }
+  process.exit(0);
+}
+
+process.on('SIGTERM', () => void shutdown('SIGTERM'));
+process.on('SIGINT', () => void shutdown('SIGINT'));
+process.on('unhandledRejection', (reason) => {
+  console.error('[unhandledRejection]', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', err);
+  void shutdown('uncaughtException');
+});
+
 void initRateLimitStore().then(() => {
-  app.listen(PORT, () => {
-    console.log(`Uzima API listening on http://localhost:${PORT}`);
+  server = app.listen(PORT, () => {
+    console.log(`IOU Exchange API listening on :${PORT} (${isProd ? 'production' : 'development'})`);
   });
 });

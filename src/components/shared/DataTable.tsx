@@ -27,7 +27,7 @@ export default function DataTable<T>({
 }: DataTableProps<T>) {
   if (data.length === 0) {
     return (
-      <div className="surface-card text-center py-14 px-4 text-muted-foreground">
+      <div className="surface-card text-center py-6 px-3 text-muted-foreground">
         <p className="text-sm">{emptyMessage}</p>
       </div>
     );
@@ -50,7 +50,7 @@ export default function DataTable<T>({
               key={key}
               type="button"
               onClick={() => onRowClick?.(item)}
-              className={`w-full text-left p-4 space-y-2.5 transition-colors active:bg-primary/[0.05] ${onRowClick ? '' : 'cursor-default'}`}
+              className={`w-full text-left px-3 py-2.5 space-y-1.5 transition-colors active:bg-primary/[0.05] ${onRowClick ? '' : 'cursor-default'}`}
               disabled={!onRowClick}
             >
               {primary.map((col) => (

@@ -4,6 +4,7 @@ import StatusBadge from '@/components/shared/StatusBadge';
 import { formatDate } from '@/lib/utils';
 import { exportToCsv } from '@/lib/exportUtils';
 import { toast } from 'sonner';
+import { Download } from 'lucide-react';
 
 export default function WorkflowMonitorPage() {
   const { activityLogs, invoices } = useData();
@@ -31,59 +32,85 @@ export default function WorkflowMonitorPage() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="portal-page animate-fade-in">
       <PageHeader
-        title="Workflow Monitor"
+        title="Workflow monitor"
         subtitle="Track invoice lifecycle transitions and platform activity"
         actions={
-          <button type="button" onClick={exportAudit} className="px-4 py-2 text-sm rounded-xl border font-medium">
+          <button
+            type="button"
+            onClick={exportAudit}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#D3F36B] text-[#0E1F1A] text-xs font-bold hover:bg-[#C5E85A] min-h-[36px]"
+          >
+            <Download size={12} />
             Export audit CSV
           </button>
         }
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="border rounded-lg">
-          <div className="p-4 border-b">
-            <h3 className="font-semibold text-sm">Recent Transitions</h3>
-          </div>
-          <div className="divide-y max-h-[500px] overflow-y-auto">
-            {recentTransitions.map(item => (
-              <div key={item.id} className="px-4 py-3 flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-mono">{item.iouRegistryId}</p>
-                  <p className="text-xs text-muted-foreground">{item.supplierName} → {item.buyerName}</p>
-                </div>
-                <div className="text-right">
-                  <StatusBadge status={item.status} />
-                  <p className="text-[10px] text-muted-foreground mt-1">{formatDate(item.lastUpdate)}</p>
-                </div>
+      <div className="portal-split">
+        <section className="portal-section">
+          <header className="portal-section__head">
+            <div>
+              <h2 className="portal-section__title">Recent transitions</h2>
+              <p className="portal-section__desc">{recentTransitions.length} invoices with lifecycle events</p>
+            </div>
+          </header>
+          <div className="divide-y divide-[#0E1F1A]/8 max-h-[500px] overflow-y-auto">
+            {recentTransitions.length === 0 ? (
+              <div className="portal-empty px-3 py-5">
+                <p className="text-xs font-medium text-[#5A6B7D]">No transitions recorded</p>
               </div>
-            ))}
+            ) : (
+              recentTransitions.map(item => (
+                <div key={item.id} className="px-3 py-2.5 flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-xs font-mono font-semibold text-[#0E1F1A] truncate">{item.iouRegistryId}</p>
+                    <p className="text-[11px] text-[#5A6B7D] truncate">{item.supplierName} → {item.buyerName}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <StatusBadge status={item.status} />
+                    <p className="text-[10px] text-[#5A6B7D]/80 mt-1 font-medium">{formatDate(item.lastUpdate)}</p>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
-        </div>
+        </section>
 
-        <div className="border rounded-lg">
-          <div className="p-4 border-b">
-            <h3 className="font-semibold text-sm">Activity Log</h3>
-          </div>
-          <div className="divide-y max-h-[500px] overflow-y-auto">
-            {activityLogs.map(log => (
-              <div key={log.id} className="px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-semibold text-primary">
-                    {log.userName.charAt(0)}
-                  </div>
-                  <div>
-                    <p className="text-sm"><span className="font-medium">{log.userName}</span> {log.action}</p>
-                    {log.details && <p className="text-xs text-muted-foreground">{log.details}</p>}
-                    <p className="text-[10px] text-muted-foreground">{formatDate(log.timestamp)}</p>
+        <section className="portal-section">
+          <header className="portal-section__head">
+            <div>
+              <h2 className="portal-section__title">Activity log</h2>
+              <p className="portal-section__desc">{activityLogs.length} events</p>
+            </div>
+          </header>
+          <div className="divide-y divide-[#0E1F1A]/8 max-h-[500px] overflow-y-auto">
+            {activityLogs.length === 0 ? (
+              <div className="portal-empty px-3 py-5">
+                <p className="text-xs font-medium text-[#5A6B7D]">No activity yet</p>
+              </div>
+            ) : (
+              activityLogs.map(log => (
+                <div key={log.id} className="px-3 py-2.5">
+                  <div className="flex items-start gap-2">
+                    <div className="w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-bold bg-[#D3F36B] text-[#0E1F1A] shrink-0">
+                      {log.userName.charAt(0)}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs">
+                        <span className="font-semibold text-[#0E1F1A]">{log.userName}</span>{' '}
+                        <span className="text-[#5A6B7D]">{log.action}</span>
+                      </p>
+                      {log.details && <p className="text-[11px] text-[#5A6B7D] mt-0.5 leading-snug">{log.details}</p>}
+                      <p className="text-[10px] text-[#5A6B7D]/80 mt-1 font-medium">{formatDate(log.timestamp)}</p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
-        </div>
+        </section>
       </div>
     </div>
   );

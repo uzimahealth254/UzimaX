@@ -22,7 +22,7 @@ export async function generatePurchaseNote(opts: {
   const doc = new PDFDocument({ margin: 50 });
   const done = bufferFromDoc(doc);
 
-  doc.fontSize(18).text('Uzima — Purchase Note', { underline: true });
+  doc.fontSize(18).text('IOU Exchange — Purchase Note', { underline: true });
   doc.moveDown();
   doc.fontSize(11).fillColor('#333');
   doc.text(`IOU Registry ID: ${opts.iouRegistryId}`);
@@ -33,7 +33,7 @@ export async function generatePurchaseNote(opts: {
   doc.text(`Purchase price: KES ${opts.purchasePrice.toLocaleString()}`);
   doc.moveDown();
   doc.text(`Generated: ${new Date().toISOString()}`);
-  doc.text('This is a simulated transaction document for the Uzima platform.');
+  doc.text('This is a simulated transaction document for the IOU Exchange platform.');
   doc.end();
 
   const buffer = await done;
@@ -55,7 +55,7 @@ export async function generateAssignmentLetter(opts: {
   const doc = new PDFDocument({ margin: 50 });
   const done = bufferFromDoc(doc);
 
-  doc.fontSize(18).text('Uzima — Assignment Letter', { underline: true });
+  doc.fontSize(18).text('IOU Exchange — Assignment Letter', { underline: true });
   doc.moveDown();
   doc.fontSize(11);
   doc.text(`IOU: ${opts.iouRegistryId}`);
@@ -85,7 +85,7 @@ export async function generatePaymentReceipt(opts: {
   const doc = new PDFDocument({ margin: 50 });
   const done = bufferFromDoc(doc);
 
-  doc.fontSize(18).text('Uzima — Payment Receipt', { underline: true });
+  doc.fontSize(18).text('IOU Exchange — Payment Receipt', { underline: true });
   doc.moveDown();
   doc.fontSize(11);
   doc.text(`IOU: ${opts.iouRegistryId}`);
@@ -100,6 +100,42 @@ export async function generatePaymentReceipt(opts: {
   return storeFile({
     orgId: opts.orgId,
     originalName: `payment-receipt-${opts.iouRegistryId}.pdf`,
+    buffer,
+    mimeType: 'application/pdf',
+  });
+}
+
+export async function generatePackageSummary(opts: {
+  orgId: string;
+  packageRef: string;
+  packageId: string;
+  status: string;
+  totalFaceValue: number;
+  totalPurchasePrice: number;
+  itemCount: number;
+  nseReference?: string | null;
+}): Promise<{ url: string; key: string }> {
+  const doc = new PDFDocument({ margin: 50 });
+  const done = bufferFromDoc(doc);
+
+  doc.fontSize(18).text('IOU Exchange — Package Summary', { underline: true });
+  doc.moveDown();
+  doc.fontSize(11);
+  doc.text(`Package ref: ${opts.packageRef}`);
+  doc.text(`Package ID: ${opts.packageId}`);
+  doc.text(`Status: ${opts.status}`);
+  doc.text(`Receivables: ${opts.itemCount}`);
+  doc.text(`Total face value: KES ${opts.totalFaceValue.toLocaleString()}`);
+  doc.text(`Total purchase price: KES ${opts.totalPurchasePrice.toLocaleString()}`);
+  if (opts.nseReference) doc.text(`NSE reference: ${opts.nseReference}`);
+  doc.moveDown();
+  doc.text(`Generated: ${new Date().toISOString()}`);
+  doc.end();
+
+  const buffer = await done;
+  return storeFile({
+    orgId: opts.orgId,
+    originalName: `package-summary-${opts.packageRef}.pdf`,
     buffer,
     mimeType: 'application/pdf',
   });

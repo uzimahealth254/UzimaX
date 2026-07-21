@@ -1206,7 +1206,7 @@ services:
     staticPublishPath: dist
     envVars:
       - key: VITE_API_URL
-        value: https://uzima-api.onrender.com
+        value: https://api.ioux.africa
 
 databases:
   - name: uzima-db
@@ -1435,7 +1435,7 @@ RESEND_API_KEY=<key>
 # SMTP_PORT=587
 # SMTP_USER=...
 # SMTP_PASS=...
-EMAIL_FROM=Uzima Platform <no-reply@uzima.co.ke>
+EMAIL_FROM=IOU Exchange <no-reply@ioux.africa>
 
 # ============ SMS (optional) ============
 SMS_PROVIDER=africastalking     # or 'stub'
@@ -1447,7 +1447,7 @@ AT_SENDER_ID=Uzima
 REDIS_URL=redis://localhost:6379
 
 # ============ Portal (.env) ============
-VITE_API_URL=https://api.uzima.co.ke
+VITE_API_URL=https://api.ioux.africa
 ```
 
 ---

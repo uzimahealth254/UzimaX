@@ -3,8 +3,9 @@
     name: uzima-api
     runtime: node
     plan: starter
-    buildCommand: npm install
+    buildCommand: npm install && npx drizzle-kit push && npm run db:rls
     startCommand: npm run start:api
+    healthCheckPath: /api/v1/health
     envVars:
       - key: NODE_VERSION
         value: 20.18.0
@@ -12,10 +13,9 @@
         value: 8787
       - key: NODE_ENV
         value: production
+      # Paste Supabase pooler URL (session :5432 for migrations; transaction :6543 for app)
       - key: DATABASE_URL
-        fromDatabase:
-          name: uzima-db
-          property: connectionString
+        sync: false
       - key: JWT_SECRET
         generateValue: true
       - key: JWT_REFRESH_SECRET
@@ -24,20 +24,65 @@
         value: "false"
       - key: ENABLE_SIMULATED_WALLET
         value: "false"
+      - key: VITE_ENABLE_WALLET
+        value: "false"
+      - key: VITE_ENABLE_ENGINE
+        value: "false"
       - key: ALLOW_BODY_REFRESH
         value: "false"
+      - key: COOKIE_SECURE
+        value: "true"
+      # Email (Resend): set EMAIL_PROVIDER=resend + RESEND_API_KEY in Render dashboard
       - key: EMAIL_PROVIDER
+        value: resend
+      - key: EMAIL_FROM
+        value: IOU Exchange <no-reply@ioux.africa>
+      - key: SUPPORT_EMAIL
+        value: hello@ioux.africa
+      - key: PORTAL_URL
+        value: https://app.ioux.africa
+      - key: SITE_URL
+        value: https://www.ioux.africa
+      - key: RESEND_API_KEY
         sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMS_PROVIDER
+        value: stub
+      - key: AT_API_KEY
+        sync: false
+      - key: AT_USERNAME
+        sync: false
+      - key: AT_SENDER_ID
+        value: IOUX
       - key: AFYAX_WEBHOOK_SECRET
         generateValue: true
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_REGION
+        value: auto
       - key: STORAGE_LOCAL_PATH
         value: ./storage
       - key: CORS_ORIGINS
-        value: https://uzima-portal.onrender.com
+        value: https://www.ioux.africa,https://ioux.africa,https://app.ioux.africa
       - key: REDIS_URL
-        sync: false
-      - key: COOKIE_SECURE
-        value: "true"
+        fromService:
+          type: redis
+          name: uzima-redis
+          property: connectionString
+
   - type: web
     name: uzima-portal
     runtime: node
@@ -48,8 +93,15 @@
       - key: NODE_VERSION
         value: 20.18.0
       - key: VITE_API_URL
-        value: https://uzima-api.onrender.com
+        value: https://api.ioux.africa
+      - key: VITE_SHOW_DEMO
+        value: "false"
+      - key: VITE_ENABLE_WALLET
+        value: "false"
+      - key: VITE_ENABLE_ENGINE
+        value: "false"
 
-databases:
-  - name: uzima-db
+  - type: redis
+    name: uzima-redis
     plan: starter
+    maxmemoryPolicy: allkeys-lru

@@ -4,7 +4,7 @@ import { eq, and, isNull, gt } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import * as s from '../db/schema.js';
 import { AppError } from '../lib/errors.js';
-import { sendEmail, templates } from './email.js';
+import { sendEmail, templates, emailSubjects } from './email.js';
 import { demoOtpAllowed } from '../lib/security.js';
 
 const OTP_TTL_MS = 10 * 60 * 1000;
@@ -32,7 +32,7 @@ export async function issueOtp(opts: {
     ? (process.env.DEMO_OTP || '123456')
     : String(crypto.randomInt(100000, 1000000));
 
-  const codeHash = await bcrypt.hash(code, 10);
+  const codeHash = await bcrypt.hash(code, 12);
   await db.insert(s.otpCodes).values({
     userId: opts.userId,
     purpose: opts.purpose,
@@ -41,11 +41,13 @@ export async function issueOtp(opts: {
   });
 
   if (opts.email) {
+    const isReset = opts.purpose === 'password_reset';
+    const purposeLabel = opts.purpose.replace(/[:_]/g, ' ').trim();
     await sendEmail({
       to: opts.email,
-      subject: 'Uzima verification code',
-      html: templates.otp(code),
-      text: `Your Uzima OTP is ${code}. It expires in 10 minutes.`,
+      subject: isReset ? emailSubjects.passwordReset() : emailSubjects.otp(purposeLabel),
+      html: isReset ? templates.passwordReset(code) : templates.otp(code, purposeLabel),
+      text: `Your IOU Exchange code is ${code}. It expires in 10 minutes.`,
     });
   }
 

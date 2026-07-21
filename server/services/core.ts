@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, like } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, like } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import * as s from '../db/schema.js';
 import { generateIOURegistryId } from '../lib/iouId.js';
@@ -7,6 +7,8 @@ import { computeTenorDays, priceReceivable } from '../lib/pricing.js';
 import { assertProgrammeAllows } from './programme.js';
 import { generatePurchaseNote, generatePaymentReceipt } from './pdf.js';
 import { writeAudit } from '../middleware/audit.js';
+import { notifyOrgUsers } from './notificationService.js';
+import { templates, emailSubjects } from './email.js';
 
 async function nextIouRegistryId(): Promise<string> {
   const year = new Date().getFullYear();
@@ -65,23 +67,6 @@ export async function transitionInvoice(
   return { ...inv, status: toStatus };
 }
 
-async function notifyOrgUsers(orgId: string, n: { type: string; title: string; body?: string; referenceType?: string; referenceId?: string }) {
-  const orgUsers = await db.select().from(s.users).where(eq(s.users.orgId, orgId));
-  if (!orgUsers.length) return;
-  await db.insert(s.notifications).values(
-    orgUsers.map((u) => ({
-      userId: u.id,
-      type: n.type,
-      title: n.title,
-      body: n.body || null,
-      referenceType: n.referenceType || null,
-      referenceId: n.referenceId || null,
-      channel: 'in_app',
-      sentAt: new Date(),
-    })),
-  );
-}
-
 async function getSpvOrg() {
   const [spv] = await db.select().from(s.organisations).where(eq(s.organisations.orgType, 'spv')).limit(1);
   if (!spv) throw new AppError(500, 'config_error', 'SPV organisation not configured');
@@ -106,7 +91,17 @@ export async function createBuyerOriginatedInvoice(data: {
   interestRate?: number;
   installmentSchedule?: { installmentNo: number; dueDate: string; amount: number }[];
   origin?: string;
+  supportingDocs?: unknown[];
+  commitmentToPay?: boolean;
+  bankStandingOrderRef?: string;
 }, actorId?: string) {
+  await assertProgrammeAllows({
+    buyerOrgId: data.buyerOrgId,
+    faceValue: data.faceValue,
+    issueDate: data.issueDate,
+    dueDate: data.dueDate,
+  });
+
   const iou = await nextIouRegistryId();
   const [inv] = await db.insert(s.invoices).values({
     iouRegistryId: iou,
@@ -122,6 +117,9 @@ export async function createBuyerOriginatedInvoice(data: {
     dueDate: data.dueDate,
     interestRate: data.interestRate != null ? String(data.interestRate) : null,
     status: 'awaiting_opt_in',
+    supportingDocs: data.supportingDocs || [],
+    commitmentToPay: Boolean(data.commitmentToPay),
+    bankStandingOrderRef: data.bankStandingOrderRef || null,
     metadata: data.description ? { description: data.description } : {},
   }).returning();
 
@@ -152,6 +150,9 @@ export async function createBuyerOriginatedInvoice(data: {
     body: `New IOU ${iou} — review and opt in or decline`,
     referenceType: 'invoice',
     referenceId: inv.id,
+    emailHtml: templates.optInRequest(iou, `KES ${Number(data.faceValue).toLocaleString()}`),
+    emailSubject: emailSubjects.optIn(iou),
+    smsBody: `IOUX: Opt-in requested for ${iou}`,
   });
 
   await writeAudit({
@@ -171,7 +172,17 @@ export async function createSupplierOriginatedInvoice(data: {
   issueDate: string;
   dueDate: string;
   description?: string;
+  supportingDocs?: unknown[];
+  commitmentToPay?: boolean;
+  bankStandingOrderRef?: string;
 }, actorId?: string) {
+  await assertProgrammeAllows({
+    buyerOrgId: data.buyerOrgId,
+    faceValue: data.faceValue,
+    issueDate: data.issueDate,
+    dueDate: data.dueDate,
+  });
+
   const iou = await nextIouRegistryId();
   const [inv] = await db.insert(s.invoices).values({
     iouRegistryId: iou,
@@ -186,6 +197,9 @@ export async function createSupplierOriginatedInvoice(data: {
     dueDate: data.dueDate,
     status: 'awaiting_buyer_verification',
     listingStatus: 'listed',
+    supportingDocs: data.supportingDocs || [],
+    commitmentToPay: Boolean(data.commitmentToPay),
+    bankStandingOrderRef: data.bankStandingOrderRef || null,
     metadata: data.description ? { description: data.description } : {},
   }).returning();
 
@@ -205,6 +219,9 @@ export async function createSupplierOriginatedInvoice(data: {
     body: `Supplier listed ${iou} against your organisation`,
     referenceType: 'invoice',
     referenceId: inv.id,
+    emailHtml: templates.buyerVerificationRequest(iou, `KES ${Number(data.faceValue).toLocaleString()}`),
+    emailSubject: emailSubjects.verification(iou),
+    smsBody: `IOUX: Verify supplier invoice ${iou}`,
   });
 
   await writeAudit({
@@ -246,14 +263,37 @@ export async function walletDebit(orgId: string, amount: number, reference: stri
   return newBal;
 }
 
-async function calculateFees(faceValue: number) {
+async function calculateAssignmentFees(faceValue: number) {
   const configs = await db.select().from(s.feeConfigurations).where(eq(s.feeConfigurations.isActive, true));
   let total = 0;
   const lines: { feeConfigId: string; amount: number; appliesTo: string }[] = [];
   for (const c of configs) {
+    if (c.feeType === 'per_payment_pct') continue; // applied on payment updates only
     let amount = 0;
-    if (c.rateBps) amount = Math.round(faceValue * (c.rateBps / 10000));
-    if (c.flatAmount) amount += Number(c.flatAmount);
+    if (c.feeType === 'flat_fee' && c.flatAmount) {
+      amount = Number(c.flatAmount);
+    } else if (c.rateBps) {
+      amount = Math.round(faceValue * (c.rateBps / 10000));
+    }
+    if (c.flatAmount && c.feeType !== 'flat_fee') amount += Number(c.flatAmount);
+    if (amount > 0) {
+      total += amount;
+      lines.push({ feeConfigId: c.id, amount, appliesTo: c.appliesTo });
+    }
+  }
+  return { total, lines };
+}
+
+async function calculatePerPaymentFees(paymentAmount: number) {
+  const configs = await db.select().from(s.feeConfigurations).where(eq(s.feeConfigurations.isActive, true));
+  let total = 0;
+  const lines: { feeConfigId: string; amount: number; appliesTo: string }[] = [];
+  for (const c of configs) {
+    if (c.feeType !== 'per_payment_pct' && c.feeType !== 'transaction_pct') continue;
+    // per_payment_pct always; transaction_pct only if applies_to includes payment flow via description tag
+    if (c.feeType === 'transaction_pct' && !String(c.description || '').toLowerCase().includes('payment')) continue;
+    let amount = 0;
+    if (c.rateBps) amount = Math.round(paymentAmount * (c.rateBps / 10000));
     if (amount > 0) {
       total += amount;
       lines.push({ feeConfigId: c.id, amount, appliesTo: c.appliesTo });
@@ -291,7 +331,7 @@ export async function createAssignment(opts: {
   });
   const bps = opts.discountBps ?? priced.recommendedBps;
   const purchasePrice = Math.round(face * (1 - bps / 10000));
-  const fees = await calculateFees(face);
+  const fees = await calculateAssignmentFees(face);
   const supplierNet = purchasePrice - Math.round(fees.total / 2);
 
   const [asgn] = await db.insert(s.assignments).values({
@@ -352,6 +392,27 @@ export async function createAssignment(opts: {
     body: `${inv.iouRegistryId} assigned to SPV`,
     referenceType: 'assignment',
     referenceId: asgn.id,
+    emailHtml: templates.assignmentCreated(inv.iouRegistryId || inv.id, opts.type),
+    emailSubject: emailSubjects.assignment(inv.iouRegistryId || inv.id),
+    smsBody: `IOUX: ${inv.iouRegistryId} assigned to SPV`,
+  });
+  await notifyOrgUsers(inv.buyerOrgId, {
+    type: 'assignment_created',
+    title: 'Receivable assigned to SPV',
+    body: `${inv.iouRegistryId} is now assigned`,
+    referenceType: 'assignment',
+    referenceId: asgn.id,
+    emailHtml: templates.assignmentCreated(inv.iouRegistryId || inv.id, opts.type),
+    emailSubject: emailSubjects.assignment(inv.iouRegistryId || inv.id),
+  });
+  await notifyOrgUsers(inv.supplierOrgId, {
+    type: 'assignment_created',
+    title: 'Receivable assigned to SPV',
+    body: `${inv.iouRegistryId} is now assigned`,
+    referenceType: 'assignment',
+    referenceId: asgn.id,
+    emailHtml: templates.assignmentCreated(inv.iouRegistryId || inv.id, opts.type),
+    emailSubject: emailSubjects.assignment(inv.iouRegistryId || inv.id),
   });
 
   try {
@@ -407,12 +468,15 @@ export async function respondToOptIn(optInId: string, accept: boolean, userId: s
   await transitionInvoice(opt.invoiceId, 'opt_in_declined', userId, declineReason);
   const [inv] = await db.select().from(s.invoices).where(eq(s.invoices.id, opt.invoiceId)).limit(1);
   if (inv) {
+    const iou = inv.iouRegistryId || inv.id;
     await notifyOrgUsers(inv.buyerOrgId, {
       type: 'opt_in_declined',
       title: 'Supplier declined opt-in',
-      body: `${inv.iouRegistryId} declined`,
+      body: `${iou} declined`,
       referenceType: 'invoice',
       referenceId: inv.id,
+      emailHtml: templates.optInDeclined(iou, declineReason),
+      emailSubject: emailSubjects.optInDeclined(iou),
     });
   }
   return { optIn: opt, assignment: null };
@@ -436,6 +500,19 @@ export async function respondToBuyerVerification(verificationId: string, accept:
   }
 
   await transitionInvoice(v.invoiceId, 'buyer_rejected', userId, rejectReason);
+  const [inv] = await db.select().from(s.invoices).where(eq(s.invoices.id, v.invoiceId)).limit(1);
+  if (inv) {
+    const iou = inv.iouRegistryId || inv.id;
+    await notifyOrgUsers(inv.supplierOrgId, {
+      type: 'verification_rejected',
+      title: 'Buyer rejected verification',
+      body: `${iou} was rejected`,
+      referenceType: 'invoice',
+      referenceId: inv.id,
+      emailHtml: templates.verificationRejected(iou, rejectReason),
+      emailSubject: emailSubjects.verificationRejected(iou),
+    });
+  }
   return { verification: v, assignment: null };
 }
 
@@ -443,13 +520,75 @@ export async function releaseEscrowLeg(legId: string, actorId?: string) {
   const [leg] = await db.select().from(s.escrowLegs).where(eq(s.escrowLegs.id, legId)).limit(1);
   if (!leg) throw new AppError(404, 'not_found', 'Escrow leg not found');
   if (leg.status !== 'pending') throw new AppError(400, 'invalid_state', 'Leg not pending');
+  if (!leg.legType.includes('disbursement')) {
+    throw new AppError(400, 'invalid_leg', 'Not a disbursement leg');
+  }
 
-  const status = leg.legType.includes('collection') ? 'collected' : 'released';
-  await db.update(s.escrowLegs).set({ status, executedAt: new Date() }).where(eq(s.escrowLegs.id, legId));
+  await db.update(s.escrowLegs).set({ status: 'released', executedAt: new Date() }).where(eq(s.escrowLegs.id, legId));
 
   if (leg.legType === 'disbursement_to_supplier') {
     const [asgn] = await db.select().from(s.assignments).where(eq(s.assignments.id, leg.assignmentId)).limit(1);
-    if (asgn) await transitionInvoice(asgn.invoiceId, 'disbursed', actorId, 'Escrow disbursement released');
+    if (asgn) {
+      await transitionInvoice(asgn.invoiceId, 'disbursed', actorId, 'Escrow disbursement released');
+      const [inv] = await db.select().from(s.invoices).where(eq(s.invoices.id, asgn.invoiceId)).limit(1);
+      const iou = inv?.iouRegistryId || asgn.invoiceId;
+      const amount = `KES ${Number(leg.amount).toLocaleString()}`;
+      await notifyOrgUsers(asgn.spvOrgId, {
+        type: 'escrow_disbursed',
+        title: 'Escrow disbursement recorded',
+        body: `${iou} — ${amount} (simulated ledger)`,
+        referenceType: 'escrow_leg',
+        referenceId: leg.id,
+        emailHtml: templates.escrowDisbursedRecorded(iou, amount),
+        emailSubject: emailSubjects.escrowDisburse(iou),
+      });
+      await notifyOrgUsers(asgn.supplierOrgId, {
+        type: 'escrow_disbursed',
+        title: 'Escrow disbursement recorded',
+        body: `${iou} — ${amount} (simulated ledger)`,
+        referenceType: 'escrow_leg',
+        referenceId: leg.id,
+        emailHtml: templates.escrowDisbursedRecorded(iou, amount),
+        emailSubject: emailSubjects.escrowDisburse(iou),
+      });
+    }
+  }
+  return leg;
+}
+
+export async function collectEscrowLeg(legId: string, _actorId?: string) {
+  const [leg] = await db.select().from(s.escrowLegs).where(eq(s.escrowLegs.id, legId)).limit(1);
+  if (!leg) throw new AppError(404, 'not_found', 'Escrow leg not found');
+  if (leg.status !== 'pending') throw new AppError(400, 'invalid_state', 'Leg not pending');
+  if (!leg.legType.includes('collection')) {
+    throw new AppError(400, 'invalid_leg', 'Not a collection leg');
+  }
+
+  await db.update(s.escrowLegs).set({ status: 'collected', executedAt: new Date() }).where(eq(s.escrowLegs.id, legId));
+
+  const [asgn] = await db.select().from(s.assignments).where(eq(s.assignments.id, leg.assignmentId)).limit(1);
+  if (asgn) {
+    const [inv] = await db.select().from(s.invoices).where(eq(s.invoices.id, asgn.invoiceId)).limit(1);
+    const iou = inv?.iouRegistryId || asgn.invoiceId;
+    const amount = `KES ${Number(leg.amount).toLocaleString()}`;
+    await notifyOrgUsers(asgn.spvOrgId, {
+      type: 'escrow_collected',
+      title: 'Escrow collection recorded',
+      body: `${iou} — ${amount} (simulated ledger)`,
+      referenceType: 'escrow_leg',
+      referenceId: leg.id,
+      emailHtml: templates.escrowCollectionRecorded(iou, amount),
+      emailSubject: emailSubjects.escrowCollect(iou),
+    });
+    await notifyOrgUsers(asgn.buyerOrgId, {
+      type: 'escrow_collected',
+      title: 'Escrow collection recorded',
+      body: `${iou} — ${amount} (simulated ledger)`,
+      referenceType: 'escrow_leg',
+      referenceId: leg.id,
+      emailHtml: templates.escrowCollectionRecorded(iou, amount),
+      emailSubject: emailSubjects.escrowCollect(iou),
+    });
   }
   return leg;
 }
@@ -481,15 +620,73 @@ export async function applyPaymentUpdate(data: {
     afyaxReference: data.afyaxReference || null,
   });
 
+  // Apply payment against earliest unpaid installments (recording only — settlement partner moved the cash)
+  const installments = await db.select().from(s.installmentSchedules)
+    .where(eq(s.installmentSchedules.invoiceId, inv.id))
+    .orderBy(asc(s.installmentSchedules.installmentNo));
+  let remaining = data.amountPaid;
+  for (const row of installments) {
+    if (remaining <= 0) break;
+    if (row.status === 'paid') continue;
+    const due = Number(row.amount) - Number(row.paidAmount || 0);
+    if (due <= 0) continue;
+    const apply = Math.min(remaining, due);
+    const newPaid = Number(row.paidAmount || 0) + apply;
+    const fullyPaid = newPaid >= Number(row.amount) - 0.001;
+    await db.update(s.installmentSchedules).set({
+      paidAmount: String(newPaid),
+      status: fullyPaid ? 'paid' : 'partial',
+      paidAt: fullyPaid ? new Date() : row.paidAt,
+    }).where(eq(s.installmentSchedules.id, row.id));
+    remaining -= apply;
+  }
+
   const [asgn] = await db.select().from(s.assignments).where(eq(s.assignments.invoiceId, inv.id)).limit(1);
   if (asgn) {
     await walletCredit(asgn.spvOrgId, data.amountPaid, `payment:${inv.id}`, 'Buyer payment via AfyaX');
+
+    const payFees = await calculatePerPaymentFees(data.amountPaid);
+    const platform = await getPlatformOrg();
+    if (payFees.total > 0 && platform) {
+      await walletDebit(asgn.spvOrgId, payFees.total, `fee:payment:${inv.id}`, 'Per-payment platform fee');
+      await walletCredit(platform.id, payFees.total, `fee:payment:${inv.id}`, 'Per-payment platform fee');
+      for (const line of payFees.lines) {
+        await db.insert(s.feeLedger).values({
+          assignmentId: asgn.id,
+          feeConfigId: line.feeConfigId,
+          chargedToOrg: asgn.spvOrgId,
+          amount: String(line.amount),
+          status: 'collected',
+        });
+      }
+    }
+
     await notifyOrgUsers(asgn.spvOrgId, {
       type: 'payment_received',
-      title: `Payment received: KES ${data.amountPaid.toLocaleString()}`,
-      body: `On ${inv.iouRegistryId}. Balance: KES ${data.outstandingBalance.toLocaleString()}`,
+      title: `Payment update recorded: KES ${data.amountPaid.toLocaleString()}`,
+      body: `On ${inv.iouRegistryId}. Outstanding (as reported): KES ${data.outstandingBalance.toLocaleString()}`,
       referenceType: 'invoice',
       referenceId: inv.id,
+      emailHtml: templates.paymentReceived(
+        `KES ${data.amountPaid.toLocaleString()}`,
+        `KES ${data.outstandingBalance.toLocaleString()}`,
+        inv.iouRegistryId || inv.id,
+      ),
+      emailSubject: emailSubjects.payment(inv.iouRegistryId || undefined),
+      smsBody: `IOUX: Payment update KES ${data.amountPaid} on ${inv.iouRegistryId}`,
+    });
+    await notifyOrgUsers(inv.buyerOrgId, {
+      type: 'payment_received',
+      title: `Payment update recorded: KES ${data.amountPaid.toLocaleString()}`,
+      body: `On ${inv.iouRegistryId}. Outstanding: KES ${data.outstandingBalance.toLocaleString()}`,
+      referenceType: 'invoice',
+      referenceId: inv.id,
+      emailHtml: templates.paymentReceived(
+        `KES ${data.amountPaid.toLocaleString()}`,
+        `KES ${data.outstandingBalance.toLocaleString()}`,
+        inv.iouRegistryId || inv.id,
+      ),
+      emailSubject: emailSubjects.payment(inv.iouRegistryId || undefined),
     });
     try {
       const receipt = await generatePaymentReceipt({
@@ -514,6 +711,21 @@ export async function applyPaymentUpdate(data: {
     if (asgn) {
       await db.update(s.assignments).set({ status: 'settled' }).where(eq(s.assignments.id, asgn.id));
     }
+    const iou = inv.iouRegistryId || inv.id;
+    const settledPayload = {
+      type: 'invoice_settled',
+      title: 'Invoice settled',
+      body: `${iou} marked settled (partner-reported zero balance)`,
+      referenceType: 'invoice',
+      referenceId: inv.id,
+      emailHtml: templates.invoiceSettled(iou),
+      emailSubject: emailSubjects.settled(iou),
+    };
+    if (asgn) {
+      await notifyOrgUsers(asgn.spvOrgId, settledPayload);
+      await notifyOrgUsers(asgn.supplierOrgId, settledPayload);
+    }
+    await notifyOrgUsers(inv.buyerOrgId, settledPayload);
   }
 
   return { invoiceId: inv.id, received: true };

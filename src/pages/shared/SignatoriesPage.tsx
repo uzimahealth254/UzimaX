@@ -6,7 +6,7 @@ import PageHeader from '@/components/layout/PageHeader';
 import DataTable from '@/components/shared/DataTable';
 import { toast } from 'sonner';
 
-export default function SignatoriesPage() {
+export default function SignatoriesPage({ embedded = false }: { embedded?: boolean }) {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [roleTitle, setRoleTitle] = useState('Director');
@@ -58,44 +58,59 @@ export default function SignatoriesPage() {
   });
 
   return (
-    <div className="space-y-5 sm:space-y-6 animate-fade-in">
-      <PageHeader
-        title="Signatory management"
-        subtitle="Board-approved signatories for OTP-verified consents"
-      />
-
-      <div className="border rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row flex-wrap gap-3 sm:items-end">
-        <div className="flex-1 min-w-0 sm:min-w-[180px]">
-          <label className="text-xs text-muted-foreground">Role title</label>
-          <input className="block w-full border rounded-lg px-3 py-2.5 text-sm" value={roleTitle} onChange={(e) => setRoleTitle(e.target.value)} />
-        </div>
-        <button type="button" onClick={addSelf} className="w-full sm:w-auto px-4 py-2.5 min-h-[44px] rounded-xl bg-primary text-primary-foreground text-sm font-medium">
-          Register me as signatory
-        </button>
-      </div>
-
-      {isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
-      ) : (
-        <DataTable
-          data={rows}
-          emptyMessage="No signatories registered"
-          getRowKey={(s) => s.id}
-          columns={[
-            { key: 'user', header: 'User', primary: true, render: (s) => s.displayName },
-            { key: 'title', header: 'Title', render: (s) => s.roleTitle || '—' },
-            {
-              key: 'active',
-              header: 'Active',
-              render: (s) => (
-                <button type="button" className="text-xs underline min-h-[40px]" onClick={(e) => { e.stopPropagation(); void toggle(s.id, !!s.isActive); }}>
-                  {s.isActive ? 'Active' : 'Inactive'}
-                </button>
-              ),
-            },
-          ]}
+    <div className={embedded ? 'space-y-3' : 'portal-page animate-fade-in'}>
+      {!embedded && (
+        <PageHeader
+          title="Signatory management"
+          subtitle="Board-approved signatories for OTP consents"
         />
       )}
+
+      <section className={embedded ? 'space-y-3' : 'portal-section'}>
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            className="field-input !min-h-[34px] !py-1.5 text-xs w-full sm:w-40"
+            value={roleTitle}
+            onChange={(e) => setRoleTitle(e.target.value)}
+            placeholder="Role title"
+          />
+          <button
+            type="button"
+            onClick={addSelf}
+            className="px-3 py-1.5 min-h-[34px] rounded-lg bg-[#0E1F1A] text-white text-xs font-bold"
+          >
+            Register me
+          </button>
+        </div>
+        <div className={embedded ? '' : '[&_.surface-card]:border-0 [&_.surface-card]:rounded-none'}>
+          {isLoading ? (
+            <p className="px-3 py-4 text-xs text-[#5A6B7D]">Loading…</p>
+          ) : (
+            <DataTable
+              data={rows}
+              emptyMessage="No signatories registered"
+              getRowKey={(s) => s.id}
+              columns={[
+                { key: 'user', header: 'User', primary: true, render: (s) => s.displayName },
+                { key: 'title', header: 'Title', render: (s) => s.roleTitle || '—' },
+                {
+                  key: 'active',
+                  header: 'Active',
+                  render: (s) => (
+                    <button
+                      type="button"
+                      className="text-xs font-bold underline min-h-[32px] text-[#0E1F1A]"
+                      onClick={(e) => { e.stopPropagation(); void toggle(s.id, !!s.isActive); }}
+                    >
+                      {s.isActive ? 'Active' : 'Inactive'}
+                    </button>
+                  ),
+                },
+              ]}
+            />
+          )}
+        </div>
+      </section>
     </div>
   );
 }

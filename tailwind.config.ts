@@ -7,9 +7,9 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['DM Sans', 'system-ui', 'sans-serif'],
-        display: ['Playfair Display', 'Georgia', 'serif'],
-        mono: ['IBM Plex Mono', 'monospace'],
+        sans: ['"Plus Jakarta Sans"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        display: ['"Plus Jakarta Sans"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        mono: ['IBM Plex Mono', 'ui-monospace', 'monospace'],
       },
       colors: {
         border: 'hsl(var(--border))',
@@ -46,10 +46,18 @@ export default {
           foreground: 'hsl(var(--card-foreground))',
         },
         brand: {
-          blue: '#1B6BB5',
-          'blue-light': '#E8F2FB',
-          green: '#2F9E6B',
-          'green-light': '#E8F7F0',
+          clinic: '#D3F36B',
+          mint: '#F4FBE3',
+          blue: '#0E1F1A',
+          'blue-soft': '#E8F0EA',
+          credit: '#F0C419',
+          'credit-soft': '#FFF8E0',
+          'blue-light': '#E8F0EA',
+          'green-light': '#F4FBE3',
+          teal: '#D3F36B',
+          lime: '#D3F36B',
+          gold: '#F0C419',
+          forest: '#0E1F1A',
         },
       },
       borderRadius: {
@@ -59,12 +67,22 @@ export default {
       },
       keyframes: {
         'fade-in': {
-          '0%': { opacity: '0', transform: 'translateY(8px)' },
+          '0%': { opacity: '0', transform: 'translateY(10px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        'soft-rise': {
+          '0%': { opacity: '0', transform: 'translateY(16px) scale(0.98)' },
+          '100%': { opacity: '1', transform: 'translateY(0) scale(1)' },
+        },
+        'ken-pan': {
+          '0%': { transform: 'scale(1.08) translate3d(0,0,0)' },
+          '100%': { transform: 'scale(1.14) translate3d(-1.5%, 1%, 0)' },
         },
       },
       animation: {
-        'fade-in': 'fade-in 0.3s ease-out forwards',
+        'fade-in': 'fade-in 0.35s ease-out forwards',
+        'soft-rise': 'soft-rise 0.55s cubic-bezier(0.22,1,0.36,1) forwards',
+        'ken-pan': 'ken-pan 18s ease-in-out infinite alternate',
       },
     },
   },

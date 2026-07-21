@@ -5,8 +5,10 @@ import { api } from '@/lib/apiClient';
 import PageHeader from '@/components/layout/PageHeader';
 import DataTable from '@/components/shared/DataTable';
 import StatusBadge from '@/components/shared/StatusBadge';
+import StatCard from '@/components/shared/StatCard';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { toast } from 'sonner';
+import { Calendar, AlertTriangle, CheckCircle2, RefreshCw } from 'lucide-react';
 
 interface ScheduleRow {
   id: string;
@@ -41,50 +43,59 @@ export default function PaymentSchedulePage() {
   };
 
   const columns = [
-    { key: 'iou', header: 'IOU', render: (p: ScheduleRow) => <span className="font-mono text-xs">{p.iouRegistryId || p.invoiceId.slice(0, 8)}</span> },
-    { key: 'buyer', header: 'Payee', render: (p: ScheduleRow) => p.payee },
-    { key: 'amount', header: 'Amount', render: (p: ScheduleRow) => <span className="font-mono">{formatCurrency(p.amount)}</span> },
-    { key: 'due', header: 'Due Date', render: (p: ScheduleRow) => formatDate(p.dueDate) },
+    { key: 'iou', header: 'IOU', primary: true, render: (p: ScheduleRow) => <span className="font-mono text-xs font-semibold">{p.iouRegistryId || p.invoiceId.slice(0, 8)}</span> },
+    { key: 'buyer', header: 'Payee', render: (p: ScheduleRow) => <span className="font-medium">{p.payee}</span> },
+    { key: 'amount', header: 'Amount', render: (p: ScheduleRow) => <span className="font-mono font-semibold">{formatCurrency(p.amount)}</span> },
+    { key: 'due', header: 'Due date', render: (p: ScheduleRow) => formatDate(p.dueDate) },
     { key: 'status', header: 'Status', render: (p: ScheduleRow) => <StatusBadge status={p.status} /> },
     {
-      key: 'action', header: '', render: (p: ScheduleRow) => (
+      key: 'action',
+      header: 'Note',
+      hideOnMobile: true,
+      render: (p: ScheduleRow) => (
         p.status === 'paid'
-          ? <span className="text-xs text-muted-foreground">{p.paidAt ? formatDate(p.paidAt) : 'Settled'}</span>
-          : <span className="text-xs text-muted-foreground">Awaiting AfyaX payment update</span>
+          ? <span className="text-xs text-[#5A6B7D]">{p.paidAt ? formatDate(p.paidAt) : 'Settled'}</span>
+          : <span className="text-xs text-[#5A6B7D]">Awaiting AfyaX</span>
       ),
     },
   ];
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="portal-page animate-fade-in">
       <PageHeader
-        title="Payment Schedule"
-        subtitle="Maturity schedule for receivables assigned to Uzima Capital SPV"
+        title="Payment schedule"
+        subtitle="Maturity schedule for SPV-assigned receivables"
         actions={
-          <button type="button" onClick={handleRefresh} className="px-4 py-2 text-sm rounded-xl border font-medium">
+          <button
+            type="button"
+            onClick={handleRefresh}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs rounded-lg bg-[#D3F36B] text-[#0E1F1A] font-bold hover:bg-[#C5E85A] min-h-[36px]"
+          >
+            <RefreshCw size={12} />
             Refresh
           </button>
         }
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="stat-card border-l-4 border-l-amber-500">
-          <p className="text-sm text-muted-foreground">Upcoming</p>
-          <p className="text-2xl font-bold font-mono mt-1">{upcoming.length}</p>
-        </div>
-        <div className="stat-card border-l-4 border-l-red-500">
-          <p className="text-sm text-muted-foreground">Overdue</p>
-          <p className="text-2xl font-bold font-mono mt-1">{overdue.length}</p>
-        </div>
-        <div className="stat-card border-l-4 border-l-emerald-500">
-          <p className="text-sm text-muted-foreground">Paid</p>
-          <p className="text-2xl font-bold font-mono mt-1">{paid.length}</p>
-        </div>
+      <div className="portal-metrics portal-metrics--3">
+        <StatCard label="Upcoming" value={upcoming.length} icon={Calendar} accent="gold" />
+        <StatCard label="Overdue" value={overdue.length} icon={AlertTriangle} accent="red" />
+        <StatCard label="Paid" value={paid.length} icon={CheckCircle2} accent="lime" />
       </div>
 
-      {isLoading
-        ? <p className="text-sm text-muted-foreground">Loading schedule…</p>
-        : <DataTable columns={columns} data={myPayments} emptyMessage="No payments scheduled" />}
+      <section className="portal-section">
+        <header className="portal-section__head">
+          <div>
+            <h2 className="portal-section__title">Schedule</h2>
+            <p className="portal-section__desc">{myPayments.length} payment{myPayments.length === 1 ? '' : 's'}</p>
+          </div>
+        </header>
+        <div className="[&_.surface-card]:border-0 [&_.surface-card]:rounded-none">
+          {isLoading
+            ? <p className="px-3 py-4 text-xs text-[#5A6B7D]">Loading schedule…</p>
+            : <DataTable columns={columns} data={myPayments} emptyMessage="No payments scheduled" />}
+        </div>
+      </section>
     </div>
   );
 }
