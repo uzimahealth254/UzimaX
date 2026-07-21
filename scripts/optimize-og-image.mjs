@@ -5,9 +5,11 @@ const input = process.argv[2] || 'social-preview.png';
 const outputJpg = 'public/og-image.jpg';
 const outputPng = 'public/og-image-optimized.png';
 
+// Baseline (non-progressive) JPEG — WhatsApp previews are more reliable with this
 await sharp(input)
   .resize(1200, 630, { fit: 'cover', position: 'centre' })
-  .jpeg({ quality: 82, mozjpeg: true })
+  .flatten({ background: '#0b1f33' })
+  .jpeg({ quality: 88, progressive: false, mozjpeg: false })
   .toFile(outputJpg);
 
 await sharp(input)
