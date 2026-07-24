@@ -3,6 +3,9 @@ import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import type { Server } from 'http';
 import { authRouter, apiRouter } from './routes/api.js';
 import { apiRateLimit, authRateLimit, initRateLimitStore } from './middleware/rateLimit.js';
@@ -16,6 +19,8 @@ assertSecurityConfig();
 const app = express();
 const PORT = Number(process.env.PORT) || 8787;
 const isProd = process.env.NODE_ENV === 'production';
+const distPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../dist');
+const serveSpa = isProd && fs.existsSync(path.join(distPath, 'index.html'));
 
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
@@ -98,6 +103,17 @@ app.get('/api/v1/health', async (_req, res) => {
 
 app.use('/api/v1/auth', authRouter);
 app.use('/api/v1', apiRouter);
+
+// Single Render service: API + built marketing/portal (https://uzimax.onrender.com)
+if (serveSpa) {
+  app.use(express.static(distPath, { index: false, maxAge: '1h' }));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api/')) return next();
+    res.sendFile(path.join(distPath, 'index.html'), (err) => {
+      if (err) next(err);
+    });
+  });
+}
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (err instanceof AppError) {

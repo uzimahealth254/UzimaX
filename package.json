@@ -13,7 +13,8 @@
     "build": "tsc --noEmit && vite build",
     "build:api": "echo API runs via tsx — no separate build required",
     "preview": "vite preview",
-    "start": "serve -s dist -l ${PORT:-3000}",
+    "start": "tsx server/index.ts",
+    "start:static": "serve -s dist -l ${PORT:-3000}",
     "start:api": "tsx server/index.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit push",
@@ -111,7 +112,7 @@
     "sharp": "^0.34.5",
     "supertest": "^7.2.2",
     "tailwindcss": "^3.4.17",
-    "typescript": "~5.6.3",
+    "typescript": "5.6.3",
     "vite": "^6.0.5",
     "vitest": "^4.1.10"
   }
