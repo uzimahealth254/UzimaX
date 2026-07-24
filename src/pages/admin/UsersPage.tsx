@@ -146,13 +146,20 @@ export default function UsersPage() {
     }
     setSending(true);
     try {
-      await api.post('/admin/users/invite', {
+      const { data } = await api.post('/admin/users/invite', {
         email: inviteEmail,
         fullName: inviteName || undefined,
         role: inviteRole,
         orgId: inviteRole === 'admin' ? undefined : inviteOrgId,
       });
-      toast.success('Invite sent — temporary password emailed to the user');
+      if (data?.emailSent) {
+        toast.success('Invite sent — temporary password emailed to the user');
+      } else {
+        toast.warning(
+          data?.emailWarning
+            || `User created but email was not sent (mode=${data?.emailMode || 'unknown'}). Share credentials out-of-band.`,
+        );
+      }
       setInviteEmail('');
       setInviteName('');
       usersQ.refetch();

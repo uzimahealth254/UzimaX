@@ -51,6 +51,9 @@ export async function generateAssignmentLetter(opts: {
   parties: string;
   assignmentId: string;
   signatureHash?: string;
+  standingOrderRef?: string | null;
+  standingOrderBank?: string | null;
+  commitmentAckAt?: string | Date | null;
 }): Promise<{ url: string; key: string }> {
   const doc = new PDFDocument({ margin: 50 });
   const done = bufferFromDoc(doc);
@@ -62,6 +65,20 @@ export async function generateAssignmentLetter(opts: {
   doc.text(`Assignment: ${opts.assignmentId}`);
   doc.text(`Parties: ${opts.parties}`);
   if (opts.signatureHash) doc.text(`Signature hash: ${opts.signatureHash}`);
+  if (opts.commitmentAckAt) {
+    const when = typeof opts.commitmentAckAt === 'string'
+      ? opts.commitmentAckAt
+      : opts.commitmentAckAt.toISOString();
+    doc.text(`Obligor commitment acknowledgement: ${when}`);
+  }
+  if (opts.standingOrderRef) {
+    doc.text(`Bank standing-order reference: ${opts.standingOrderRef}`);
+  }
+  if (opts.standingOrderBank) {
+    doc.text(`Standing-order bank: ${opts.standingOrderBank}`);
+  }
+  doc.moveDown();
+  doc.text('IOU Exchange records references only; it does not execute bank standing orders or move cash.');
   doc.moveDown();
   doc.text(`Issued: ${new Date().toISOString()}`);
   doc.end();

@@ -14,7 +14,9 @@ export type InvoiceStatus =
   | 'matured'
   | 'settled'
   | 'defaulted'
-  | 'opt_in_declined';
+  | 'opt_in_declined'
+  | 'buyer_rejected'
+  | 'cancelled';
 
 export type InvoiceOrigin = 'supplier_listed' | 'buyer_posted' | 'api_upload';
 
@@ -72,6 +74,11 @@ export interface Invoice {
   documents?: string[];
   statusHistory?: StatusHistoryEntry[];
   createdAt: string;
+  commitmentToPay?: boolean;
+  commitmentAckAt?: string;
+  bankStandingOrderRef?: string;
+  standingOrderBank?: string;
+  standingOrderSetAt?: string;
 }
 
 export interface StatusHistoryEntry {
@@ -118,6 +125,7 @@ export interface ReceivableAssignment {
   amount: number;
   createdAt: string;
   triggeredBy: 'supplier_opt_in' | 'consent_signed';
+  assignmentType?: string;
 }
 
 export interface PurchaseOffer {

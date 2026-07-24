@@ -37,6 +37,7 @@ export default function PostIOUPage() {
     description: '',
     currency: 'KES',
     bankStandingOrderRef: '',
+    standingOrderBank: '',
   });
 
   useEffect(() => {
@@ -69,6 +70,7 @@ export default function PostIOUPage() {
         description: form.description,
         commitmentToPay: true,
         bankStandingOrderRef: form.bankStandingOrderRef || undefined,
+        standingOrderBank: form.standingOrderBank || undefined,
         supportingDocs: docs.map((d) => ({
           id: d.id,
           name: d.name,
@@ -175,16 +177,29 @@ export default function PostIOUPage() {
                 className="field-input"
               />
             </div>
-            <div className="sm:col-span-2 lg:col-span-3">
-              <label className="block text-xs font-semibold text-[#0E1F1A] mb-1">
-                Bank standing-order reference <span className="font-normal text-[#5A6B7D]">(optional)</span>
-              </label>
-              <input
-                value={form.bankStandingOrderRef}
-                onChange={e => setForm({ ...form, bankStandingOrderRef: e.target.value })}
-                placeholder="External settlement / standing-order ref — not executed by IOU Exchange"
-                className="field-input"
-              />
+            <div className="sm:col-span-2 lg:col-span-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-[#0E1F1A] mb-1">
+                  Bank standing-order reference <span className="font-normal text-[#5A6B7D]">(optional)</span>
+                </label>
+                <input
+                  value={form.bankStandingOrderRef}
+                  onChange={e => setForm({ ...form, bankStandingOrderRef: e.target.value })}
+                  placeholder="External settlement / standing-order ref — not executed by IOU Exchange"
+                  className="field-input"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-[#0E1F1A] mb-1">
+                  Bank name <span className="font-normal text-[#5A6B7D]">(optional)</span>
+                </label>
+                <input
+                  value={form.standingOrderBank}
+                  onChange={e => setForm({ ...form, standingOrderBank: e.target.value })}
+                  placeholder="e.g. Equity Bank"
+                  className="field-input"
+                />
+              </div>
             </div>
           </div>
           <div>
@@ -211,7 +226,7 @@ export default function PostIOUPage() {
               required
             />
             <span>
-              I confirm this is an approved, undisputed payable and record my <strong>commitment to pay</strong> at maturity
+              I confirm this is an approved, undisputed payable and commit to pay on the due date
               (settlement is executed by the settlement partner — not by IOU Exchange).
             </span>
           </label>

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, type ReactNode } from 'react';
 
 interface ConfirmationModalProps {
   open: boolean;
@@ -9,11 +9,12 @@ interface ConfirmationModalProps {
   variant?: 'default' | 'destructive';
   onConfirm: () => void;
   onCancel: () => void;
+  children?: ReactNode;
 }
 
 export default function ConfirmationModal({
   open, title, description, confirmLabel = 'Confirm', cancelLabel = 'Cancel',
-  variant = 'default', onConfirm, onCancel,
+  variant = 'default', onConfirm, onCancel, children,
 }: ConfirmationModalProps) {
   useEffect(() => {
     if (open) {
@@ -32,7 +33,8 @@ export default function ConfirmationModal({
       <div className="relative bg-white rounded-xl border border-[#0E1F1A]/10 shadow-none p-6 w-full sm:max-w-md animate-fade-in safe-pad-bottom">
         <div className="mx-auto w-10 h-1 rounded-full bg-muted-foreground/20 mb-4 sm:hidden" />
         <h2 className="text-lg font-semibold mb-2">{title}</h2>
-        <p className="text-sm text-muted-foreground mb-6 leading-relaxed">{description}</p>
+        <p className="text-sm text-muted-foreground mb-4 leading-relaxed">{description}</p>
+        {children ? <div className="mb-6">{children}</div> : <div className="mb-2" />}
         <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2.5">
           <button
             onClick={onCancel}

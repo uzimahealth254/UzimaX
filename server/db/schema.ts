@@ -101,8 +101,13 @@ export const invoices = pgTable('invoices', {
   supportingDocs: jsonb('supporting_docs').$type<unknown[]>().default([]),
   /** Buyer commitment-to-pay captured at origination (workplan v1.6) */
   commitmentToPay: boolean('commitment_to_pay').notNull().default(false),
+  /** User who recorded obligor acknowledgement */
+  commitmentAckBy: uuid('commitment_ack_by').references(() => users.id),
+  commitmentAckAt: timestamp('commitment_ack_at', { withTimezone: true }),
   /** External bank standing-order / settlement reference — not a rail executed by IOU Exchange */
   bankStandingOrderRef: text('bank_standing_order_ref'),
+  standingOrderBank: text('standing_order_bank'),
+  standingOrderSetAt: timestamp('standing_order_set_at', { withTimezone: true }),
   metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

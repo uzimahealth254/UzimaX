@@ -30,7 +30,12 @@ interface ApiDataContextType {
   postBuyerIOU: (data: any, actor?: Actor) => Promise<any>;
   postSupplierInvoice: (data: any) => Promise<any>;
   respondToOptIn: (optInId: string, accept: boolean, declineReason?: string, actor?: Actor) => Promise<any>;
-  respondToBuyerVerification: (id: string, accept: boolean, reason?: string) => Promise<any>;
+  respondToBuyerVerification: (
+    id: string,
+    accept: boolean,
+    reason?: string,
+    extras?: { bankStandingOrderRef?: string; standingOrderBank?: string },
+  ) => Promise<any>;
   updateInvoiceStatus: (invoiceId: string, status: string, actor?: Actor) => void;
   makeOffer: (offer: any, actor?: Actor) => Promise<any>;
   respondToOffer: (offerId: string, accept: boolean, actor?: Actor) => Promise<any>;
@@ -169,6 +174,7 @@ export function usePlatformData() {
       supportingDocs: data.supportingDocs || data.documents || undefined,
       commitmentToPay: data.commitmentToPay ?? true,
       bankStandingOrderRef: data.bankStandingOrderRef,
+      standingOrderBank: data.standingOrderBank,
     });
     invalidate();
     return inv;
@@ -199,8 +205,18 @@ export function usePlatformData() {
     return data;
   }, [qc]);
 
-  const respondToBuyerVerification = useCallback(async (id: string, accept: boolean, rejectReason?: string) => {
-    const { data } = await api.post(`/buyer-verifications/${id}/respond`, { accept, rejectReason });
+  const respondToBuyerVerification = useCallback(async (
+    id: string,
+    accept: boolean,
+    rejectReason?: string,
+    extras?: { bankStandingOrderRef?: string; standingOrderBank?: string },
+  ) => {
+    const { data } = await api.post(`/buyer-verifications/${id}/respond`, {
+      accept,
+      rejectReason,
+      bankStandingOrderRef: extras?.bankStandingOrderRef,
+      standingOrderBank: extras?.standingOrderBank,
+    });
     invalidate();
     return data;
   }, [qc]);

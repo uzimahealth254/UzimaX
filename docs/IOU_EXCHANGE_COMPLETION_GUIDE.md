@@ -47,7 +47,7 @@ What needs correcting:
 
 ## 2. THE BLOCKING DECISION — resolve this first
 
-Do not start §4 until this is agreed with the operator.
+**Status (24 Jul 2026):** Operator authorised Cursor to execute this guide end-to-end. **Hybrid tracks are implemented** as recommended below. Do not re-litigate unless the operator overrides in writing.
 
 ### The question
 Does every deal require `Offer → Buyer OTP consent → Assignment`, or does confirmation auto-assign?

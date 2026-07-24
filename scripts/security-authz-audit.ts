@@ -50,6 +50,7 @@ const UNAUTH_MUTATIONS: { method: string; path: string; body?: unknown }[] = [
   { method: 'POST', path: '/escrow/00000000-0000-0000-0000-000000000001/release' },
   { method: 'POST', path: '/packages', body: { packageRef: 'x', assignmentIds: [] } },
   { method: 'POST', path: '/programmes', body: { name: 'x' } },
+  { method: 'POST', path: '/settlements/notify', body: { iouRegistryId: 'IOU-KE-2026-00001-0' } },
   { method: 'POST', path: '/admin/users/invite', body: { email: 'x@y.z', role: 'buyer' } },
   { method: 'POST', path: '/organisations', body: { name: 'x', orgType: 'buyer' } },
 ];

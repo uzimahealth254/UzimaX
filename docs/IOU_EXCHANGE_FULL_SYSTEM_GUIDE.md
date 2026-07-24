@@ -52,6 +52,19 @@ It orchestrates:
 | **SPV** | Capital / SPV operator | Registry, offers, assignments, escrow views, packaging |
 | **Admin** | Platform operator | Programmes, fees, users/orgs, reconciliation, workflow, analytics |
 
+### Assignment tracks (Hybrid — locked 24 Jul 2026, IOUX-COMPLETE-001 §2)
+
+Two tracks coexist; they are **not** alternatives for the same deal economics:
+
+| Track | `assignment_type` | When | Obligor acknowledgement |
+|-------|-------------------|------|-------------------------|
+| **Standard confirmation** | `standard_confirmation` | Path A buyer-post → supplier opt-in, or Path B supplier-list → buyer verify | Inherent in posting (Path A) or verification (Path B); `commitment_ack_at` required before assign |
+| **Negotiated offer** | `negotiated_offer` | SPV proposes a specific discount; supplier accepts; buyer OTP consent | Fresh OTP-verified consent because economics changed |
+
+SPV registry tabs: **Assigned** · **Open to offer** · **Pending consent** · **Declined / closed**.
+
+Do **not** remove auto-assignment from `respondToOptIn` / `respondToBuyerVerification` unless the operator overrides this decision in writing.
+
 ### Maturity (honest)
 
 | Layer | Status |

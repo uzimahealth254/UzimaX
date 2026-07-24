@@ -16,6 +16,7 @@ import {
   applyPaymentUpdate,
   getOrCreateWallet,
   createAssignment,
+  recordSettlement,
 } from '../services/core.js';
 import { computeTenorDays, priceReceivable } from '../lib/pricing.js';
 import { writeAudit } from '../middleware/audit.js';
@@ -353,6 +354,7 @@ const invoiceCreateSchema = z.object({
   }).passthrough()).optional(),
   commitmentToPay: z.boolean().optional(),
   bankStandingOrderRef: z.string().max(128).optional(),
+  standingOrderBank: z.string().max(128).optional(),
 });
 
 apiRouter.post('/invoices', authenticateAny, validate(invoiceCreateSchema), async (req, res, next) => {
@@ -389,6 +391,7 @@ apiRouter.post('/invoices', authenticateAny, validate(invoiceCreateSchema), asyn
         supportingDocs: body.supportingDocs,
         commitmentToPay: body.commitmentToPay,
         bankStandingOrderRef: body.bankStandingOrderRef,
+        standingOrderBank: body.standingOrderBank,
       });
       return res.status(201).json({
         invoiceId: result.invoice.id,
@@ -425,6 +428,7 @@ apiRouter.post('/invoices', authenticateAny, validate(invoiceCreateSchema), asyn
         supportingDocs: body.supportingDocs,
         commitmentToPay: body.commitmentToPay ?? true,
         bankStandingOrderRef: body.bankStandingOrderRef,
+        standingOrderBank: body.standingOrderBank,
       }, user.userId);
       return res.status(201).json(result.invoice);
     }
@@ -568,12 +572,23 @@ apiRouter.get('/buyer-verifications', authenticate, authorize('buyer', 'admin', 
 apiRouter.post('/buyer-verifications/:id/respond', authenticate, authorize('buyer', 'admin'), validate(z.object({
   accept: z.boolean(),
   rejectReason: z.string().optional(),
+  bankStandingOrderRef: z.string().max(128).optional(),
+  standingOrderBank: z.string().max(128).optional(),
 })), async (req, res, next) => {
   try {
     const [v] = await db.select().from(s.buyerVerifications).where(eq(s.buyerVerifications.id, req.params.id)).limit(1);
     if (!v) throw new AppError(404, 'not_found', 'Verification not found');
     assertBuyerOrg(req.user!, v.buyerOrgId);
-    const result = await respondToBuyerVerification(req.params.id, req.body.accept, req.user!.userId, req.body.rejectReason);
+    const result = await respondToBuyerVerification(
+      req.params.id,
+      req.body.accept,
+      req.user!.userId,
+      req.body.rejectReason,
+      {
+        bankStandingOrderRef: req.body.bankStandingOrderRef,
+        standingOrderBank: req.body.standingOrderBank,
+      },
+    );
     res.json(result);
   } catch (e) { next(e); }
 });
@@ -856,10 +871,19 @@ apiRouter.post('/consents/:id/confirm-sign', authenticate, authorize('buyer', 'a
       signedAt: new Date(),
     }).where(eq(s.assignmentConsents.id, consent.id));
 
+    // Negotiated track: OTP consent is the obligor acknowledgement for changed economics
+    const now = new Date();
+    await db.update(s.invoices).set({
+      commitmentToPay: true,
+      commitmentAckBy: req.user!.userId,
+      commitmentAckAt: now,
+      updatedAt: now,
+    }).where(eq(s.invoices.id, consent.invoiceId));
+
     const [offer] = await db.select().from(s.purchaseOffers).where(eq(s.purchaseOffers.invoiceId, consent.invoiceId)).limit(1);
     const asgn = await createAssignment({
       invoiceId: consent.invoiceId,
-      type: 'offer_consent',
+      type: 'negotiated_offer',
       actorId: req.user!.userId,
       offerId: offer?.id,
       consentId: consent.id,
@@ -875,6 +899,9 @@ apiRouter.post('/consents/:id/confirm-sign', authenticate, authorize('buyer', 'a
           parties: `Buyer ${consent.buyerOrgId} / SPV ${consent.spvOrgId}`,
           assignmentId: asgn.id,
           signatureHash: hash,
+          standingOrderRef: inv.bankStandingOrderRef,
+          standingOrderBank: inv.standingOrderBank,
+          commitmentAckAt: inv.commitmentAckAt || now,
         });
         await db.insert(s.orgDocuments).values({
           orgId: consent.buyerOrgId,
@@ -940,9 +967,16 @@ apiRouter.post('/consents/:id/sign', authenticate, authorize('buyer', 'admin'), 
     await db.update(s.assignmentConsents).set({
       status: 'signed', otpVerified: true, signatureHash: hash, signatoryId, signedAt: new Date(),
     }).where(eq(s.assignmentConsents.id, consent.id));
+    const now = new Date();
+    await db.update(s.invoices).set({
+      commitmentToPay: true,
+      commitmentAckBy: req.user!.userId,
+      commitmentAckAt: now,
+      updatedAt: now,
+    }).where(eq(s.invoices.id, consent.invoiceId));
     const [offer] = await db.select().from(s.purchaseOffers).where(eq(s.purchaseOffers.invoiceId, consent.invoiceId)).limit(1);
     const asgn = await createAssignment({
-      invoiceId: consent.invoiceId, type: 'offer_consent', actorId: req.user!.userId,
+      invoiceId: consent.invoiceId, type: 'negotiated_offer', actorId: req.user!.userId,
       offerId: offer?.id, consentId: consent.id, discountBps: offer?.discountRateBps,
     });
     const [inv] = await db.select().from(s.invoices).where(eq(s.invoices.id, consent.invoiceId)).limit(1);
@@ -1515,24 +1549,35 @@ apiRouter.post('/admin/users/invite', authenticate, authorize('admin'), validate
     const [org] = req.body.orgId
       ? await db.select().from(s.organisations).where(eq(s.organisations.id, req.body.orgId)).limit(1)
       : [null];
-    await sendInviteEmail({
-      to: email,
-      subject: subjects.invite(),
-      html: emailTemplates.invite({
-        name: req.body.fullName,
-        role: req.body.role,
-        orgName: org?.name,
-        tempPassword: tempPass,
-        email,
-      }),
-      text: `Welcome to IOU Exchange. Temporary password: ${tempPass}. Sign in at ${process.env.PORTAL_URL || 'https://app.ioux.africa'}/login and change it immediately.`,
-    });
+    let emailResult: { ok: boolean; mode: string } = { ok: false, mode: 'unknown' };
+    let emailError: string | undefined;
+    try {
+      emailResult = await sendInviteEmail({
+        to: email,
+        subject: subjects.invite(),
+        html: emailTemplates.invite({
+          name: req.body.fullName,
+          role: req.body.role,
+          orgName: org?.name,
+          tempPassword: tempPass,
+          email,
+        }),
+        text: `Welcome to IOU Exchange. Temporary password: ${tempPass}. Sign in at ${process.env.PORTAL_URL || 'https://app.ioux.africa'}/login and change it immediately.`,
+      });
+      if (!emailResult.ok) {
+        emailError = `Invite email not delivered (mode=${emailResult.mode})`;
+        console.warn('[invite]', emailError, { email });
+      }
+    } catch (err) {
+      emailError = err instanceof Error ? err.message : 'Invite email failed';
+      console.error('[invite] email send failed', err);
+    }
     await writeAudit({
       actorId: req.user!.userId,
       action: 'user.invite',
       resourceType: 'user',
       resourceId: user.id,
-      details: { email, role: req.body.role },
+      details: { email, role: req.body.role, emailOk: emailResult.ok, emailMode: emailResult.mode },
     });
     // Never echo temporary password in API response
     res.status(201).json({
@@ -1541,6 +1586,9 @@ apiRouter.post('/admin/users/invite', authenticate, authorize('admin'), validate
       fullName: user.fullName,
       role: user.role,
       invited: true,
+      emailSent: emailResult.ok,
+      emailMode: emailResult.mode,
+      ...(emailError ? { emailWarning: emailError } : {}),
     });
   } catch (e) { next(e); }
 });
@@ -1671,6 +1719,37 @@ apiRouter.post('/webhooks/payment-update', apiKeyAuth, requireScope('payments:wr
       afyaxReference: req.body.idempotencyKey || req.body.afyaxReference,
     };
     const result = await applyPaymentUpdate(payload);
+    res.json(result);
+  } catch (e) { next(e); }
+});
+
+/** Explicit settlement recording (partner / admin) — IOUX does not move cash */
+apiRouter.post('/settlements/notify', authenticateAny, validate(z.object({
+  invoiceId: z.string().uuid().optional(),
+  iouRegistryId: z.string().optional(),
+  note: z.string().max(500).optional(),
+  amountPaid: z.number().optional(),
+  source: z.string().max(64).optional(),
+})), async (req, res, next) => {
+  try {
+    if (!req.body.invoiceId && !req.body.iouRegistryId) {
+      throw new AppError(400, 'validation_error', 'invoiceId or iouRegistryId required');
+    }
+    if (req.apiClient) {
+      if (!(req.apiClient.scopes.includes('payments:write') || req.apiClient.scopes.includes('*'))) {
+        throw new AppError(403, 'forbidden', 'Missing scopes: payments:write');
+      }
+    } else if (!req.user || !['admin', 'spv'].includes(req.user.role)) {
+      throw new AppError(403, 'forbidden', 'Admin or SPV required');
+    }
+    const result = await recordSettlement({
+      invoiceId: req.body.invoiceId,
+      iouRegistryId: req.body.iouRegistryId,
+      actorId: req.user?.userId,
+      source: req.body.source || (req.apiClient ? 'api_key' : 'portal'),
+      note: req.body.note,
+      amountPaid: req.body.amountPaid,
+    });
     res.json(result);
   } catch (e) { next(e); }
 });

@@ -27,13 +27,35 @@ export default function BuyerVerificationInboxPage() {
   const pending = buyerVerifications.filter((v: any) => v.status === 'pending');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [rejectId, setRejectId] = useState<string | null>(null);
+  const [verifyId, setVerifyId] = useState<string | null>(null);
+  const [standingRef, setStandingRef] = useState('');
+  const [standingBank, setStandingBank] = useState('');
+  const [committed, setCommitted] = useState(false);
 
   const act = async (id: string, accept: boolean) => {
+    if (accept && !committed) {
+      toast.error('Confirm commitment to pay before verifying');
+      return;
+    }
     setBusyId(id);
     try {
-      await respondToBuyerVerification(id, accept, accept ? undefined : 'Rejected by buyer');
-      toast.success(accept ? 'Verified — assigned to SPV' : 'Rejected');
+      await respondToBuyerVerification(
+        id,
+        accept,
+        accept ? undefined : 'Rejected by buyer',
+        accept
+          ? {
+              bankStandingOrderRef: standingRef || undefined,
+              standingOrderBank: standingBank || undefined,
+            }
+          : undefined,
+      );
+      toast.success(accept ? 'Verified — assigned to SPV (standard confirmation track)' : 'Rejected');
       setRejectId(null);
+      setVerifyId(null);
+      setCommitted(false);
+      setStandingRef('');
+      setStandingBank('');
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Action failed');
     } finally {
@@ -105,7 +127,12 @@ export default function BuyerVerificationInboxPage() {
                       type="button"
                       disabled={busy}
                       className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-[#0E1F1A] text-white text-xs font-bold hover:bg-[#1A3A2E] disabled:opacity-50 min-h-[34px]"
-                      onClick={() => act(v.id, true)}
+                      onClick={() => {
+                        setVerifyId(v.id);
+                        setCommitted(false);
+                        setStandingRef('');
+                        setStandingBank('');
+                      }}
                     >
                       <CheckCircle2 size={13} />
                       {busy ? '…' : 'Verify'}
@@ -126,6 +153,51 @@ export default function BuyerVerificationInboxPage() {
           })}
         </div>
       )}
+
+      <ConfirmationModal
+        open={!!verifyId}
+        title="Verify and commit to pay?"
+        description="Verification records your acknowledgement of this payable and assigns it to the SPV on the standard confirmation track."
+        confirmLabel="Verify & assign"
+        onCancel={() => setVerifyId(null)}
+        onConfirm={() => verifyId && act(verifyId, true)}
+      >
+        <div className="space-y-3 text-left mt-2">
+          <label className="flex items-start gap-2 text-xs text-[#0E1F1A]">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={committed}
+              onChange={(e) => setCommitted(e.target.checked)}
+            />
+            <span>
+              I confirm this is an approved, undisputed payable and commit to pay on the due date.
+            </span>
+          </label>
+          <div>
+            <label className="block text-[11px] font-semibold text-[#0E1F1A] mb-1">
+              Standing-order reference <span className="font-normal text-[#5A6B7D]">(optional)</span>
+            </label>
+            <input
+              className="field-input text-xs"
+              value={standingRef}
+              onChange={(e) => setStandingRef(e.target.value)}
+              placeholder="External bank reference"
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] font-semibold text-[#0E1F1A] mb-1">
+              Bank name <span className="font-normal text-[#5A6B7D]">(optional)</span>
+            </label>
+            <input
+              className="field-input text-xs"
+              value={standingBank}
+              onChange={(e) => setStandingBank(e.target.value)}
+              placeholder="e.g. Equity Bank"
+            />
+          </div>
+        </div>
+      </ConfirmationModal>
 
       <ConfirmationModal
         open={!!rejectId}

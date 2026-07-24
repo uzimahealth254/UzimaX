@@ -4,6 +4,7 @@ import * as s from '../db/schema.js';
 import { generateIOURegistryId } from '../lib/iouId.js';
 import { AppError } from '../lib/errors.js';
 import { computeTenorDays, priceReceivable } from '../lib/pricing.js';
+import { canonicalizeAssignmentType, type AssignmentType } from '../lib/assignmentTracks.js';
 import { assertProgrammeAllows } from './programme.js';
 import { generatePurchaseNote, generatePaymentReceipt } from './pdf.js';
 import { writeAudit } from '../middleware/audit.js';
@@ -33,8 +34,8 @@ const VALID: Record<string, string[]> = {
   verified: ['assigned', 'listed', 'cancelled'],
   offer_received: ['offer_accepted', 'listed', 'cancelled'],
   offer_accepted: ['assigned', 'cancelled'],
-  assigned: ['packaged', 'disbursed', 'cancelled'],
-  packaged: ['disbursed', 'cancelled'],
+  assigned: ['packaged', 'disbursed', 'settled', 'cancelled'],
+  packaged: ['disbursed', 'settled', 'cancelled'],
   disbursed: ['matured', 'settled', 'cancelled'],
   matured: ['settled', 'defaulted', 'cancelled'],
   settled: [],
@@ -94,6 +95,7 @@ export async function createBuyerOriginatedInvoice(data: {
   supportingDocs?: unknown[];
   commitmentToPay?: boolean;
   bankStandingOrderRef?: string;
+  standingOrderBank?: string;
 }, actorId?: string) {
   await assertProgrammeAllows({
     buyerOrgId: data.buyerOrgId,
@@ -102,6 +104,11 @@ export async function createBuyerOriginatedInvoice(data: {
     dueDate: data.dueDate,
   });
 
+  if (!data.commitmentToPay) {
+    throw new AppError(400, 'commitment_required', 'Buyer must record commitment to pay before posting an IOU');
+  }
+
+  const now = new Date();
   const iou = await nextIouRegistryId();
   const [inv] = await db.insert(s.invoices).values({
     iouRegistryId: iou,
@@ -118,8 +125,12 @@ export async function createBuyerOriginatedInvoice(data: {
     interestRate: data.interestRate != null ? String(data.interestRate) : null,
     status: 'awaiting_opt_in',
     supportingDocs: data.supportingDocs || [],
-    commitmentToPay: Boolean(data.commitmentToPay),
+    commitmentToPay: true,
+    commitmentAckBy: actorId || null,
+    commitmentAckAt: now,
     bankStandingOrderRef: data.bankStandingOrderRef || null,
+    standingOrderBank: data.standingOrderBank || null,
+    standingOrderSetAt: data.bankStandingOrderRef || data.standingOrderBank ? now : null,
     metadata: data.description ? { description: data.description } : {},
   }).returning();
 
@@ -304,7 +315,7 @@ async function calculatePerPaymentFees(paymentAmount: number) {
 
 export async function createAssignment(opts: {
   invoiceId: string;
-  type: 'opt_in_auto' | 'offer_consent' | 'supplier_originated_auto';
+  type: AssignmentType | 'opt_in_auto' | 'offer_consent' | 'supplier_originated_auto' | 'standard_confirmation' | 'negotiated_offer';
   actorId?: string;
   offerId?: string;
   consentId?: string;
@@ -312,6 +323,14 @@ export async function createAssignment(opts: {
 }) {
   const [inv] = await db.select().from(s.invoices).where(eq(s.invoices.id, opts.invoiceId)).limit(1);
   if (!inv) throw new AppError(404, 'not_found', 'Invoice not found');
+
+  if (!inv.commitmentToPay || !inv.commitmentAckAt) {
+    throw new AppError(
+      400,
+      'commitment_required',
+      'Cannot assign without obligor commitment-to-pay acknowledgement',
+    );
+  }
 
   const face = Number(inv.faceValue);
   await assertProgrammeAllows({
@@ -322,6 +341,7 @@ export async function createAssignment(opts: {
     discountRateBps: opts.discountBps,
   });
 
+  const assignmentType = canonicalizeAssignmentType(opts.type);
   const spv = await getSpvOrg();
   const platform = await getPlatformOrg();
   const tenor = computeTenorDays(inv.issueDate, inv.dueDate);
@@ -341,7 +361,7 @@ export async function createAssignment(opts: {
     spvOrgId: spv.id,
     supplierOrgId: inv.supplierOrgId,
     buyerOrgId: inv.buyerOrgId,
-    assignmentType: opts.type,
+    assignmentType,
     purchasePrice: String(purchasePrice),
     faceValue: String(face),
     status: 'active',
@@ -383,7 +403,7 @@ export async function createAssignment(opts: {
     fromStatus: inv.status,
     toStatus: 'assigned',
     changedBy: opts.actorId || null,
-    reason: `Assignment ${opts.type}`,
+    reason: `Assignment ${assignmentType} (from ${opts.type})`,
   });
 
   await notifyOrgUsers(spv.id, {
@@ -392,7 +412,7 @@ export async function createAssignment(opts: {
     body: `${inv.iouRegistryId} assigned to SPV`,
     referenceType: 'assignment',
     referenceId: asgn.id,
-    emailHtml: templates.assignmentCreated(inv.iouRegistryId || inv.id, opts.type),
+    emailHtml: templates.assignmentCreated(inv.iouRegistryId || inv.id, assignmentType),
     emailSubject: emailSubjects.assignment(inv.iouRegistryId || inv.id),
     smsBody: `IOUX: ${inv.iouRegistryId} assigned to SPV`,
   });
@@ -402,7 +422,7 @@ export async function createAssignment(opts: {
     body: `${inv.iouRegistryId} is now assigned`,
     referenceType: 'assignment',
     referenceId: asgn.id,
-    emailHtml: templates.assignmentCreated(inv.iouRegistryId || inv.id, opts.type),
+    emailHtml: templates.assignmentCreated(inv.iouRegistryId || inv.id, assignmentType),
     emailSubject: emailSubjects.assignment(inv.iouRegistryId || inv.id),
   });
   await notifyOrgUsers(inv.supplierOrgId, {
@@ -411,7 +431,7 @@ export async function createAssignment(opts: {
     body: `${inv.iouRegistryId} is now assigned`,
     referenceType: 'assignment',
     referenceId: asgn.id,
-    emailHtml: templates.assignmentCreated(inv.iouRegistryId || inv.id, opts.type),
+    emailHtml: templates.assignmentCreated(inv.iouRegistryId || inv.id, assignmentType),
     emailSubject: emailSubjects.assignment(inv.iouRegistryId || inv.id),
   });
 
@@ -442,7 +462,7 @@ export async function createAssignment(opts: {
     action: 'assignment.created',
     resourceType: 'assignment',
     resourceId: asgn.id,
-    details: { type: opts.type, invoiceId: inv.id },
+    details: { type: assignmentType, legacyType: opts.type, invoiceId: inv.id },
   });
 
   return asgn;
@@ -461,7 +481,8 @@ export async function respondToOptIn(optInId: string, accept: boolean, userId: s
   }).where(eq(s.optIns.id, optInId));
 
   if (accept) {
-    const asgn = await createAssignment({ invoiceId: opt.invoiceId, type: 'opt_in_auto', actorId: userId });
+    // Path A standard confirmation track (buyer already committed at post)
+    const asgn = await createAssignment({ invoiceId: opt.invoiceId, type: 'standard_confirmation', actorId: userId });
     return { optIn: opt, assignment: asgn };
   }
 
@@ -482,7 +503,13 @@ export async function respondToOptIn(optInId: string, accept: boolean, userId: s
   return { optIn: opt, assignment: null };
 }
 
-export async function respondToBuyerVerification(verificationId: string, accept: boolean, userId: string, rejectReason?: string) {
+export async function respondToBuyerVerification(
+  verificationId: string,
+  accept: boolean,
+  userId: string,
+  rejectReason?: string,
+  opts?: { bankStandingOrderRef?: string; standingOrderBank?: string },
+) {
   const [v] = await db.select().from(s.buyerVerifications).where(eq(s.buyerVerifications.id, verificationId)).limit(1);
   if (!v) throw new AppError(404, 'not_found', 'Verification not found');
   if (v.status !== 'pending') throw new AppError(400, 'invalid_state', 'Already responded');
@@ -495,7 +522,25 @@ export async function respondToBuyerVerification(verificationId: string, accept:
   }).where(eq(s.buyerVerifications.id, verificationId));
 
   if (accept) {
-    const asgn = await createAssignment({ invoiceId: v.invoiceId, type: 'supplier_originated_auto', actorId: userId });
+    const now = new Date();
+    // Path B: verification *is* obligor acknowledgement — record commitment before assign
+    const patch: Partial<typeof s.invoices.$inferInsert> = {
+      commitmentToPay: true,
+      commitmentAckBy: userId,
+      commitmentAckAt: now,
+      updatedAt: now,
+    };
+    if (opts?.bankStandingOrderRef) {
+      patch.bankStandingOrderRef = opts.bankStandingOrderRef;
+      patch.standingOrderSetAt = now;
+    }
+    if (opts?.standingOrderBank) {
+      patch.standingOrderBank = opts.standingOrderBank;
+      patch.standingOrderSetAt = now;
+    }
+    await db.update(s.invoices).set(patch).where(eq(s.invoices.id, v.invoiceId));
+
+    const asgn = await createAssignment({ invoiceId: v.invoiceId, type: 'standard_confirmation', actorId: userId });
     return { verification: v, assignment: asgn };
   }
 
@@ -729,6 +774,74 @@ export async function applyPaymentUpdate(data: {
   }
 
   return { invoiceId: inv.id, received: true };
+}
+
+/**
+ * P0.6 — Explicit settlement recording (partner-reported; IOUX does not move cash).
+ * Closes collection escrow legs, marks invoice/assignment settled, notifies parties.
+ */
+export async function recordSettlement(opts: {
+  invoiceId?: string;
+  iouRegistryId?: string;
+  actorId?: string;
+  source?: string;
+  note?: string;
+  amountPaid?: number;
+}) {
+  let inv;
+  if (opts.invoiceId) {
+    [inv] = await db.select().from(s.invoices).where(eq(s.invoices.id, opts.invoiceId)).limit(1);
+  } else if (opts.iouRegistryId) {
+    [inv] = await db.select().from(s.invoices).where(eq(s.invoices.iouRegistryId, opts.iouRegistryId)).limit(1);
+  }
+  if (!inv) throw new AppError(404, 'not_found', 'Invoice not found');
+
+  if (inv.status === 'settled') {
+    return { invoiceId: inv.id, alreadySettled: true };
+  }
+
+  const [asgn] = await db.select().from(s.assignments).where(eq(s.assignments.invoiceId, inv.id)).limit(1);
+
+  if (asgn) {
+    const legs = await db.select().from(s.escrowLegs).where(eq(s.escrowLegs.assignmentId, asgn.id));
+    for (const leg of legs) {
+      if (leg.status === 'pending' && (leg.legType.includes('collection') || leg.legType.includes('payout') || leg.legType.includes('fee'))) {
+        await db.update(s.escrowLegs).set({
+          status: 'released',
+          executedAt: new Date(),
+        }).where(eq(s.escrowLegs.id, leg.id));
+      }
+    }
+    await db.update(s.assignments).set({ status: 'settled' }).where(eq(s.assignments.id, asgn.id));
+  }
+
+  await transitionInvoice(inv.id, 'settled', opts.actorId || null, opts.note || `Settlement recorded (${opts.source || 'manual'})`);
+
+  const iou = inv.iouRegistryId || inv.id;
+  const settledPayload = {
+    type: 'invoice_settled',
+    title: 'Settlement recorded',
+    body: `${iou} marked settled${opts.note ? ` — ${opts.note}` : ''} (partner-reported; IOUX does not move cash)`,
+    referenceType: 'invoice',
+    referenceId: inv.id,
+    emailHtml: templates.invoiceSettled(iou),
+    emailSubject: emailSubjects.settled(iou),
+  };
+  if (asgn) {
+    await notifyOrgUsers(asgn.spvOrgId, settledPayload);
+    await notifyOrgUsers(asgn.supplierOrgId, settledPayload);
+  }
+  await notifyOrgUsers(inv.buyerOrgId, settledPayload);
+
+  await writeAudit({
+    actorId: opts.actorId,
+    action: 'settlement.recorded',
+    resourceType: 'invoice',
+    resourceId: inv.id,
+    details: { source: opts.source || 'manual', note: opts.note, amountPaid: opts.amountPaid },
+  });
+
+  return { invoiceId: inv.id, settled: true, assignmentId: asgn?.id };
 }
 
 export async function listInvoicesForOrg(orgId: string, role: string) {

@@ -8,6 +8,7 @@ import LifecycleTimeline from '@/components/shared/LifecycleTimeline';
 import OfferCalculator from '@/components/shared/OfferCalculator';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { isValidIOURegistryId } from '@/lib/iouId';
+import { toAssignmentTrack, trackExplanation, trackLabel } from '@/lib/assignmentTracks';
 import { ArrowLeft, FileText, Building2 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -53,6 +54,12 @@ export default function IOUDetailPage() {
   const consent = consents.find(c => c.invoiceId === inv.id);
   const escrow = escrowLegs.filter(e => e.invoiceId === inv.id);
   const schemeOk = isValidIOURegistryId(inv.iouRegistryId) || inv.iouRegistryId.startsWith('IOU-KE-');
+  const track = asgn?.assignmentType ? toAssignmentTrack(asgn.assignmentType) : null;
+  const trackLine = track
+    ? trackExplanation(track, asgn?.createdAt || inv.assignedAt || inv.commitmentAckAt)
+    : consent?.status === 'pending'
+      ? 'Awaiting obligor consent to negotiated terms.'
+      : null;
 
   const canMakeOffer = OFFER_ELIGIBLE.has(inv.status);
   const canRequestConsent = inv.status === 'offer_accepted' && !consent;
@@ -117,6 +124,13 @@ export default function IOUDetailPage() {
         </div>
       )}
 
+      {trackLine && (
+        <div className="portal-callout">
+          {track ? <strong>{trackLabel(track)}. </strong> : null}
+          {trackLine}
+        </div>
+      )}
+
       <section className="portal-section">
         <header className="portal-section__head">
           <h2 className="portal-section__title">Lifecycle</h2>
@@ -156,6 +170,25 @@ export default function IOUDetailPage() {
             <div>
               <p className="text-[10px] font-semibold text-[#5A6B7D]">Description</p>
               <p className="text-xs text-[#0E1F1A] mt-0.5 leading-snug">{inv.description}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-[#0E1F1A]/8">
+              <div className="rounded-md bg-[#f7faf6] border border-[#0E1F1A]/6 p-2">
+                <p className="text-[10px] font-semibold text-[#5A6B7D]">Commitment to pay</p>
+                <p className="font-medium text-[#0E1F1A] mt-0.5">
+                  {inv.commitmentToPay
+                    ? `Recorded${inv.commitmentAckAt ? ` · ${formatDate(inv.commitmentAckAt)}` : ''}`
+                    : 'Not recorded'}
+                </p>
+              </div>
+              <div className="rounded-md bg-[#f7faf6] border border-[#0E1F1A]/6 p-2">
+                <p className="text-[10px] font-semibold text-[#5A6B7D]">Standing order ref</p>
+                <p className="font-mono font-medium text-[#0E1F1A] mt-0.5 break-anywhere">
+                  {inv.bankStandingOrderRef || '—'}
+                </p>
+                {inv.standingOrderBank && (
+                  <p className="text-[10px] text-[#5A6B7D] mt-0.5">{inv.standingOrderBank}</p>
+                )}
+              </div>
             </div>
           </div>
         </section>

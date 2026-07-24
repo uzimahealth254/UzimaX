@@ -36,6 +36,7 @@
     "supabase:function:serve:webhook": "supabase functions serve afyax-payment-update",
     "supabase:function:deploy:webhook": "supabase functions deploy afyax-payment-update",
     "test:cross-tenant": "tsx scripts/security-cross-tenant.ts",
+    "smoke:tenant-isolation": "tsx scripts/security-cross-tenant.ts",
     "test:authz": "tsx scripts/security-authz-audit.ts",
     "smoke": "tsx scripts/smoke-uzima.ts",
     "smoke:dual": "tsx scripts/smoke-dual-origination.ts",
