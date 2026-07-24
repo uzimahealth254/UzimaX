@@ -71,8 +71,36 @@ export default function AboutPage() {
         </div>
       </section>
 
-      <section className="mk-panel mk-panel--paper">
-        <div className="container" style={{ maxWidth: 760 }}>
+      <section className="mk-panel mk-panel--paper mk-panel--waves">
+        <svg className="mk-waves mk-waves--tl" viewBox="0 0 420 280" fill="none" aria-hidden>
+          <path
+            className="mk-waves__stroke mk-waves__stroke--a"
+            d="M-20 48 C60 12, 110 92, 190 58 C270 24, 310 88, 400 42"
+          />
+          <path
+            className="mk-waves__stroke mk-waves__stroke--b"
+            d="M-10 88 C70 52, 120 128, 205 90 C290 52, 330 118, 430 78"
+          />
+          <path
+            className="mk-waves__stroke mk-waves__stroke--c"
+            d="M0 128 C80 96, 130 164, 220 126 C310 88, 350 156, 440 118"
+          />
+        </svg>
+        <svg className="mk-waves mk-waves--br" viewBox="0 0 420 280" fill="none" aria-hidden>
+          <path
+            className="mk-waves__stroke mk-waves__stroke--a"
+            d="M20 220 C100 180, 150 250, 230 210 C310 170, 360 240, 440 200"
+          />
+          <path
+            className="mk-waves__stroke mk-waves__stroke--b"
+            d="M10 180 C90 142, 140 210, 220 168 C300 126, 350 200, 450 158"
+          />
+          <path
+            className="mk-waves__stroke mk-waves__stroke--c"
+            d="M0 140 C85 108, 135 176, 215 132 C295 88, 345 162, 460 120"
+          />
+        </svg>
+        <div className="container" style={{ maxWidth: 760, position: 'relative', zIndex: 1 }}>
           <Reveal>
             <span className="label dark">How we work</span>
             <h2 className="h2" style={{ marginTop: 12, maxWidth: '16ch' }}>

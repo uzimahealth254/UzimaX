@@ -1739,6 +1739,91 @@
 .uzima-site .mk-panel--paper {
   background: #fff;
 }
+
+/* Soft greenish wave ornaments (About / paper panels) */
+.uzima-site .mk-panel--waves {
+  isolation: isolate;
+}
+.uzima-site .mk-waves {
+  position: absolute;
+  width: min(420px, 52vw);
+  height: auto;
+  pointer-events: none;
+  z-index: 0;
+}
+.uzima-site .mk-waves--tl {
+  top: -12px;
+  left: -28px;
+}
+.uzima-site .mk-waves--br {
+  right: -36px;
+  bottom: -20px;
+  transform: scaleX(-1);
+}
+.uzima-site .mk-waves__stroke {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.uzima-site .mk-waves__stroke--a {
+  stroke: #3b7a4e;
+  stroke-width: 1.6;
+  opacity: 0.38;
+}
+.uzima-site .mk-waves__stroke--b {
+  stroke: #7cb88a;
+  stroke-width: 1.35;
+  opacity: 0.32;
+}
+.uzima-site .mk-waves__stroke--c {
+  stroke: #a8d4b0;
+  stroke-width: 1.15;
+  opacity: 0.45;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .uzima-site .mk-waves__stroke {
+    stroke-dasharray: 520;
+    stroke-dashoffset: 520;
+    animation: mk-wave-draw 1.4s ease-out forwards;
+  }
+  .uzima-site .mk-waves__stroke--b {
+    animation-delay: 0.12s;
+  }
+  .uzima-site .mk-waves__stroke--c {
+    animation-delay: 0.24s;
+  }
+  .uzima-site .mk-waves--br .mk-waves__stroke {
+    animation-delay: 0.18s;
+  }
+  .uzima-site .mk-waves--br .mk-waves__stroke--b {
+    animation-delay: 0.3s;
+  }
+  .uzima-site .mk-waves--br .mk-waves__stroke--c {
+    animation-delay: 0.42s;
+  }
+}
+
+@keyframes mk-wave-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .uzima-site .mk-waves {
+    width: min(280px, 70vw);
+    opacity: 0.85;
+  }
+  .uzima-site .mk-waves--tl {
+    top: -4px;
+    left: -40px;
+  }
+  .uzima-site .mk-waves--br {
+    right: -48px;
+    bottom: -8px;
+  }
+}
 .uzima-site .mk-panel__layout {
   display: grid;
   grid-template-columns: 1fr 1fr;
