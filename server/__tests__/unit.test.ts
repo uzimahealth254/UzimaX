@@ -1,6 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import { generateIOURegistryId, isValidIOURegistryId, luhnCheckDigit } from '../lib/iouId.ts';
 import { checkProgramCapacity, computeTenorDays, priceReceivable } from '../lib/pricing.ts';
+import {
+  canonicalizeAssignmentType,
+  toAssignmentTrack,
+} from '../lib/assignmentTracks.ts';
+import {
+  packageTotals,
+  weightedAvgDiscountBps,
+  weightedAvgTenorDays,
+} from '../lib/packageMetrics.ts';
 
 describe('IOU registry IDs', () => {
   it('generates valid Luhn-checked IDs', () => {
@@ -43,5 +52,38 @@ describe('pricing & programmes', () => {
 
   it('allows within capacity', () => {
     expect(checkProgramCapacity(100_000, 1_000_000, 200_000).ok).toBe(true);
+  });
+});
+
+describe('assignment tracks (WS hybrid)', () => {
+  it('maps legacy types to canonical tracks', () => {
+    expect(toAssignmentTrack('opt_in_auto')).toBe('standard_confirmation');
+    expect(toAssignmentTrack('supplier_originated_auto')).toBe('standard_confirmation');
+    expect(toAssignmentTrack('offer_consent')).toBe('negotiated_offer');
+    expect(canonicalizeAssignmentType('opt_in_auto')).toBe('standard_confirmation');
+    expect(canonicalizeAssignmentType('negotiated_offer')).toBe('negotiated_offer');
+  });
+});
+
+describe('package metrics (WS-16)', () => {
+  it('matches hand-calculated weighted tenor and discount', () => {
+    // 1m @ 30d + 3m @ 90d → tenor = (30m + 270m) / 4m = 75
+    expect(weightedAvgTenorDays([
+      { faceValue: 1_000_000, tenorDays: 30 },
+      { faceValue: 3_000_000, tenorDays: 90 },
+    ])).toBe(75);
+
+    // 1m @ 500bps + 1m @ 700bps → 600
+    expect(weightedAvgDiscountBps([
+      { faceValue: 1_000_000, discountBps: 500 },
+      { faceValue: 1_000_000, discountBps: 700 },
+    ])).toBe(600);
+  });
+
+  it('sums package totals', () => {
+    expect(packageTotals([
+      { faceValue: 100, purchasePrice: 95 },
+      { faceValue: 200, purchasePrice: 180 },
+    ])).toEqual({ totalFaceValue: 300, totalPurchasePrice: 275 });
   });
 });

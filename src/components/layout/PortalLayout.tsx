@@ -209,7 +209,7 @@ export default function PortalLayout() {
   return (
     <div className="portal-shell flex h-[100dvh] app-ambient overflow-hidden">
       <div className="portal-backdrop" aria-hidden>
-        <img src="/auth-pharmacy.jpg?v=3" alt="" className="portal-backdrop__pharmacy" />
+        <img src="/auth-portal-hero.jpg?v=4" alt="" className="portal-backdrop__pharmacy" />
         <div className="portal-backdrop__veil" />
       </div>
 

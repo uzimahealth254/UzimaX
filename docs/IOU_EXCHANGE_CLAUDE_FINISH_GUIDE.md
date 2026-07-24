@@ -5,7 +5,9 @@
 **Repo:** `c:\Users\Admin\Downloads\CPF` · GitHub `uzimahealth254/UzimaX` · branch **`main`**  
 **Date:** 24 July 2026  
 **Purpose:** Exhaustive state of what exists — roles, pages, emails, infra, honesty limits.  
-**Tasking / finish order:** superseded for *how to finish* by **`docs/IOU_EXCHANGE_COMPLETION_GUIDE.md`** (`IOUX-COMPLETE-001`). Keep this file as the inventory of *what exists*.
+**Tasking / finish order:** superseded for *how to finish Phase 1* by **`docs/IOU_EXCHANGE_COMPLETION_GUIDE.md`** (`IOUX-COMPLETE-001`).  
+**Ask Claude for the full-system master plan:** **`docs/IOU_EXCHANGE_CLAUDE_FULL_SYSTEM_BRIEF.md`** (`IOUX-CLAUDE-FULL-BRIEF-001`) — what we have done + request for `IOUX-FULL-FINISH-001`.  
+Keep this file as the inventory of *what exists*.
 
 **Related docs (do not ignore):**
 - `docs/IOU_EXCHANGE_FULL_SYSTEM_GUIDE.md` — architecture & system truth  

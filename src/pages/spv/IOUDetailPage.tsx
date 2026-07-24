@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { useData } from '@/hooks/usePlatformData';
 import { useActor } from '@/hooks/useActor';
+import { api } from '@/lib/apiClient';
 import PageHeader from '@/components/layout/PageHeader';
 import StatusBadge from '@/components/shared/StatusBadge';
 import LifecycleTimeline from '@/components/shared/LifecycleTimeline';
@@ -26,6 +28,11 @@ export default function IOUDetailPage() {
   const [offerBusy, setOfferBusy] = useState(false);
   const [consentBusy, setConsentBusy] = useState(false);
   const inv = invoices.find(i => i.id === id || i.iouRegistryId === id);
+  const creditRiskQ = useQuery({
+    queryKey: ['buyer-credit-risk', inv?.buyerId],
+    queryFn: async () => (await api.get(`/buyers/${inv!.buyerId}/credit-risk`)).data,
+    enabled: Boolean(inv?.buyerId),
+  });
 
   if (!inv) {
     return (
@@ -209,6 +216,18 @@ export default function IOUDetailPage() {
               <div className="rounded-md bg-[#f7faf6] border border-[#0E1F1A]/6 p-2">
                 <p className="text-[10px] font-semibold text-[#5A6B7D]">Buyer</p>
                 <p className="font-semibold text-[#0E1F1A] mt-0.5">{inv.buyerName}</p>
+                {creditRiskQ.data && (
+                  <p className="text-[10px] text-[#5A6B7D] mt-1">
+                    Behavioural risk band{' '}
+                    <span className="font-bold text-[#0E1F1A]">
+                      {creditRiskQ.data.band || creditRiskQ.data.riskBand || '—'}
+                    </span>
+                    {creditRiskQ.data.score != null ? ` · score ${creditRiskQ.data.score}` : ''}
+                    <span className="block mt-0.5 font-normal">
+                      Based on payment history on this platform — not a licensed credit rating.
+                    </span>
+                  </p>
+                )}
               </div>
             </div>
             <div className="space-y-2 pt-1 border-t border-[#0E1F1A]/8">

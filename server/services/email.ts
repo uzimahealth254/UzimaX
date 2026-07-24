@@ -10,6 +10,10 @@ export interface EmailPayload {
   html: string;
   text?: string;
   replyTo?: string;
+  /** WS-07 — template key for email_send_log */
+  template?: string;
+  relatedType?: string;
+  relatedId?: string;
 }
 
 const SITE_URL = () => process.env.SITE_URL || process.env.MARKETING_URL || 'https://www.ioux.africa';
@@ -535,11 +539,37 @@ export const emailSubjects = {
   programmeBlock: () => 'IOU Exchange — programme limit blocked',
 };
 
-export async function sendEmail(payload: EmailPayload): Promise<{ ok: boolean; mode: string }> {
+export async function sendEmail(payload: EmailPayload): Promise<{ ok: boolean; mode: string; providerMessageId?: string; error?: string }> {
   const provider = process.env.EMAIL_PROVIDER || 'stub';
   const from = process.env.EMAIL_FROM || 'IOU Exchange <no-reply@ioux.africa>';
   const replyTo = payload.replyTo || process.env.SUPPORT_EMAIL || 'hello@ioux.africa';
   const text = payload.text || htmlToText(payload.html);
+  const template = payload.template || 'generic';
+
+  const logAttempt = async (opts: {
+    status: 'sent' | 'failed' | 'stub';
+    mode: string;
+    providerMessageId?: string;
+    error?: string;
+  }) => {
+    try {
+      const { db } = await import('../db/client.js');
+      const s = await import('../db/schema.js');
+      await db.insert(s.emailSendLog).values({
+        toEmail: payload.to,
+        template,
+        subject: payload.subject,
+        status: opts.status,
+        provider: opts.mode,
+        providerMessageId: opts.providerMessageId || null,
+        error: opts.error || null,
+        relatedType: payload.relatedType || null,
+        relatedId: payload.relatedId || null,
+      });
+    } catch (e) {
+      console.warn('[email] send log failed', e);
+    }
+  };
 
   if (provider === 'resend' && process.env.RESEND_API_KEY) {
     try {
@@ -559,13 +589,19 @@ export async function sendEmail(payload: EmailPayload): Promise<{ ok: boolean; m
         }),
       });
       if (!res.ok) {
-        console.warn('[email] Resend error', await res.text());
-        return { ok: false, mode: 'resend' };
+        const errText = await res.text();
+        console.warn('[email] Resend error', errText);
+        await logAttempt({ status: 'failed', mode: 'resend', error: errText.slice(0, 500) });
+        return { ok: false, mode: 'resend', error: errText.slice(0, 200) };
       }
-      return { ok: true, mode: 'resend' };
+      const body = await res.json().catch(() => ({} as { id?: string }));
+      await logAttempt({ status: 'sent', mode: 'resend', providerMessageId: body.id });
+      return { ok: true, mode: 'resend', providerMessageId: body.id };
     } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
       console.warn('[email] Resend failed', e);
-      return { ok: false, mode: 'resend' };
+      await logAttempt({ status: 'failed', mode: 'resend', error: msg });
+      return { ok: false, mode: 'resend', error: msg };
     }
   }
 
@@ -574,6 +610,7 @@ export async function sendEmail(payload: EmailPayload): Promise<{ ok: boolean; m
       const nodemailer = await import('nodemailer').catch(() => null);
       if (!nodemailer) {
         console.info('[email:smtp] nodemailer not installed — stubbing', payload.to, payload.subject);
+        await logAttempt({ status: 'stub', mode: 'stub' });
         return { ok: true, mode: 'stub' };
       }
       const transport = nodemailer.createTransport({
@@ -593,13 +630,17 @@ export async function sendEmail(payload: EmailPayload): Promise<{ ok: boolean; m
         html: payload.html,
         text,
       });
+      await logAttempt({ status: 'sent', mode: 'smtp' });
       return { ok: true, mode: 'smtp' };
     } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
       console.warn('[email] SMTP failed', e);
-      return { ok: false, mode: 'smtp' };
+      await logAttempt({ status: 'failed', mode: 'smtp', error: msg });
+      return { ok: false, mode: 'smtp', error: msg };
     }
   }
 
   console.info('[email:stub]', { to: payload.to, subject: payload.subject });
+  await logAttempt({ status: 'stub', mode: 'stub' });
   return { ok: true, mode: 'stub' };
 }

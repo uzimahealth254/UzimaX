@@ -19,6 +19,7 @@ import {
   recordSettlement,
 } from '../services/core.js';
 import { computeTenorDays, priceReceivable } from '../lib/pricing.js';
+import { packageTotals, weightedAvgDiscountBps, weightedAvgTenorDays } from '../lib/packageMetrics.js';
 import { writeAudit } from '../middleware/audit.js';
 import { storeFile, readStoredFile, orgIdFromStorageKey } from '../services/storage.js';
 import { issueOtp, verifyOtp } from '../services/otp.js';
@@ -1114,33 +1115,33 @@ apiRouter.post('/packages', authenticate, authorize('spv', 'admin'), validate(z.
     const invs = await db.select().from(s.invoices);
     const invById = Object.fromEntries(invs.map((i) => [i.id, i]));
     const offers = await db.select().from(s.purchaseOffers);
-    const totalFace = selected.reduce((sum, a) => sum + Number(a.faceValue), 0);
-    const totalPurchase = selected.reduce((sum, a) => sum + Number(a.purchasePrice || 0), 0);
-    let weightedTenor = 0;
-    let weightedDiscountBps = 0;
-    if (totalFace > 0) {
-      for (const a of selected) {
-        const inv = invById[a.invoiceId];
-        const w = Number(a.faceValue) / totalFace;
-        if (inv?.issueDate && inv?.dueDate) {
-          weightedTenor += w * computeTenorDays(inv.issueDate, inv.dueDate);
-        }
-        const offer = offers.find((o) => o.invoiceId === a.invoiceId && o.status === 'accepted')
-          || offers.find((o) => o.id === a.offerId);
-        if (offer?.discountRateBps != null) weightedDiscountBps += w * Number(offer.discountRateBps);
-        else if (a.purchasePrice != null && Number(a.faceValue) > 0) {
-          const disc = (1 - Number(a.purchasePrice) / Number(a.faceValue)) * 10000;
-          weightedDiscountBps += w * disc;
-        }
+    const tenorItems: { faceValue: number; tenorDays: number }[] = [];
+    const discItems: { faceValue: number; discountBps: number }[] = [];
+    const priceItems: { faceValue: number; purchasePrice: number }[] = [];
+    for (const a of selected) {
+      const face = Number(a.faceValue);
+      const purchase = Number(a.purchasePrice || 0);
+      priceItems.push({ faceValue: face, purchasePrice: purchase });
+      const inv = invById[a.invoiceId];
+      if (inv?.issueDate && inv?.dueDate) {
+        tenorItems.push({ faceValue: face, tenorDays: computeTenorDays(inv.issueDate, inv.dueDate) });
       }
+      const offer = offers.find((o) => o.invoiceId === a.invoiceId && o.status === 'accepted')
+        || offers.find((o) => o.id === a.offerId);
+      let disc = offer?.discountRateBps != null ? Number(offer.discountRateBps) : null;
+      if (disc == null && face > 0 && purchase > 0) {
+        disc = Math.round((1 - purchase / face) * 10000);
+      }
+      if (disc != null) discItems.push({ faceValue: face, discountBps: disc });
     }
+    const totals = packageTotals(priceItems);
     const [pkg] = await db.insert(s.packages).values({
       packageRef: req.body.packageRef,
       status: 'draft',
-      totalFaceValue: String(totalFace),
-      totalPurchasePrice: String(totalPurchase),
-      weightedAvgTenor: Math.round(weightedTenor) || null,
-      weightedAvgDiscountBps: Math.round(weightedDiscountBps) || null,
+      totalFaceValue: String(totals.totalFaceValue),
+      totalPurchasePrice: String(totals.totalPurchasePrice),
+      weightedAvgTenor: tenorItems.length ? weightedAvgTenorDays(tenorItems) : null,
+      weightedAvgDiscountBps: discItems.length ? weightedAvgDiscountBps(discItems) : null,
       createdBy: req.user!.userId,
     }).returning();
     await db.insert(s.packageItems).values(selected.map((a) => ({ packageId: pkg.id, assignmentId: a.id })));
@@ -1156,8 +1157,8 @@ apiRouter.post('/packages', authenticate, authorize('spv', 'admin'), validate(z.
         packageRef: pkg.packageRef,
         packageId: pkg.id,
         status: pkg.status,
-        totalFaceValue: totalFace,
-        totalPurchasePrice: totalPurchase,
+        totalFaceValue: totals.totalFaceValue,
+        totalPurchasePrice: totals.totalPurchasePrice,
         itemCount: selected.length,
       });
       await db.insert(s.orgDocuments).values({
@@ -1563,6 +1564,9 @@ apiRouter.post('/admin/users/invite', authenticate, authorize('admin'), validate
           email,
         }),
         text: `Welcome to IOU Exchange. Temporary password: ${tempPass}. Sign in at ${process.env.PORTAL_URL || 'https://app.ioux.africa'}/login and change it immediately.`,
+        template: 'invite',
+        relatedType: 'user',
+        relatedId: user.id,
       });
       if (!emailResult.ok) {
         emailError = `Invite email not delivered (mode=${emailResult.mode})`;
@@ -1590,6 +1594,64 @@ apiRouter.post('/admin/users/invite', authenticate, authorize('admin'), validate
       emailMode: emailResult.mode,
       ...(emailError ? { emailWarning: emailError } : {}),
     });
+  } catch (e) { next(e); }
+});
+
+/** WS-07 — resend invite with a new temporary password */
+apiRouter.post('/admin/users/:id/resend-invite', authenticate, authorize('admin'), async (req, res, next) => {
+  try {
+    const [user] = await db.select().from(s.users).where(eq(s.users.id, req.params.id)).limit(1);
+    if (!user) throw new AppError(404, 'not_found', 'User not found');
+    const tempPass = generateTempPassword();
+    assertStrongPassword(tempPass);
+    const passwordHash = await bcrypt.hash(tempPass, 12);
+    await db.update(s.users).set({
+      passwordHash,
+      mustChangePassword: true,
+      updatedAt: new Date(),
+    }).where(eq(s.users.id, user.id));
+
+    const { sendEmail: sendInviteEmail, templates: emailTemplates, emailSubjects: subjects } = await import('../services/email.js');
+    const [org] = user.orgId
+      ? await db.select().from(s.organisations).where(eq(s.organisations.id, user.orgId)).limit(1)
+      : [null];
+    const emailResult = await sendInviteEmail({
+      to: user.email,
+      subject: subjects.invite(),
+      html: emailTemplates.invite({
+        name: user.fullName,
+        role: user.role,
+        orgName: org?.name,
+        tempPassword: tempPass,
+        email: user.email,
+      }),
+      text: `IOU Exchange invite (resent). Temporary password: ${tempPass}. Sign in at ${process.env.PORTAL_URL || 'https://app.ioux.africa'}/login and change it immediately.`,
+      template: 'invite_resend',
+      relatedType: 'user',
+      relatedId: user.id,
+    });
+    await writeAudit({
+      actorId: req.user!.userId,
+      action: 'user.resend_invite',
+      resourceType: 'user',
+      resourceId: user.id,
+      details: { email: user.email, emailOk: emailResult.ok, emailMode: emailResult.mode },
+    });
+    res.json({
+      id: user.id,
+      email: user.email,
+      emailSent: emailResult.ok,
+      emailMode: emailResult.mode,
+      ...(emailResult.ok ? {} : { emailWarning: emailResult.error || `Email not delivered (mode=${emailResult.mode})` }),
+    });
+  } catch (e) { next(e); }
+});
+
+apiRouter.get('/admin/email-log', authenticate, authorize('admin'), async (req, res, next) => {
+  try {
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const rows = await db.select().from(s.emailSendLog).orderBy(desc(s.emailSendLog.createdAt)).limit(limit);
+    res.json({ data: rows });
   } catch (e) { next(e); }
 });
 
@@ -1751,6 +1813,66 @@ apiRouter.post('/settlements/notify', authenticateAny, validate(z.object({
       amountPaid: req.body.amountPaid,
     });
     res.json(result);
+  } catch (e) { next(e); }
+});
+
+/**
+ * Horizon C lite (WS-22 precursor) — evidence manifest for an instrument.
+ * Returns metadata + document URLs; counsel-approved wording is a change-order item.
+ */
+apiRouter.get('/invoices/:id/evidence-bundle', authenticate, authorize('buyer', 'supplier', 'spv', 'admin'), async (req, res, next) => {
+  try {
+    const [inv] = await db.select().from(s.invoices).where(eq(s.invoices.id, req.params.id)).limit(1);
+    if (!inv) throw new AppError(404, 'not_found', 'Invoice not found');
+    await assertInvoiceAccess(req.user!, inv);
+    const [asgn] = await db.select().from(s.assignments).where(eq(s.assignments.invoiceId, inv.id)).limit(1);
+    const consents = await db.select().from(s.assignmentConsents).where(eq(s.assignmentConsents.invoiceId, inv.id));
+    const docs = await db.select().from(s.orgDocuments).where(
+      and(
+        eq(s.orgDocuments.orgId, inv.buyerOrgId),
+      ),
+    );
+    const relatedDocs = docs.filter((d) => {
+      const url = d.fileUrl || '';
+      return url.includes(inv.iouRegistryId || '') || url.includes(inv.id)
+        || ['purchase_note', 'assignment_letter', 'payment_receipt'].includes(d.docType || '');
+    });
+    const history = await db.select().from(s.invoiceStatusHistory).where(eq(s.invoiceStatusHistory.invoiceId, inv.id));
+    res.json({
+      invoiceId: inv.id,
+      iouRegistryId: inv.iouRegistryId,
+      status: inv.status,
+      commitment: {
+        commitmentToPay: inv.commitmentToPay,
+        commitmentAckAt: inv.commitmentAckAt,
+        commitmentAckBy: inv.commitmentAckBy,
+        bankStandingOrderRef: inv.bankStandingOrderRef,
+        standingOrderBank: inv.standingOrderBank,
+        standingOrderSetAt: inv.standingOrderSetAt,
+      },
+      assignment: asgn ? {
+        id: asgn.id,
+        assignmentType: asgn.assignmentType,
+        purchasePrice: asgn.purchasePrice,
+        status: asgn.status,
+        createdAt: asgn.createdAt,
+      } : null,
+      consents: consents.map((c) => ({
+        id: c.id,
+        status: c.status,
+        signedAt: c.signedAt,
+        otpVerified: c.otpVerified,
+        signatureHash: c.signatureHash,
+      })),
+      documents: relatedDocs.map((d) => ({
+        id: d.id,
+        docType: d.docType,
+        fileUrl: d.fileUrl,
+        uploadedAt: d.uploadedAt,
+      })),
+      statusHistory: history,
+      disclaimer: 'Evidence manifest for operational review. Not a counsel-certified true-sale opinion. IOU Exchange records references; it does not move cash or list notes on an exchange.',
+    });
   } catch (e) { next(e); }
 });
 

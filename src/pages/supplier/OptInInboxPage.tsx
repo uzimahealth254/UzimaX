@@ -77,6 +77,9 @@ export default function OptInInboxPage() {
           <HandCoins size={20} className="mx-auto text-[#5A6B7D] mb-2" />
           <p className="text-xs font-bold text-[#0E1F1A]">No pending opt-ins</p>
           <p className="text-[11px] text-[#5A6B7D] mt-0.5">
+            When a buyer posts an instrument naming you, it appears here for opt-in / sell.
+          </p>
+          <p className="text-[11px] text-[#5A6B7D] mt-0.5">
             When a buyer posts an invoice naming you, it appears here to sell.
           </p>
         </div>

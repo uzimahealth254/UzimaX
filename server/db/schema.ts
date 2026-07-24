@@ -346,3 +346,21 @@ export const otpCodes = pgTable('otp_codes', {
   consumedAt: timestamp('consumed_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+/** WS-07 — every outbound email attempt for admin visibility */
+export const emailSendLog = pgTable('email_send_log', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  toEmail: text('to_email').notNull(),
+  template: text('template').notNull().default('generic'),
+  subject: text('subject'),
+  status: text('status').notNull(), // sent | failed | stub
+  provider: text('provider'),
+  providerMessageId: text('provider_message_id'),
+  error: text('error'),
+  relatedType: text('related_type'),
+  relatedId: uuid('related_id'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index('idx_email_send_log_created').on(t.createdAt),
+  index('idx_email_send_log_to').on(t.toEmail),
+]);

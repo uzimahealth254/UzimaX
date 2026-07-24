@@ -61,7 +61,10 @@ export async function getAdminAnalytics() {
       avgDiscountPct: avgDiscountBps / 100,
       settlementEvents: payments.filter((p) => Number(p.outstandingBalance) <= 0).length,
       paymentEvents: payments.length,
+      assignmentsActive: assignments.filter((a) => a.status === 'active').length,
+      assignmentsSettled: assignments.filter((a) => a.status === 'settled').length,
     },
+    source: 'live_postgres_aggregates',
   };
 }
 

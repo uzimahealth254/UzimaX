@@ -47,7 +47,7 @@ export default function SolutionsPage() {
           </Reveal>
           <Reveal delay={1}>
             <div className="mk-panel__media">
-              <img src="/images/solutions-supplier.jpg" alt="Pharmacy supplier operations" />
+              <img src="/images/solutions-supplier.jpg" alt="Supplier operations — trade receivables securitisation" />
             </div>
           </Reveal>
         </div>

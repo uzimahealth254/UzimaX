@@ -7,7 +7,7 @@ import DataTable from '@/components/shared/DataTable';
 import StatusBadge from '@/components/shared/StatusBadge';
 import { toast } from 'sonner';
 
-type Tab = 'organisations' | 'users' | 'invite' | 'create-org';
+type Tab = 'organisations' | 'users' | 'invite' | 'create-org' | 'email-log';
 
 const defaultOrgForm = {
   name: '',
@@ -40,6 +40,11 @@ export default function UsersPage() {
     queryKey: ['admin-users'],
     queryFn: async () => (await api.get('/admin/users')).data.data,
   });
+  const emailLogQ = useQuery({
+    queryKey: ['admin-email-log'],
+    queryFn: async () => (await api.get('/admin/email-log?limit=80')).data.data,
+    enabled: tab === 'email-log',
+  });
 
   const orgsForRole = useMemo(
     () => organisations.filter((o: any) => (o.orgType || o.type) === inviteRole),
@@ -61,6 +66,7 @@ export default function UsersPage() {
     users: { title: 'Users', desc: `${(usersQ.data || []).length} accounts` },
     invite: { title: 'Invite user', desc: 'Create user and email temporary password' },
     'create-org': { title: 'Create organisation', desc: 'Register buyer, supplier, or SPV with KYC fields' },
+    'email-log': { title: 'Email log', desc: 'Recent send attempts (invite, OTP, lifecycle)' },
   }[tab];
 
   const orgColumns = [
@@ -136,6 +142,29 @@ export default function UsersPage() {
     { key: 'email', header: 'Email', render: (u: any) => <span className="text-[#5A6B7D] text-xs">{u.email}</span> },
     { key: 'role', header: 'Role', render: (u: any) => <span className="capitalize text-xs">{u.role}</span> },
     { key: 'status', header: 'Status', render: (u: any) => <StatusBadge status={u.status || 'active'} /> },
+    {
+      key: 'actions',
+      header: '',
+      render: (u: any) => (
+        <button
+          type="button"
+          className="text-[10px] font-bold px-2 py-1 rounded bg-[#F4FBE3] text-[#0E1F1A] hover:bg-[#D3F36B]"
+          onClick={async (e) => {
+            e.stopPropagation();
+            try {
+              const { data } = await api.post(`/admin/users/${u.id}/resend-invite`);
+              if (data?.emailSent) toast.success(`Invite resent to ${u.email}`);
+              else toast.warning(data?.emailWarning || 'User reset but email failed — check Email log');
+              qc.invalidateQueries({ queryKey: ['admin-email-log'] });
+            } catch (err: any) {
+              toast.error(err.response?.data?.message || 'Resend failed');
+            }
+          }}
+        >
+          Resend invite
+        </button>
+      ),
+    },
   ];
 
   const handleInvite = async (e: React.FormEvent) => {
@@ -220,7 +249,7 @@ export default function UsersPage() {
             <p className="portal-section__desc">{tabMeta.desc}</p>
           </div>
           <div className="flex gap-0 border-b border-[#0E1F1A]/10 w-full sm:w-auto overflow-x-auto">
-            {(['organisations', 'users', 'invite', 'create-org'] as Tab[]).map((t) => (
+            {(['organisations', 'users', 'invite', 'create-org', 'email-log'] as Tab[]).map((t) => (
               <button
                 key={t}
                 type="button"
@@ -433,6 +462,40 @@ export default function UsersPage() {
                 {creatingOrg ? 'Creating…' : 'Create organisation'}
               </button>
             </form>
+          </div>
+        )}
+
+        {tab === 'email-log' && (
+          <div className="[&_.surface-card]:border-0 [&_.surface-card]:rounded-none">
+            <DataTable
+              columns={[
+                {
+                  key: 'at',
+                  header: 'When',
+                  primary: true,
+                  render: (r: any) => (
+                    <span className="font-mono text-[10px]">
+                      {r.createdAt ? new Date(r.createdAt).toISOString().slice(0, 19) : '—'}
+                    </span>
+                  ),
+                },
+                { key: 'to', header: 'To', render: (r: any) => <span className="text-xs">{r.toEmail}</span> },
+                { key: 'tpl', header: 'Template', render: (r: any) => <span className="text-xs">{r.template}</span> },
+                {
+                  key: 'status',
+                  header: 'Status',
+                  render: (r: any) => <StatusBadge status={r.status === 'sent' || r.status === 'stub' ? 'active' : 'rejected'} />,
+                },
+                {
+                  key: 'err',
+                  header: 'Error',
+                  hideOnMobile: true,
+                  render: (r: any) => <span className="text-[10px] text-[#5A6B7D] truncate max-w-[12rem] block">{r.error || '—'}</span>,
+                },
+              ]}
+              data={emailLogQ.data || []}
+              emptyMessage={emailLogQ.isLoading ? 'Loading…' : 'No email attempts logged yet'}
+            />
           </div>
         )}
       </section>
