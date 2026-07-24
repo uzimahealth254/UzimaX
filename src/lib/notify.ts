@@ -2,6 +2,8 @@
  * Optional client-side notify hooks (outbox). Server email is authoritative via Resend/SMTP.
  */
 
+import { getApiBaseUrl } from '@/lib/apiBase';
+
 export type NotifyChannel = 'email' | 'sms' | 'in_app';
 
 export interface NotifyPayload {
@@ -13,7 +15,7 @@ export interface NotifyPayload {
 }
 
 const OUTBOX_KEY = 'ioux-notify-outbox';
-const apiBase = () => import.meta.env.VITE_API_URL || 'http://localhost:8787';
+const apiBase = () => getApiBaseUrl();
 
 function pushOutbox(entry: NotifyPayload & { at: string; status: string }) {
   try {

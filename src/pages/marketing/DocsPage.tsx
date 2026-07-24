@@ -1,6 +1,7 @@
 import MarketingLayout, { SectionLabel } from '@/components/marketing/MarketingLayout';
+import { getApiBaseUrl } from '@/lib/apiBase';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:8787';
+const API = getApiBaseUrl() || 'https://uzimax.onrender.com';
 
 const CURL = `curl -X POST ${API}/api/v1/external/invoices \\
   -H "X-API-Key: <YOUR_API_KEY>" \\

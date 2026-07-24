@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { api, getAccessToken } from '@/lib/apiClient';
+import { getApiBaseUrl } from '@/lib/apiBase';
 import PageHeader from '@/components/layout/PageHeader';
 import DataTable from '@/components/shared/DataTable';
 import { formatDate } from '@/lib/utils';
@@ -36,7 +37,7 @@ export default function DocumentsPage({ embedded = false }: { embedded?: boolean
       const form = new FormData();
       form.append('file', file);
       form.append('docType', docType);
-      const base = (import.meta.env.VITE_API_URL || 'http://localhost:8787') + '/api/v1';
+      const base = `${getApiBaseUrl()}/api/v1`;
       const res = await fetch(`${base}/documents/upload`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${getAccessToken()}` },
@@ -59,7 +60,7 @@ export default function DocumentsPage({ embedded = false }: { embedded?: boolean
   const openDoc = async (d: Doc) => {
     const url = d.fileUrl.startsWith('http')
       ? d.fileUrl
-      : `${import.meta.env.VITE_API_URL || 'http://localhost:8787'}${d.fileUrl}`;
+      : `${getApiBaseUrl()}${d.fileUrl}`;
     const res = await fetch(url, { headers: { Authorization: `Bearer ${getAccessToken()}` } });
     const blob = await res.blob();
     window.open(URL.createObjectURL(blob), '_blank');

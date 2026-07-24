@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { getAccessToken } from '@/lib/apiClient';
+import { getApiBaseUrl } from '@/lib/apiBase';
 import { toast } from 'sonner';
 import { Paperclip, X } from 'lucide-react';
 
@@ -29,7 +30,7 @@ export default function DocumentAttach({ onChange }: Props) {
       const form = new FormData();
       form.append('file', file);
       form.append('docType', 'supporting');
-      const base = (import.meta.env.VITE_API_URL || 'http://localhost:8787') + '/api/v1';
+      const base = `${getApiBaseUrl()}/api/v1`;
       const res = await fetch(`${base}/documents/upload`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${getAccessToken()}` },

@@ -1,6 +1,7 @@
 import axios from 'axios';
+import { getApiBaseUrl } from '@/lib/apiBase';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8787';
+const API_URL = getApiBaseUrl();
 
 let accessToken: string | null = sessionStorage.getItem('uzima_access') || null;
 // Refresh prefers httpOnly cookie; body refresh kept only as fallback for same-origin tooling

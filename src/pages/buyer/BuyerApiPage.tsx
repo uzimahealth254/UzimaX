@@ -7,8 +7,9 @@ import DataTable from '@/components/shared/DataTable';
 import ConfirmationModal from '@/components/shared/ConfirmationModal';
 import { toast } from 'sonner';
 import { Copy, KeyRound, Plus, ShieldAlert, Ban } from 'lucide-react';
+import { getApiBaseUrl } from '@/lib/apiBase';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8787';
+const API_BASE = getApiBaseUrl();
 
 type ApiKeyRow = {
   id: string;

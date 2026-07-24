@@ -34,6 +34,16 @@ async function main() {
     );
   }
   console.log('Seeding IOU Exchange database...');
+  try {
+    await pgClient`SELECT 1`;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(
+      `Cannot connect to DATABASE_URL (${url || 'unset'}). ` +
+        `Start local Postgres first: open Docker Desktop, then run \`docker compose up -d postgres\`. ` +
+        `Original error: ${msg}`,
+    );
+  }
   await clearAll();
   const hash = await bcrypt.hash(DEMO_PASSWORD, 12);
 
