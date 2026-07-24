@@ -107,7 +107,8 @@ app.use('/api/v1', apiRouter);
 // Single Render service: API + built marketing/portal (https://uzimax.onrender.com)
 if (serveSpa) {
   app.use(express.static(distPath, { index: false, maxAge: '1h' }));
-  app.get('*', (req, res, next) => {
+  // Express 5 / path-to-regexp: use named splat, not bare '*'
+  app.get('/{*path}', (req, res, next) => {
     if (req.path.startsWith('/api/')) return next();
     res.sendFile(path.join(distPath, 'index.html'), (err) => {
       if (err) next(err);
