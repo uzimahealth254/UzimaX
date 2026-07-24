@@ -36,11 +36,11 @@ const JUMP = [
 const FAQS = [
   {
     q: 'What is IOU Exchange?',
-    a: 'IOU Exchange is a platform that turns confirmed pharmacy and health-trade receivables into early working capital. Suppliers get paid now; buyers settle at maturity; an SPV bridges the two.',
+    a: 'IOU Exchange is a trade receivables securitisation management service. Suppliers can get paid earlier; buyers settle at maturity; an SPV bridges the two — with a full audit trail.',
   },
   {
     q: 'Who can use it?',
-    a: 'IOU Exchange is invite-only, built for health-trade organisations — suppliers, buyers, and capital partners. Contact us to be onboarded.',
+    a: 'IOU Exchange is invite-only, built for trade organisations — suppliers, buyers, and capital partners. Contact us to be onboarded.',
   },
   {
     q: 'How does a supplier get paid early?',
@@ -181,7 +181,7 @@ Authorization: X-API-Key <key>`}
               <span className="label">Security & trust</span>
               <h2 className="h2">Access controlled. Actions logged.</h2>
               <p className="lead" style={{ color: 'var(--white-80)' }}>
-                Built for invite-only health-trade organisations — with a full trail on every critical action.
+                Built for invite-only trade organisations — with a full trail on every critical action.
               </p>
             </div>
           </Reveal>

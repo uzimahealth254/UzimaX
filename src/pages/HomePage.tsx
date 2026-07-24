@@ -17,7 +17,7 @@ const ROLES = [
   {
     index: '01 — Supplier',
     title: 'Cash against confirmed invoices',
-    body: 'Turn unpaid pharmacy receivables into working capital. List, accept an offer, get paid early.',
+    body: 'Turn unpaid trade receivables into earlier cash. List, accept an offer, get paid before maturity.',
     to: '/solutions#suppliers',
     link: 'Explore supplier path',
     img: '/images/role-supplier.jpg',
@@ -32,7 +32,7 @@ const ROLES = [
   },
   {
     index: '03 — SPV',
-    title: 'Originate quality health receivables',
+    title: 'Originate quality trade receivables',
     body: 'Purchase verified trade paper, manage assignments and maturity, package toward listing readiness.',
     to: '/solutions#spv',
     link: 'Explore financier path',
@@ -50,12 +50,12 @@ export default function HomePage() {
           <p className="mk-brand">{BRAND.name}</p>
           <div className="mk-hero__rule" aria-hidden />
           <h1>
-            Working capital for
+            Trade receivables
             <br />
-            pharmacy trade
+            securitisation management
           </h1>
           <p className="sub">
-            Receivables finance for suppliers, buyers, and SPVs — one platform from confirmation to settlement.
+            A management service for suppliers, buyers, and SPVs — from confirmation and assignment through settlement records.
           </p>
           <div className="jump">
             <Link to="/portals" className="btn btn-lime" style={{ border: 'none' }}>
@@ -77,12 +77,11 @@ export default function HomePage() {
           <Reveal delay={1}>
             <div className="mk-problem__aside">
               <p>
-                Across Kenya&apos;s pharmaceutical trade, 60–90 day credit is normal. Insurer cycles push some past 90.
-                Stock moves now; cash arrives a quarter later.
+                Across many B2B trades, 60–90 day credit is normal. Stock and services move now; cash arrives a quarter later.
               </p>
               <p>
-                That trapped capital slows the whole chain — thinner shelves, fewer orders, weaker margins.{' '}
-                {BRAND.name} unlocks it.
+                That trapped capital slows the whole chain — thinner inventory, fewer orders, weaker margins.{' '}
+                {BRAND.name} helps manage the receivables path so capital can move sooner.
               </p>
             </div>
           </Reveal>

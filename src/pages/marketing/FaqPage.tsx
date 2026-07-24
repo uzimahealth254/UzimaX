@@ -5,11 +5,11 @@ import MarketingLayout, { SectionLabel } from '@/components/marketing/MarketingL
 const FAQS: { q: string; a: string }[] = [
   {
     q: 'What is IOU Exchange?',
-    a: 'IOU Exchange is a platform for pharmacy and health-trade receivables. It connects buyers, suppliers, and an SPV so confirmed invoices can be financed early — with a full audit trail.',
+    a: 'IOU Exchange is a trade receivables securitisation management service. It connects buyers, suppliers, and an SPV so confirmed invoices can be managed through confirmation, assignment, and settlement records — with a full audit trail.',
   },
   {
     q: 'Who can use it?',
-    a: 'Invite-only. Health-trade organisations (pharmacies, distributors, wholesalers) and capital partners onboarded by IOU Exchange admins. There is no public self-signup.',
+    a: 'Invite-only. Trade organisations (suppliers, buyers) and capital partners onboarded by IOU Exchange admins. There is no public self-signup.',
   },
   {
     q: 'How does a supplier get paid early?',

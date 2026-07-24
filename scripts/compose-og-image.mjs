@@ -46,14 +46,15 @@ const cover = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" 
   <rect width="${W}" height="${H}" fill="url(#greenBloom)"/>
   <rect y="0" width="${W}" height="7" fill="url(#bar)"/>
 
-  <rect x="48" y="508" width="400" height="72" rx="14" fill="#0E1F1A" fill-opacity="0.82"/>
-  <g transform="translate(66,522)">
+  <rect x="48" y="488" width="520" height="92" rx="14" fill="#0E1F1A" fill-opacity="0.82"/>
+  <g transform="translate(66,506)">
     <rect width="42" height="42" rx="10" fill="#0A1612" stroke="#D3F36B" stroke-width="1.5"/>
     <path d="M11.5 11v12c0 5.4 4 9.4 9.6 9.4S30.7 28.4 30.7 23V11" fill="none" stroke="#F3FAF5" stroke-width="3.2" stroke-linecap="round"/>
     <circle cx="31.6" cy="11.5" r="3.4" fill="#F0C419"/>
   </g>
-  <text x="124" y="548" font-family="Georgia, 'Times New Roman', serif" font-size="26" font-weight="700" fill="#F8FBF9">IOU Exchange</text>
-  <text x="124" y="570" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="600" fill="#F0C419">www.ioux.africa</text>
+  <text x="124" y="530" font-family="Georgia, 'Times New Roman', serif" font-size="26" font-weight="700" fill="#F8FBF9">IOU Exchange</text>
+  <text x="124" y="554" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="600" fill="#D3F36B">Trade receivables securitisation management</text>
+  <text x="124" y="574" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="600" fill="#F0C419">uzimax.onrender.com</text>
 </svg>`);
 
 await sharp(bg)

@@ -15,11 +15,11 @@ export default function AboutPage() {
         <div className="container mk-hero__inner">
           <p className="mk-brand">About {BRAND.name}</p>
           <div className="mk-hero__rule" aria-hidden />
-          <h1 style={{ maxWidth: '13ch', fontSize: 'clamp(36px, 5.8vw, 72px)' }}>
-            The working-capital layer for health trade.
+          <h1 style={{ maxWidth: '16ch', fontSize: 'clamp(36px, 5.8vw, 72px)' }}>
+            Trade receivables securitisation management.
           </h1>
           <p className="sub">
-            We connect the people who move medicine — suppliers, buyers, and the capital that keeps them liquid.
+            We connect suppliers, buyers, and capital partners on one audited path — from confirmation to settlement records.
           </p>
         </div>
       </section>
@@ -33,12 +33,12 @@ export default function AboutPage() {
           <Reveal delay={1}>
             <div className="mk-problem__aside">
               <p>
-                In Kenya&apos;s pharmaceutical trade, most B2B sales happen on credit. Suppliers deliver stock and then
-                wait 60, 90, sometimes more than 120 days to be paid.
+                In many B2B trades, sales happen on credit. Suppliers deliver now and then wait 60, 90, sometimes more
+                than 120 days to be paid.
               </p>
               <p>
-                {BRAND.name} turns those confirmed receivables into cash today — while the buyer settles at maturity as
-                planned. Everyone keeps trading.
+                {BRAND.name} is a trade receivables securitisation management service: confirmed receivables can move
+                into an SPV path while the buyer settles at maturity as planned — with a full audit trail.
               </p>
             </div>
           </Reveal>
@@ -49,16 +49,16 @@ export default function AboutPage() {
         <div className="container">
           <Reveal>
             <p className="mk-statement__text">
-              Trade credit keeps medicine <span className="mk-statement__lime">moving</span>
+              Trade credit keeps goods <span className="mk-statement__lime">moving</span>
               {' '}— and the money{' '}
               <span className="mk-statement__lime">stuck</span>.
             </p>
           </Reveal>
           <div className="mk-metrics">
             {[
-              ['60–90', 'days — typical payment terms'],
-              ['~70%', 'of formal B2B health trade runs on credit'],
-              ['Months→days', `the gap ${BRAND.name} closes`],
+              ['60–90', 'days — typical B2B payment terms'],
+              ['Credit', 'how much formal trade still runs'],
+              ['Months→days', `the gap ${BRAND.name} helps close`],
             ].map(([n, c], i) => (
               <Reveal key={c} delay={(i + 1) as 1 | 2 | 3}>
                 <div className="mk-metric">

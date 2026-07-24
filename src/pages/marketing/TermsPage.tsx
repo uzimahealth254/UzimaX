@@ -64,7 +64,7 @@ export default function TermsPage() {
               <span className="n">02</span>What IOU Exchange is — and is not
             </h2>
             <p>
-              IOU Exchange is a technology platform that facilitates trade-receivables workflows for health-trade organisations:
+              IOU Exchange is a technology platform that facilitates trade-receivables securitisation management workflows for trade organisations:
               registering invoices and IOUs, confirming receivables between counterparties, assigning receivables to a
               special-purpose vehicle (SPV), and providing settlement visibility.
             </p>

@@ -18,10 +18,10 @@ export default function SolutionsPage() {
         <div className="container mk-hero__inner" style={{ paddingTop: 120, paddingBottom: 56 }}>
           <p className="mk-brand">{BRAND.name}</p>
           <div className="mk-hero__rule" aria-hidden />
-          <h1 style={{ maxWidth: '14ch', fontSize: 'clamp(36px, 5.5vw, 68px)' }}>
-            Working capital, tailored to your role.
+          <h1 style={{ maxWidth: '16ch', fontSize: 'clamp(36px, 5.5vw, 68px)' }}>
+            Securitisation management, tailored to your role.
           </h1>
-          <p className="sub">Whether you sell, buy, or finance — {BRAND.name} fits your side of the trade.</p>
+          <p className="sub">Whether you sell, buy, or finance — {BRAND.name} fits your side of the trade receivables path.</p>
           <div className="jump">
             <a href="#suppliers">Suppliers</a>
             <a href="#buyers">Buyers</a>

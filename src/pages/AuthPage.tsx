@@ -146,7 +146,7 @@ export default function AuthPage() {
               Secure access
             </p>
             <h1 className="mt-3 font-display text-3xl sm:text-4xl lg:text-[2.75rem] font-extrabold leading-[1.1] tracking-tight text-white">
-              Working capital for pharmacy trade
+              {BRAND.tagline}
             </h1>
             <p className="mt-4 text-sm sm:text-base font-medium leading-relaxed text-white/75 max-w-sm">
               Sign in with your organisation credentials to access your role portal.

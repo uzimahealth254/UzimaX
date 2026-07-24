@@ -13,7 +13,9 @@ export const BRAND = {
   privacyEmail: 'privacy@ioux.africa',
   legalEmail: 'legal@ioux.africa',
   fromEmail: 'IOU Exchange <no-reply@ioux.africa>',
-  tagline: 'Working capital for pharmacy trade',
+  tagline: 'Trade receivables securitisation management',
+  description:
+    'IOU Exchange is a trade receivables securitisation management service for suppliers, buyers, and SPVs — from confirmation and assignment through settlement records.',
 } as const;
 
 /** Production CORS allow-list (comma-separated for env) */
