@@ -87,7 +87,7 @@
     name: uzima-portal
     runtime: node
     plan: starter
-    buildCommand: npm install && npm run build
+    buildCommand: npm install --include=dev && npm run build
     startCommand: npm start
     healthCheckPath: /api/v1/health
     envVars:
