@@ -61,12 +61,15 @@ export interface Invoice {
   buyerName: string;
   invoiceNumber: string;
   amount: number;
+  listedAmount?: number;
   currency: string;
   issueDate: string;
   dueDate: string;
   description: string;
   status: InvoiceStatus;
   origin?: InvoiceOrigin;
+  sourcePlatformOrgId?: string | null;
+  sourcePlatformName?: string | null;
   listedAt?: string;
   verifiedAt?: string;
   postedAt?: string;

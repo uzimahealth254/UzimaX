@@ -11,7 +11,7 @@ type Tab = 'organisations' | 'users' | 'invite' | 'create-org' | 'email-log';
 
 const defaultOrgForm = {
   name: '',
-  orgType: 'buyer' as 'buyer' | 'supplier' | 'spv',
+  orgType: 'buyer' as 'buyer' | 'supplier' | 'spv' | 'platform',
   registrationNo: '',
   kraPin: '',
   address: '',
@@ -20,6 +20,7 @@ const defaultOrgForm = {
   ppbRegistration: '',
   ppbLicence: '',
   cmaReference: '',
+  apiNote: '',
   kycStatus: 'pending' as 'pending' | 'verified' | 'rejected',
 };
 
@@ -65,7 +66,7 @@ export default function UsersPage() {
     organisations: { title: 'Organisations', desc: `${organisations.length} registered` },
     users: { title: 'Users', desc: `${(usersQ.data || []).length} accounts` },
     invite: { title: 'Invite user', desc: 'Create user and email temporary password' },
-    'create-org': { title: 'Create organisation', desc: 'Register buyer, supplier, or SPV with KYC fields' },
+    'create-org': { title: 'Create organisation', desc: 'Register buyer, supplier, SPV, or platform (aggregator) with KYC fields' },
     'email-log': { title: 'Email log', desc: 'Recent send attempts (invite, OTP, lifecycle)' },
   }[tab];
 
@@ -112,7 +113,7 @@ export default function UsersPage() {
           </button>
           <button
             type="button"
-            disabled={editingOrgId === o.id || o.orgType === 'platform'}
+            disabled={editingOrgId === o.id}
             className="text-[10px] font-bold px-2 py-1 rounded border border-[#0E1F1A]/15 text-[#0E1F1A] hover:bg-[#0E1F1A]/5"
             onClick={async (e) => {
               e.stopPropagation();
@@ -217,12 +218,15 @@ export default function UsersPage() {
       if (orgForm.address.trim()) payload.address = orgForm.address.trim();
       if (orgForm.contactEmail.trim()) payload.contactEmail = orgForm.contactEmail.trim();
       if (orgForm.contactPhone.trim()) payload.contactPhone = orgForm.contactPhone.trim();
-      if (orgForm.orgType !== 'spv') {
+      if (orgForm.orgType === 'buyer' || orgForm.orgType === 'supplier') {
         if (orgForm.ppbRegistration.trim()) payload.ppbRegistration = orgForm.ppbRegistration.trim();
         if (orgForm.ppbLicence.trim()) payload.ppbLicence = orgForm.ppbLicence.trim();
       }
       if (orgForm.orgType === 'spv' && orgForm.cmaReference.trim()) {
         payload.cmaReference = orgForm.cmaReference.trim();
+      }
+      if (orgForm.orgType === 'platform' && orgForm.apiNote.trim()) {
+        payload.apiNote = orgForm.apiNote.trim();
       }
 
       const { data } = await api.post('/organisations', payload);
@@ -311,6 +315,7 @@ export default function UsersPage() {
                   <option value="supplier">Supplier</option>
                   <option value="buyer">Buyer</option>
                   <option value="spv">SPV</option>
+                  <option value="platform">Platform</option>
                   <option value="admin">Admin</option>
                 </select>
               </div>
@@ -368,6 +373,7 @@ export default function UsersPage() {
                     <option value="buyer">Buyer</option>
                     <option value="supplier">Supplier</option>
                     <option value="spv">SPV</option>
+                    <option value="platform">Platform / aggregator</option>
                   </select>
                 </div>
                 <div>
@@ -423,7 +429,7 @@ export default function UsersPage() {
                     onChange={(e) => setOrgForm({ ...orgForm, contactPhone: e.target.value })}
                   />
                 </div>
-                {orgForm.orgType !== 'spv' && (
+                {(orgForm.orgType === 'buyer' || orgForm.orgType === 'supplier') && (
                   <>
                     <div>
                       <label className="text-[10px] font-semibold text-[#5A6B7D]">PPB registration</label>
@@ -451,6 +457,20 @@ export default function UsersPage() {
                       value={orgForm.cmaReference}
                       onChange={(e) => setOrgForm({ ...orgForm, cmaReference: e.target.value })}
                     />
+                  </div>
+                )}
+                {orgForm.orgType === 'platform' && (
+                  <div className="sm:col-span-2">
+                    <label className="text-[10px] font-semibold text-[#5A6B7D]">API / integration note</label>
+                    <textarea
+                      className="field-input mt-1 text-xs w-full min-h-[72px]"
+                      placeholder="e.g. AfyaX production key scopes, contact for webhook cert"
+                      value={orgForm.apiNote}
+                      onChange={(e) => setOrgForm({ ...orgForm, apiNote: e.target.value })}
+                    />
+                    <p className="text-[10px] text-[#5A6B7D] mt-1">
+                      After create, issue an API key for this org. External invoice posts stamp <span className="font-mono">source_platform_org_id</span>.
+                    </p>
                   </div>
                 )}
               </div>

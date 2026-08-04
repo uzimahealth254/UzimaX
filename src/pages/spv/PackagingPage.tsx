@@ -68,6 +68,7 @@ export default function PackagingPage() {
     },
     { key: 'iou', header: 'IOU ID', primary: true, render: (inv: Invoice) => <span className="font-mono text-xs font-semibold">{inv.iouRegistryId}</span> },
     { key: 'supplier', header: 'Supplier', render: (inv: Invoice) => <span className="font-medium">{inv.supplierName}</span> },
+    { key: 'buyer', header: 'Buyer', render: (inv: Invoice) => <span className="font-medium">{inv.buyerName || '—'}</span> },
     { key: 'amount', header: 'Face value', render: (inv: Invoice) => <span className="font-mono font-semibold">{formatCurrency(inv.amount)}</span> },
   ];
 

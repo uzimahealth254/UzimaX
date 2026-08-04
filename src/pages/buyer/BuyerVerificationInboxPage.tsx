@@ -4,6 +4,8 @@ import PageHeader from '@/components/layout/PageHeader';
 import StatusBadge from '@/components/shared/StatusBadge';
 import ConfirmationModal from '@/components/shared/ConfirmationModal';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { BUYER_REJECT_PRESETS, formatBuyerRejectReason } from '@/lib/docAndDecline';
+import { api } from '@/lib/apiClient';
 import { toast } from 'sonner';
 import { CheckCircle2, XCircle, FileText, ExternalLink } from 'lucide-react';
 
@@ -31,10 +33,42 @@ export default function BuyerVerificationInboxPage() {
   const [standingRef, setStandingRef] = useState('');
   const [standingBank, setStandingBank] = useState('');
   const [committed, setCommitted] = useState(false);
+  const [rejectPreset, setRejectPreset] = useState<string>('invalid_invoice');
+  const [rejectDetail, setRejectDetail] = useState('');
+  const [otp, setOtp] = useState('');
+  const [otpHint, setOtpHint] = useState<string | null>(null);
+  const [otpSending, setOtpSending] = useState(false);
+
+  const requestVerifyOtp = async (id: string) => {
+    setOtpSending(true);
+    try {
+      const { data } = await api.post(`/buyer-verifications/${id}/request-otp`);
+      setOtpHint(data?.demoHint || null);
+      toast.success('OTP sent to your registered contact');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Could not send OTP');
+    } finally {
+      setOtpSending(false);
+    }
+  };
 
   const act = async (id: string, accept: boolean) => {
     if (accept && !committed) {
       toast.error('Confirm commitment to pay before verifying');
+      return;
+    }
+    if (!accept) {
+      if (!rejectPreset) {
+        toast.error('Select a decline reason');
+        return;
+      }
+      if (rejectPreset === 'other' && !rejectDetail.trim()) {
+        toast.error('Please describe the reason');
+        return;
+      }
+    }
+    if (accept && !otp.trim()) {
+      toast.error('Enter the OTP to confirm');
       return;
     }
     setBusyId(id);
@@ -42,20 +76,29 @@ export default function BuyerVerificationInboxPage() {
       await respondToBuyerVerification(
         id,
         accept,
-        accept ? undefined : 'Rejected by buyer',
+        accept ? undefined : formatBuyerRejectReason(rejectPreset, rejectDetail),
         accept
           ? {
               bankStandingOrderRef: standingRef || undefined,
               standingOrderBank: standingBank || undefined,
+              otp: otp.trim(),
+              rejectPreset: undefined,
             }
-          : undefined,
+          : {
+              rejectPreset,
+              rejectDetail: rejectDetail || undefined,
+            },
       );
-      toast.success(accept ? 'Verified — assigned to SPV (standard confirmation track)' : 'Rejected');
+      toast.success(accept ? 'Verified — assigned to SPV (standard confirmation track)' : 'Rejected — supplier notified');
       setRejectId(null);
       setVerifyId(null);
       setCommitted(false);
       setStandingRef('');
       setStandingBank('');
+      setRejectPreset('invalid_invoice');
+      setRejectDetail('');
+      setOtp('');
+      setOtpHint(null);
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Action failed');
     } finally {
@@ -83,6 +126,8 @@ export default function BuyerVerificationInboxPage() {
             const inv = invoices.find((i: any) => i.id === v.invoiceId);
             const busy = busyId === v.id;
             const docs = invoiceDocs(inv);
+            const face = inv ? Number(inv.amount ?? inv.faceValue) : 0;
+            const listed = inv?.listedAmount != null ? Number(inv.listedAmount) : null;
             return (
               <section key={v.id} className="portal-section">
                 <div className="px-3 py-2.5 flex flex-col sm:flex-row sm:items-center gap-2.5 sm:gap-3">
@@ -92,7 +137,9 @@ export default function BuyerVerificationInboxPage() {
                       <StatusBadge status={v.status} />
                     </div>
                     <p className="text-xs text-[#5A6B7D] mt-0.5">
-                      {inv?.supplierName} · {inv ? formatCurrency(inv.amount) : '—'} · Due {inv ? formatDate(inv.dueDate) : '—'}
+                      {inv?.supplierName} · Face {inv ? formatCurrency(face) : '—'}
+                      {listed != null && listed !== face ? ` · Listed ${formatCurrency(listed)}` : ''}
+                      {' · '}Due {inv ? formatDate(inv.dueDate) : '—'}
                     </p>
                     {docs.length > 0 && (
                       <div className="mt-2 pt-2 border-t border-[#0E1F1A]/8">
@@ -132,6 +179,9 @@ export default function BuyerVerificationInboxPage() {
                         setCommitted(false);
                         setStandingRef('');
                         setStandingBank('');
+                        setOtp('');
+                        setOtpHint(null);
+                        void requestVerifyOtp(v.id);
                       }}
                     >
                       <CheckCircle2 size={13} />
@@ -141,7 +191,11 @@ export default function BuyerVerificationInboxPage() {
                       type="button"
                       disabled={busy}
                       className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg border border-[#0E1F1A]/15 text-xs font-semibold text-[#0E1F1A] hover:bg-[#f7faf6] disabled:opacity-50 min-h-[34px]"
-                      onClick={() => setRejectId(v.id)}
+                      onClick={() => {
+                        setRejectId(v.id);
+                        setRejectPreset('invalid_invoice');
+                        setRejectDetail('');
+                      }}
                     >
                       <XCircle size={13} />
                       Reject
@@ -157,7 +211,7 @@ export default function BuyerVerificationInboxPage() {
       <ConfirmationModal
         open={!!verifyId}
         title="Verify and commit to pay?"
-        description="Verification records your acknowledgement of this payable and assigns it to the SPV on the standard confirmation track."
+        description="Verification records your acknowledgement of this payable and assigns it to the SPV on the standard confirmation track. A checker OTP is required."
         confirmLabel="Verify & assign"
         onCancel={() => setVerifyId(null)}
         onConfirm={() => verifyId && act(verifyId, true)}
@@ -196,18 +250,68 @@ export default function BuyerVerificationInboxPage() {
               placeholder="e.g. Equity Bank"
             />
           </div>
+          <div>
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <label className="block text-[11px] font-semibold text-[#0E1F1A]">Confirmation OTP</label>
+              <button
+                type="button"
+                className="text-[11px] font-bold text-[#0E1F1A] hover:underline disabled:opacity-50"
+                disabled={otpSending || !verifyId}
+                onClick={() => verifyId && void requestVerifyOtp(verifyId)}
+              >
+                {otpSending ? 'Sending…' : 'Resend OTP'}
+              </button>
+            </div>
+            <input
+              className="field-input text-xs font-mono tracking-widest"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value)}
+              placeholder="6-digit code"
+              inputMode="numeric"
+              maxLength={8}
+            />
+            {otpHint && (
+              <p className="text-[10px] text-[#5A6B7D] mt-1">Demo code: <span className="font-mono font-bold">{otpHint}</span></p>
+            )}
+          </div>
         </div>
       </ConfirmationModal>
 
       <ConfirmationModal
         open={!!rejectId}
         title="Reject verification?"
-        description="This supplier invoice will be rejected and will not be assigned to the SPV."
+        description="Select why you are declining. The supplier will be notified by email."
         confirmLabel="Reject invoice"
         variant="destructive"
         onCancel={() => setRejectId(null)}
         onConfirm={() => rejectId && act(rejectId, false)}
-      />
+      >
+        <div className="space-y-3 text-left mt-2">
+          <div>
+            <label className="block text-[11px] font-semibold text-[#0E1F1A] mb-1">Reason</label>
+            <select
+              className="field-input text-xs"
+              value={rejectPreset}
+              onChange={(e) => setRejectPreset(e.target.value)}
+            >
+              {BUYER_REJECT_PRESETS.map((p) => (
+                <option key={p.value} value={p.value}>{p.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[11px] font-semibold text-[#0E1F1A] mb-1">
+              Details {rejectPreset === 'other' ? <span className="text-red-600">(required)</span> : <span className="font-normal text-[#5A6B7D]">(optional)</span>}
+            </label>
+            <textarea
+              className="field-input text-xs min-h-[72px]"
+              value={rejectDetail}
+              onChange={(e) => setRejectDetail(e.target.value)}
+              placeholder="Additional context for the supplier"
+            />
+          </div>
+        </div>
+      </ConfirmationModal>
     </div>
   );
 }

@@ -58,6 +58,8 @@ export const signatories = pgTable('signatories', {
   userId: uuid('user_id').notNull().references(() => users.id),
   orgId: uuid('org_id').notNull().references(() => organisations.id),
   roleTitle: text('role_title'),
+  /** maker | checker | both */
+  capacity: text('capacity').notNull().default('checker'),
   approvalCertUrl: text('approval_cert_url'),
   specimenSigUrl: text('specimen_sig_url'),
   isActive: boolean('is_active').default(true),
@@ -80,6 +82,8 @@ export const invoices = pgTable('invoices', {
   originatorId: uuid('originator_id').notNull().references(() => organisations.id),
   buyerOrgId: uuid('buyer_org_id').notNull().references(() => organisations.id),
   supplierOrgId: uuid('supplier_org_id').notNull().references(() => organisations.id),
+  /** Originating aggregator / AfyaX-style platform org (nullable) */
+  sourcePlatformOrgId: uuid('source_platform_org_id').references(() => organisations.id),
   invoiceNumber: text('invoice_number'),
   poReference: text('po_reference'),
   faceValue: numeric('face_value', { precision: 15, scale: 2 }).notNull(),

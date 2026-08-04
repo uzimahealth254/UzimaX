@@ -96,6 +96,7 @@ export async function createBuyerOriginatedInvoice(data: {
   commitmentToPay?: boolean;
   bankStandingOrderRef?: string;
   standingOrderBank?: string;
+  sourcePlatformOrgId?: string | null;
 }, actorId?: string) {
   await assertProgrammeAllows({
     buyerOrgId: data.buyerOrgId,
@@ -116,6 +117,7 @@ export async function createBuyerOriginatedInvoice(data: {
     originatorId: data.buyerOrgId,
     buyerOrgId: data.buyerOrgId,
     supplierOrgId: data.supplierOrgId,
+    sourcePlatformOrgId: data.sourcePlatformOrgId || null,
     invoiceNumber: data.invoiceNumber,
     poReference: data.poReference,
     faceValue: String(data.faceValue),
@@ -179,6 +181,7 @@ export async function createSupplierOriginatedInvoice(data: {
   supplierOrgId: string;
   invoiceNumber?: string;
   faceValue: number;
+  listedAmount?: number;
   currency?: string;
   issueDate: string;
   dueDate: string;
@@ -194,6 +197,11 @@ export async function createSupplierOriginatedInvoice(data: {
     dueDate: data.dueDate,
   });
 
+  const listed = data.listedAmount != null ? data.listedAmount : data.faceValue;
+  if (!(listed > 0) || listed > data.faceValue) {
+    throw new AppError(400, 'invalid_listed_amount', 'listedAmount must be > 0 and ≤ face value');
+  }
+
   const iou = await nextIouRegistryId();
   const [inv] = await db.insert(s.invoices).values({
     iouRegistryId: iou,
@@ -203,6 +211,7 @@ export async function createSupplierOriginatedInvoice(data: {
     supplierOrgId: data.supplierOrgId,
     invoiceNumber: data.invoiceNumber,
     faceValue: String(data.faceValue),
+    listedAmount: String(listed),
     currency: data.currency || 'KES',
     issueDate: data.issueDate,
     dueDate: data.dueDate,
@@ -332,7 +341,7 @@ export async function createAssignment(opts: {
     );
   }
 
-  const face = Number(inv.faceValue);
+  const face = Number(inv.listedAmount ?? inv.faceValue);
   await assertProgrammeAllows({
     buyerOrgId: inv.buyerOrgId,
     faceValue: face,
@@ -468,7 +477,13 @@ export async function createAssignment(opts: {
   return asgn;
 }
 
-export async function respondToOptIn(optInId: string, accept: boolean, userId: string, declineReason?: string) {
+export async function respondToOptIn(
+  optInId: string,
+  accept: boolean,
+  userId: string,
+  declineReason?: string,
+  listedAmount?: number,
+) {
   const [opt] = await db.select().from(s.optIns).where(eq(s.optIns.id, optInId)).limit(1);
   if (!opt) throw new AppError(404, 'not_found', 'Opt-in not found');
   if (opt.status !== 'pending') throw new AppError(400, 'invalid_state', 'Opt-in already responded');
@@ -481,7 +496,14 @@ export async function respondToOptIn(optInId: string, accept: boolean, userId: s
   }).where(eq(s.optIns.id, optInId));
 
   if (accept) {
-    // Path A standard confirmation track (buyer already committed at post)
+    const [inv] = await db.select().from(s.invoices).where(eq(s.invoices.id, opt.invoiceId)).limit(1);
+    if (!inv) throw new AppError(404, 'not_found', 'Invoice not found');
+    const face = Number(inv.faceValue);
+    const listed = listedAmount != null ? listedAmount : (inv.listedAmount != null ? Number(inv.listedAmount) : face);
+    if (!(listed > 0) || listed > face) {
+      throw new AppError(400, 'invalid_listed_amount', 'Amount to sell must be > 0 and ≤ face value');
+    }
+    await db.update(s.invoices).set({ listedAmount: String(listed), updatedAt: new Date() }).where(eq(s.invoices.id, inv.id));
     const asgn = await createAssignment({ invoiceId: opt.invoiceId, type: 'standard_confirmation', actorId: userId });
     return { optIn: opt, assignment: asgn };
   }
@@ -514,9 +536,16 @@ export async function respondToBuyerVerification(
   if (!v) throw new AppError(404, 'not_found', 'Verification not found');
   if (v.status !== 'pending') throw new AppError(400, 'invalid_state', 'Already responded');
 
+  if (!accept) {
+    const reason = (rejectReason || '').trim();
+    if (!reason) {
+      throw new AppError(400, 'reason_required', 'A decline reason is required when rejecting verification');
+    }
+  }
+
   await db.update(s.buyerVerifications).set({
     status: accept ? 'verified' : 'rejected',
-    rejectReason: accept ? null : (rejectReason || 'Rejected'),
+    rejectReason: accept ? null : (rejectReason || '').trim(),
     verifiedBy: userId,
     verifiedAt: new Date(),
   }).where(eq(s.buyerVerifications.id, verificationId));

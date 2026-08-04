@@ -125,7 +125,15 @@ export default function OffersPage() {
     },
     { key: 'iou', header: 'IOU ID', primary: true, render: (inv: Invoice) => <IOURegistryId id={inv.iouRegistryId} /> },
     { key: 'supplier', header: 'Supplier', render: (inv: Invoice) => <span className="font-medium">{inv.supplierName}</span> },
-    { key: 'amount', header: 'Face value', render: (inv: Invoice) => <span className="font-mono font-semibold">{formatCurrency(inv.amount)}</span> },
+    { key: 'buyer', header: 'Buyer', render: (inv: Invoice) => <span className="font-medium">{inv.buyerName || '—'}</span> },
+    { key: 'amount', header: 'Face / listed', render: (inv: Invoice) => (
+      <span className="font-mono font-semibold">
+        {formatCurrency(inv.amount)}
+        {inv.listedAmount != null && Number(inv.listedAmount) !== Number(inv.amount)
+          ? <span className="text-[#5A6B7D] font-normal"> · {formatCurrency(Number(inv.listedAmount))}</span>
+          : null}
+      </span>
+    ) },
     {
       key: 'action',
       header: '',

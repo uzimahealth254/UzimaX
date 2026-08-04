@@ -24,6 +24,7 @@ export default function PostSupplierInvoicePage() {
     buyerOrgId: '',
     invoiceNumber: '',
     amount: '',
+    listedAmount: '',
     issueDate: '',
     dueDate: '',
     description: '',
@@ -38,12 +39,23 @@ export default function PostSupplierInvoicePage() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (docs.length < 1) {
+      toast.error('Attach at least one invoice, proposal, or work-evidence document');
+      return;
+    }
+    const face = Number(form.amount);
+    const listed = form.listedAmount ? Number(form.listedAmount) : face;
+    if (!(listed > 0) || listed > face) {
+      toast.error('Amount to sell must be greater than 0 and not exceed face value');
+      return;
+    }
     setLoading(true);
     try {
       await postSupplierInvoice({
         buyerOrgId: form.buyerOrgId,
         invoiceNumber: form.invoiceNumber,
-        amount: Number(form.amount),
+        amount: face,
+        listedAmount: listed,
         currency: form.currency,
         issueDate: form.issueDate,
         dueDate: form.dueDate,
@@ -53,7 +65,7 @@ export default function PostSupplierInvoicePage() {
           name: d.name,
           url: d.url || d.fileUrl,
           fileUrl: d.fileUrl || d.url,
-          docType: d.docType || 'supporting',
+          docType: d.docType || 'invoice_proposal',
         })),
       });
       toast.success('Invoice recorded — awaiting buyer verification');
@@ -121,6 +133,19 @@ export default function PostSupplierInvoicePage() {
               />
             </div>
             <div>
+              <label className="block text-xs font-semibold text-[#0E1F1A] mb-1">
+                Amount to sell <span className="font-normal text-[#5A6B7D]">(partial OK)</span>
+              </label>
+              <input
+                type="number"
+                min={1}
+                className="field-input"
+                value={form.listedAmount}
+                onChange={(e) => setForm({ ...form, listedAmount: e.target.value })}
+                placeholder={form.amount || 'Defaults to face value'}
+              />
+            </div>
+            <div>
               <label className="block text-xs font-semibold text-[#0E1F1A] mb-1">Currency</label>
               <input value={form.currency} readOnly className="field-input opacity-80" />
             </div>
@@ -157,16 +182,18 @@ export default function PostSupplierInvoicePage() {
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-[#0E1F1A] mb-1">Supporting documents</label>
+            <label className="block text-xs font-semibold text-[#0E1F1A] mb-1">
+              Invoice / proposal / work evidence <span className="text-red-600">*</span>
+            </label>
             <p className="text-[11px] text-[#5A6B7D] mb-1.5">
-              Attach evidence the buyer will review before verifying.
+              Required for audit and buyer verification — attach at least one document.
             </p>
-            <DocumentAttach onChange={setDocs} />
+            <DocumentAttach onChange={setDocs} defaultDocType="invoice_proposal" />
           </div>
           <div className="pt-2 border-t border-[#0E1F1A]/8 flex justify-end">
             <button
               type="submit"
-              disabled={loading || buyers.length === 0}
+              disabled={loading || buyers.length === 0 || docs.length < 1}
               className="inline-flex items-center gap-1.5 rounded-lg bg-[#0E1F1A] text-white px-4 py-2 text-xs font-bold hover:bg-[#1A3A2E] disabled:opacity-60 min-h-[40px]"
             >
               {loading ? 'Submitting…' : 'Submit for buyer verification'}

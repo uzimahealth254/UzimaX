@@ -19,6 +19,7 @@ export default function SPVDashboard() {
   const totalAUM = packages.reduce((sum, p) => sum + p.totalFaceValue, 0);
   const pendingConsents = consents.filter(c => c.status === 'pending');
   const assignedCount = invoices.filter(i => i.status === 'assigned').length;
+  const openToOffer = invoices.filter(i => ['verified', 'listed'].includes(i.status)).length;
   const userNotifs = notifications.filter(n => n.userId === user?.id && !n.read);
 
   return (
@@ -51,6 +52,21 @@ export default function SPVDashboard() {
         <StatCard label="Total AUM" value={formatCurrency(totalAUM)} icon={DollarSign} accent="forest" />
       </div>
 
+      <div className="portal-metrics mt-2">
+        <button type="button" className="text-left" onClick={() => navigate('/spv/assignments')}>
+          <StatCard label="Assigned" value={assignedCount} icon={Database} accent="forest" />
+        </button>
+        <button type="button" className="text-left" onClick={() => navigate('/spv/assignments')}>
+          <StatCard label="Pending consents" value={pendingConsents.length} icon={Send} accent="gold" />
+        </button>
+        <button type="button" className="text-left" onClick={() => navigate('/spv/registry')}>
+          <StatCard label="Open to offer" value={openToOffer} icon={Layers} accent="lime" />
+        </button>
+        <button type="button" className="text-left" onClick={() => navigate('/spv/offers')}>
+          <StatCard label="Offers pending" value={activeOffers.length} icon={DollarSign} accent="forest" />
+        </button>
+      </div>
+
       <ProfileCompletionCard />
 
       <div className="portal-split portal-split--aside">
@@ -70,15 +86,20 @@ export default function SPVDashboard() {
           </header>
           <div className="divide-y divide-[#0E1F1A]/8">
             {[
-              { label: 'Verified (ready for offer)', value: verifiedInvoices.length },
-              { label: 'Offers pending response', value: activeOffers.length },
-              { label: 'Awaiting buyer consent', value: pendingConsents.length },
-              { label: 'Assigned (packagable)', value: assignedCount },
+              { label: 'Verified (ready for offer)', value: verifiedInvoices.length, to: '/spv/offers' },
+              { label: 'Offers pending response', value: activeOffers.length, to: '/spv/offers' },
+              { label: 'Awaiting buyer consent', value: pendingConsents.length, to: '/spv/assignments' },
+              { label: 'Assigned (packagable)', value: assignedCount, to: '/spv/assignments' },
             ].map(row => (
-              <div key={row.label} className="flex items-center justify-between px-3 py-2.5">
+              <button
+                key={row.label}
+                type="button"
+                onClick={() => navigate(row.to)}
+                className="flex w-full items-center justify-between px-3 py-2.5 text-left hover:bg-[#f7faf6]"
+              >
                 <span className="text-xs text-[#5A6B7D]">{row.label}</span>
                 <span className="text-xs font-mono font-bold text-[#0E1F1A]">{row.value}</span>
-              </div>
+              </button>
             ))}
           </div>
         </section>

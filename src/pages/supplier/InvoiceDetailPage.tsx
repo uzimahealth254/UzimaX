@@ -1,11 +1,11 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useData } from '@/hooks/usePlatformData';
-import { useActor } from '@/hooks/useActor';
 import PageHeader from '@/components/layout/PageHeader';
 import StatusBadge from '@/components/shared/StatusBadge';
 import LifecycleTimeline from '@/components/shared/LifecycleTimeline';
 import ConfirmationModal from '@/components/shared/ConfirmationModal';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { api } from '@/lib/apiClient';
 import { ArrowLeft, FileText, Building2, Calendar, DollarSign } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -14,8 +14,9 @@ export default function InvoiceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { invoices, offers, respondToOffer } = useData();
-  const actor = useActor();
   const [confirmModal, setConfirmModal] = useState<{ offerId: string; accept: boolean } | null>(null);
+  const [otp, setOtp] = useState('');
+  const [otpHint, setOtpHint] = useState<string | null>(null);
 
   const invoice = invoices.find(inv => inv.id === id);
   const invoiceOffers = offers.filter(o => o.invoiceId === id);
@@ -37,11 +38,32 @@ export default function InvoiceDetailPage() {
     );
   }
 
-  const handleOfferResponse = () => {
+  const openAccept = async (offerId: string) => {
+    setConfirmModal({ offerId, accept: true });
+    setOtp('');
+    setOtpHint(null);
+    try {
+      const { data } = await api.post(`/offers/${offerId}/request-otp`);
+      setOtpHint(data?.demoHint || null);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Could not send OTP');
+    }
+  };
+
+  const handleOfferResponse = async () => {
     if (!confirmModal) return;
-    respondToOffer(confirmModal.offerId, confirmModal.accept, actor);
-    toast.success(confirmModal.accept ? 'Offer accepted successfully' : 'Offer rejected');
-    setConfirmModal(null);
+    if (confirmModal.accept && !otp.trim()) {
+      toast.error('Enter OTP to accept');
+      return;
+    }
+    try {
+      await respondToOffer(confirmModal.offerId, confirmModal.accept, confirmModal.accept ? otp.trim() : undefined);
+      toast.success(confirmModal.accept ? 'Offer accepted successfully' : 'Offer rejected');
+      setConfirmModal(null);
+      setOtp('');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Action failed');
+    }
   };
 
   return (
@@ -166,7 +188,7 @@ export default function InvoiceDetailPage() {
                     <div className="flex gap-1.5">
                       <button
                         type="button"
-                        onClick={() => setConfirmModal({ offerId: offer.id, accept: true })}
+                        onClick={() => void openAccept(offer.id)}
                         className="min-h-[32px] px-2.5 py-1 text-[11px] font-bold rounded-md bg-[#0E1F1A] text-white hover:bg-[#1A3A2E]"
                       >
                         Accept
@@ -192,14 +214,28 @@ export default function InvoiceDetailPage() {
         title={confirmModal?.accept ? 'Accept offer?' : 'Reject offer?'}
         description={
           confirmModal?.accept
-            ? 'Accepting this offer cannot be undone.'
+            ? 'Accepting requires checker OTP and cannot be undone.'
             : 'This offer will be rejected.'
         }
         confirmLabel={confirmModal?.accept ? 'Accept' : 'Reject'}
         variant={confirmModal?.accept ? 'default' : 'destructive'}
-        onConfirm={handleOfferResponse}
-        onCancel={() => setConfirmModal(null)}
-      />
+        onConfirm={() => void handleOfferResponse()}
+        onCancel={() => { setConfirmModal(null); setOtp(''); }}
+      >
+        {confirmModal?.accept && (
+          <div className="text-left mt-2">
+            <label className="block text-[11px] font-semibold text-[#0E1F1A] mb-1">Confirmation OTP</label>
+            <input
+              className="field-input text-xs font-mono tracking-widest"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value)}
+              placeholder="6-digit code"
+              maxLength={8}
+            />
+            {otpHint && <p className="text-[10px] text-[#5A6B7D] mt-1">Demo: <span className="font-mono font-bold">{otpHint}</span></p>}
+          </div>
+        )}
+      </ConfirmationModal>
     </div>
   );
 }

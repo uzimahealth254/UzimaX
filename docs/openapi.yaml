@@ -188,11 +188,14 @@ paths:
   /api/v1/external/invoices:
     post:
       summary: AfyaX alias for POST /invoices (API key invoices:write)
+      description: >
+        When the API key belongs to a platform org, the created invoice is stamped with
+        source_platform_org_id (IOUX source-of-truth; platform ID identifies origin).
       tags: [Invoices]
       security: [apiKeyAuth: []]
       responses:
         "201":
-          description: Created with invoiceId + iouRegistryId
+          description: Created with invoiceId + iouRegistryId (+ sourcePlatformOrgId when platform)
   /api/v1/invoices/{id}:
     get:
       summary: Invoice detail + status history (IDOR protected)

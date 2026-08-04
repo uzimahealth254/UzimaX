@@ -368,7 +368,9 @@
   overflow: hidden;
 }
 .uzima-site .hero-full {
-  min-height: 100vh;
+  height: 100dvh;
+  max-height: 100dvh;
+  min-height: 0;
 }
 .uzima-site .hero-tall {
   min-height: 62vh;
@@ -1436,7 +1438,9 @@
 /* ===== Editorial marketing system (post-rectangle) ===== */
 .uzima-site .mk-hero {
   position: relative;
-  min-height: min(92vh, 920px);
+  height: 100dvh;
+  max-height: 100dvh;
+  min-height: 0;
   display: flex;
   align-items: flex-end;
   overflow: hidden;
@@ -1468,7 +1472,7 @@
   position: relative;
   z-index: 2;
   width: 100%;
-  padding: 140px 0 72px;
+  padding: clamp(88px, 14vh, 140px) 0 clamp(40px, 8vh, 72px);
 }
 .uzima-site .mk-brand {
   font-family: 'Space Grotesk', sans-serif;
@@ -1480,17 +1484,24 @@
   margin: 0 0 18px;
 }
 .uzima-site .mk-hero h1 {
-  font-size: clamp(42px, 7.2vw, 92px);
+  font-size: clamp(32px, 6.2vw + 1.2vh, 92px);
   max-width: 11ch;
   color: #f3faf5;
-  margin: 0 0 20px;
+  margin: 0 0 clamp(12px, 2vh, 20px);
+  line-height: 1.05;
 }
 .uzima-site .mk-hero .sub {
   max-width: 38ch;
-  font-size: clamp(16px, 1.5vw, 19px);
+  font-size: clamp(15px, 1.4vw, 19px);
   color: rgba(243, 250, 245, 0.78);
-  margin: 0 0 28px;
-  line-height: 1.55;
+  margin: 0 0 clamp(18px, 3vh, 28px);
+  line-height: 1.5;
+}
+.uzima-site .mk-hero .jump {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
 }
 .uzima-site .mk-hero__rule {
   width: 72px;
@@ -1882,6 +1893,12 @@
   background: var(--forest-deep);
   position: relative;
   overflow: hidden;
+  color: #f3faf5;
+}
+.uzima-site .mk-statement p,
+.uzima-site .mk-statement .sub,
+.uzima-site .mk-statement .lead {
+  color: var(--white-80);
 }
 .uzima-site .mk-statement__text {
   font-family: 'Space Grotesk', sans-serif;

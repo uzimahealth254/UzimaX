@@ -29,16 +29,28 @@ interface ApiDataContextType {
   listInvoice: (data: any, actor?: Actor) => Promise<any>;
   postBuyerIOU: (data: any, actor?: Actor) => Promise<any>;
   postSupplierInvoice: (data: any) => Promise<any>;
-  respondToOptIn: (optInId: string, accept: boolean, declineReason?: string, actor?: Actor) => Promise<any>;
+  respondToOptIn: (
+    optInId: string,
+    accept: boolean,
+    declineReason?: string,
+    actor?: Actor,
+    extras?: { listedAmount?: number; otp?: string },
+  ) => Promise<any>;
   respondToBuyerVerification: (
     id: string,
     accept: boolean,
     reason?: string,
-    extras?: { bankStandingOrderRef?: string; standingOrderBank?: string },
+    extras?: {
+      bankStandingOrderRef?: string;
+      standingOrderBank?: string;
+      otp?: string;
+      rejectPreset?: string;
+      rejectDetail?: string;
+    },
   ) => Promise<any>;
   updateInvoiceStatus: (invoiceId: string, status: string, actor?: Actor) => void;
   makeOffer: (offer: any, actor?: Actor) => Promise<any>;
-  respondToOffer: (offerId: string, accept: boolean, actor?: Actor) => Promise<any>;
+  respondToOffer: (offerId: string, accept: boolean, otp?: string) => Promise<any>;
   requestConsent: (consent: any, actor?: Actor) => Promise<any>;
   signConsent: (consentId: string, approve: boolean, actor?: Actor, otp?: string, reason?: string) => Promise<any>;
   requestConsentOtp: (consentId: string) => Promise<any>;
@@ -55,11 +67,13 @@ function mapInvoice(inv: any) {
   return {
     ...inv,
     amount: Number(inv.faceValue ?? inv.amount ?? 0),
+    listedAmount: inv.listedAmount != null ? Number(inv.listedAmount) : undefined,
     supplierId: inv.supplierOrgId,
     buyerId: inv.buyerOrgId,
     supplierName: inv.supplierName,
     buyerName: inv.buyerName,
     origin: inv.origin,
+    sourcePlatformOrgId: inv.sourcePlatformOrgId || null,
   };
 }
 
@@ -155,6 +169,9 @@ export function usePlatformData() {
     ...mapInvoice(inv),
     supplierName: orgMap[inv.supplierOrgId] || inv.supplierOrgId,
     buyerName: orgMap[inv.buyerOrgId] || inv.buyerOrgId,
+    sourcePlatformName: inv.sourcePlatformOrgId
+      ? (orgMap[inv.sourcePlatformOrgId] || inv.sourcePlatformOrgId)
+      : null,
   }));
 
   const invalidate = () => {
@@ -185,6 +202,7 @@ export function usePlatformData() {
       buyerOrgId: data.buyerId || data.buyerOrgId,
       invoiceNumber: data.invoiceNumber,
       faceValue: data.amount || data.faceValue,
+      listedAmount: data.listedAmount,
       currency: data.currency || 'KES',
       issueDate: data.issueDate,
       dueDate: data.dueDate,
@@ -199,8 +217,19 @@ export function usePlatformData() {
 
   const listInvoice = postSupplierInvoice;
 
-  const respondToOptIn = useCallback(async (optInId: string, accept: boolean, declineReason?: string) => {
-    const { data } = await api.post(`/opt-ins/${optInId}/respond`, { accept, declineReason });
+  const respondToOptIn = useCallback(async (
+    optInId: string,
+    accept: boolean,
+    declineReason?: string,
+    _actor?: Actor,
+    extras?: { listedAmount?: number; otp?: string },
+  ) => {
+    const { data } = await api.post(`/opt-ins/${optInId}/respond`, {
+      accept,
+      declineReason,
+      listedAmount: extras?.listedAmount,
+      otp: extras?.otp,
+    });
     invalidate();
     return data;
   }, [qc]);
@@ -209,13 +238,22 @@ export function usePlatformData() {
     id: string,
     accept: boolean,
     rejectReason?: string,
-    extras?: { bankStandingOrderRef?: string; standingOrderBank?: string },
+    extras?: {
+      bankStandingOrderRef?: string;
+      standingOrderBank?: string;
+      otp?: string;
+      rejectPreset?: string;
+      rejectDetail?: string;
+    },
   ) => {
     const { data } = await api.post(`/buyer-verifications/${id}/respond`, {
       accept,
       rejectReason,
+      rejectPreset: extras?.rejectPreset,
+      rejectDetail: extras?.rejectDetail,
       bankStandingOrderRef: extras?.bankStandingOrderRef,
       standingOrderBank: extras?.standingOrderBank,
+      otp: extras?.otp,
     });
     invalidate();
     return data;
@@ -231,8 +269,8 @@ export function usePlatformData() {
     return data;
   }, [qc]);
 
-  const respondToOffer = useCallback(async (offerId: string, accept: boolean) => {
-    const { data } = await api.post(`/offers/${offerId}/respond`, { accept });
+  const respondToOffer = useCallback(async (offerId: string, accept: boolean, otp?: string) => {
+    const { data } = await api.post(`/offers/${offerId}/respond`, { accept, otp });
     invalidate();
     return data;
   }, [qc]);

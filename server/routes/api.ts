@@ -353,9 +353,11 @@ const invoiceCreateSchema = z.object({
     fileUrl: z.string().optional(),
     docType: z.string().optional(),
   }).passthrough()).optional(),
+  listedAmount: z.number().positive().optional(),
   commitmentToPay: z.boolean().optional(),
   bankStandingOrderRef: z.string().max(128).optional(),
   standingOrderBank: z.string().max(128).optional(),
+  sourcePlatformOrgId: z.string().uuid().optional(),
 });
 
 apiRouter.post('/invoices', authenticateAny, validate(invoiceCreateSchema), async (req, res, next) => {
@@ -437,10 +439,18 @@ apiRouter.post('/invoices', authenticateAny, validate(invoiceCreateSchema), asyn
     if (user.role === 'supplier') {
       supplierOrgId = user.orgId!;
       if (!buyerOrgId) throw new AppError(400, 'validation_error', 'buyerOrgId required');
+      const docs = body.supportingDocs || [];
+      if (!Array.isArray(docs) || docs.length < 1) {
+        throw new AppError(400, 'docs_required', 'Attach at least one invoice, proposal, or work-evidence document');
+      }
+      const listed = body.listedAmount != null ? Number(body.listedAmount) : face;
+      if (!(listed > 0) || listed > face) {
+        throw new AppError(400, 'invalid_listed_amount', 'listedAmount must be > 0 and ≤ face value');
+      }
       const result = await createSupplierOriginatedInvoice({
         buyerOrgId, supplierOrgId, invoiceNumber: body.invoiceNumber,
-        faceValue: face, currency: body.currency, issueDate: body.issueDate, dueDate: body.dueDate,
-        description: body.description, supportingDocs: body.supportingDocs,
+        faceValue: face, listedAmount: listed, currency: body.currency, issueDate: body.issueDate, dueDate: body.dueDate,
+        description: body.description, supportingDocs: docs,
         commitmentToPay: body.commitmentToPay,
         bankStandingOrderRef: body.bankStandingOrderRef,
       }, user.userId);
@@ -478,6 +488,9 @@ apiRouter.post('/external/invoices', apiKeyAuth, requireScope('invoices:write'),
     if (!isPlatform && buyerOrgId !== client.orgId) {
       throw new AppError(403, 'forbidden', 'API key cannot create invoices for other buyers');
     }
+    const sourcePlatformOrgId = isPlatform
+      ? (body.sourcePlatformOrgId || client.orgId)
+      : (body.sourcePlatformOrgId || null);
     const result = await createBuyerOriginatedInvoice({
       buyerOrgId, supplierOrgId,
       invoiceNumber: body.invoiceNumber, poReference: body.poReference,
@@ -487,12 +500,14 @@ apiRouter.post('/external/invoices', apiKeyAuth, requireScope('invoices:write'),
       installmentSchedule: body.installmentSchedule, origin: 'api_upload',
       commitmentToPay: body.commitmentToPay,
       bankStandingOrderRef: body.bankStandingOrderRef,
+      sourcePlatformOrgId,
     });
     res.status(201).json({
       invoiceId: result.invoice.id,
       id: result.invoice.id,
       iouRegistryId: result.invoice.iouRegistryId,
       status: result.invoice.status,
+      sourcePlatformOrgId: result.invoice.sourcePlatformOrgId,
     });
   } catch (e) { next(e); }
 });
@@ -549,13 +564,40 @@ apiRouter.get('/opt-ins', authenticate, authorize('supplier', 'admin', 'spv'), a
 apiRouter.post('/opt-ins/:id/respond', authenticate, authorize('supplier', 'admin'), validate(z.object({
   accept: z.boolean(),
   declineReason: z.string().optional(),
+  listedAmount: z.number().positive().optional(),
+  otp: z.string().optional(),
 })), async (req, res, next) => {
   try {
     const [opt] = await db.select().from(s.optIns).where(eq(s.optIns.id, req.params.id)).limit(1);
     if (!opt) throw new AppError(404, 'not_found', 'Opt-in not found');
     assertSupplierOrg(req.user!, opt.supplierOrgId);
-    const result = await respondToOptIn(req.params.id, req.body.accept, req.user!.userId, req.body.declineReason);
+    if (req.body.accept) {
+      const { assertCheckerOtp } = await import('../lib/makerChecker.js');
+      await assertCheckerOtp(req.user!, `opt_in:${req.params.id}`, req.body.otp);
+    }
+    const result = await respondToOptIn(
+      req.params.id,
+      req.body.accept,
+      req.user!.userId,
+      req.body.declineReason,
+      req.body.listedAmount,
+    );
     res.json(result);
+  } catch (e) { next(e); }
+});
+
+apiRouter.post('/opt-ins/:id/request-otp', authenticate, authorize('supplier', 'admin'), async (req, res, next) => {
+  try {
+    const [opt] = await db.select().from(s.optIns).where(eq(s.optIns.id, req.params.id)).limit(1);
+    if (!opt) throw new AppError(404, 'not_found', 'Opt-in not found');
+    assertSupplierOrg(req.user!, opt.supplierOrgId);
+    if (opt.status !== 'pending') throw new AppError(400, 'invalid_state', 'Already responded');
+    const hint = await issueOtp({
+      userId: req.user!.userId,
+      purpose: `opt_in:${opt.id}`,
+      email: req.user!.email,
+    });
+    res.json({ otpSent: true, ...hint });
   } catch (e) { next(e); }
 });
 
@@ -572,25 +614,62 @@ apiRouter.get('/buyer-verifications', authenticate, authorize('buyer', 'admin', 
 
 apiRouter.post('/buyer-verifications/:id/respond', authenticate, authorize('buyer', 'admin'), validate(z.object({
   accept: z.boolean(),
-  rejectReason: z.string().optional(),
+  rejectPreset: z.enum(['invalid_invoice', 'not_authentic', 'amount_mismatch', 'suspected_fraud', 'other']).optional(),
+  rejectDetail: z.string().max(500).optional(),
+  rejectReason: z.string().max(600).optional(),
   bankStandingOrderRef: z.string().max(128).optional(),
   standingOrderBank: z.string().max(128).optional(),
+  otp: z.string().optional(),
+}).superRefine((body, ctx) => {
+  if (body.accept) return;
+  if (body.rejectReason?.trim()) return;
+  if (!body.rejectPreset) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'rejectPreset or rejectReason is required when declining', path: ['rejectPreset'] });
+    return;
+  }
+  if (body.rejectPreset === 'other' && !(body.rejectDetail || '').trim()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Detail required when preset is other', path: ['rejectDetail'] });
+  }
 })), async (req, res, next) => {
   try {
     const [v] = await db.select().from(s.buyerVerifications).where(eq(s.buyerVerifications.id, req.params.id)).limit(1);
     if (!v) throw new AppError(404, 'not_found', 'Verification not found');
     assertBuyerOrg(req.user!, v.buyerOrgId);
+    const { formatBuyerRejectReason } = await import('../lib/declineReasons.js');
+    const reason = req.body.accept
+      ? undefined
+      : (req.body.rejectReason?.trim()
+        || formatBuyerRejectReason(req.body.rejectPreset || 'other', req.body.rejectDetail));
+    if (req.body.accept) {
+      const { assertCheckerOtp } = await import('../lib/makerChecker.js');
+      await assertCheckerOtp(req.user!, `buyer_verify:${req.params.id}`, req.body.otp);
+    }
     const result = await respondToBuyerVerification(
       req.params.id,
       req.body.accept,
       req.user!.userId,
-      req.body.rejectReason,
+      reason,
       {
         bankStandingOrderRef: req.body.bankStandingOrderRef,
         standingOrderBank: req.body.standingOrderBank,
       },
     );
     res.json(result);
+  } catch (e) { next(e); }
+});
+
+apiRouter.post('/buyer-verifications/:id/request-otp', authenticate, authorize('buyer', 'admin'), async (req, res, next) => {
+  try {
+    const [v] = await db.select().from(s.buyerVerifications).where(eq(s.buyerVerifications.id, req.params.id)).limit(1);
+    if (!v) throw new AppError(404, 'not_found', 'Verification not found');
+    assertBuyerOrg(req.user!, v.buyerOrgId);
+    if (v.status !== 'pending') throw new AppError(400, 'invalid_state', 'Already responded');
+    const hint = await issueOtp({
+      userId: req.user!.userId,
+      purpose: `buyer_verify:${v.id}`,
+      email: req.user!.email,
+    });
+    res.json({ otpSent: true, ...hint });
   } catch (e) { next(e); }
 });
 
@@ -637,7 +716,7 @@ apiRouter.post('/offers', authenticate, authorize('spv', 'admin'), validate(z.ob
     const [inv] = await db.select().from(s.invoices).where(eq(s.invoices.id, req.body.invoiceId)).limit(1);
     if (!inv) throw new AppError(404, 'not_found', 'Invoice not found');
     const [spv] = await db.select().from(s.organisations).where(eq(s.organisations.orgType, 'spv')).limit(1);
-    const face = Number(inv.faceValue);
+    const face = Number(inv.listedAmount ?? inv.faceValue);
     const tenor = computeTenorDays(inv.issueDate, inv.dueDate);
     const bps = req.body.discountRateBps ?? Math.round((req.body.discountRate || priceReceivable({ faceValue: face, tenorDays: tenor }).recommendedDiscount) * 100);
     const { assertProgrammeAllows } = await import('../services/programme.js');
@@ -677,6 +756,7 @@ apiRouter.post('/offers', authenticate, authorize('spv', 'admin'), validate(z.ob
 
 apiRouter.post('/offers/:id/respond', authenticate, authorize('supplier', 'admin'), validate(z.object({
   accept: z.boolean(),
+  otp: z.string().optional(),
 })), async (req, res, next) => {
   try {
     const [offer] = await db.select().from(s.purchaseOffers).where(eq(s.purchaseOffers.id, req.params.id)).limit(1);
@@ -684,6 +764,10 @@ apiRouter.post('/offers/:id/respond', authenticate, authorize('supplier', 'admin
     const [inv] = await db.select().from(s.invoices).where(eq(s.invoices.id, offer.invoiceId)).limit(1);
     assertInvoiceAccess(req.user!, inv);
     assertSupplierOrg(req.user!, inv.supplierOrgId);
+    if (req.body.accept) {
+      const { assertCheckerOtp } = await import('../lib/makerChecker.js');
+      await assertCheckerOtp(req.user!, `offer:${req.params.id}`, req.body.otp);
+    }
     await db.update(s.purchaseOffers).set({
       status: req.body.accept ? 'accepted' : 'declined',
       respondedAt: new Date(),
@@ -728,6 +812,22 @@ apiRouter.post('/offers/:id/respond', authenticate, authorize('supplier', 'admin
       emailSubject: emailSubjects.offerDeclined(iou),
     });
     res.json({ offer });
+  } catch (e) { next(e); }
+});
+
+apiRouter.post('/offers/:id/request-otp', authenticate, authorize('supplier', 'admin'), async (req, res, next) => {
+  try {
+    const [offer] = await db.select().from(s.purchaseOffers).where(eq(s.purchaseOffers.id, req.params.id)).limit(1);
+    if (!offer) throw new AppError(404, 'not_found', 'Offer not found');
+    const [inv] = await db.select().from(s.invoices).where(eq(s.invoices.id, offer.invoiceId)).limit(1);
+    assertSupplierOrg(req.user!, inv.supplierOrgId);
+    if (offer.status !== 'pending') throw new AppError(400, 'invalid_state', 'Offer is not pending');
+    const hint = await issueOtp({
+      userId: req.user!.userId,
+      purpose: `offer:${offer.id}`,
+      email: req.user!.email,
+    });
+    res.json({ otpSent: true, ...hint });
   } catch (e) { next(e); }
 });
 
@@ -1367,6 +1467,7 @@ apiRouter.post('/signatories', authenticate, validate(z.object({
   userId: z.string().uuid(),
   orgId: z.string().uuid().optional(),
   roleTitle: z.string().optional(),
+  capacity: z.enum(['maker', 'checker', 'both']).optional(),
 })), async (req, res, next) => {
   try {
     const orgId = req.body.orgId || req.user!.orgId;
@@ -1378,6 +1479,7 @@ apiRouter.post('/signatories', authenticate, validate(z.object({
       userId: req.body.userId,
       orgId,
       roleTitle: req.body.roleTitle || null,
+      capacity: req.body.capacity || 'checker',
       isActive: true,
     }).returning();
     res.status(201).json(row);
@@ -1386,6 +1488,7 @@ apiRouter.post('/signatories', authenticate, validate(z.object({
 
 apiRouter.patch('/signatories/:id', authenticate, validate(z.object({
   roleTitle: z.string().optional(),
+  capacity: z.enum(['maker', 'checker', 'both']).optional(),
   isActive: z.boolean().optional(),
   approvalCertUrl: z.string().optional(),
   specimenSigUrl: z.string().optional(),
@@ -1526,7 +1629,7 @@ apiRouter.get('/admin/users', authenticate, authorize('admin'), async (_req, res
 apiRouter.post('/admin/users/invite', authenticate, authorize('admin'), validate(z.object({
   email: z.string().email(),
   fullName: z.string().min(1).optional(),
-  role: z.enum(['supplier', 'buyer', 'spv', 'admin']),
+  role: z.enum(['supplier', 'buyer', 'spv', 'platform', 'admin']),
   orgId: z.string().uuid().optional(),
   temporaryPassword: z.string().min(12).optional(),
 })), async (req, res, next) => {
@@ -2005,6 +2108,7 @@ apiRouter.post('/organisations', authenticate, authorize('admin'), validate(z.ob
   ppbRegistration: z.string().optional(),
   ppbLicence: z.string().optional(),
   cmaReference: z.string().optional(),
+  apiNote: z.string().max(2000).optional(),
   kycStatus: z.enum(['pending', 'verified', 'rejected']).optional(),
 })), async (req, res, next) => {
   try {
@@ -2024,6 +2128,7 @@ apiRouter.post('/organisations', authenticate, authorize('admin'), validate(z.ob
         ppbRegistration: body.ppbRegistration || null,
         ppbLicence: body.ppbLicence || null,
         cmaReference: body.cmaReference || null,
+        apiNote: body.apiNote || null,
         kycStatus: body.kycStatus || 'pending',
       },
     }).returning();

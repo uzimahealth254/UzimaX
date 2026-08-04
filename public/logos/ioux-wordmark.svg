@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <!-- Standalone IOUX wordmark in rounded space (extract for PDF / JPEG) -->
+  <rect width="512" height="512" rx="112" fill="#FFFFFF" />
+  <text
+    x="256"
+    y="286"
+    text-anchor="middle"
+    dominant-baseline="middle"
+    fill="#0E1F1A"
+    font-family="Arial Black, Helvetica Neue, Arial, sans-serif"
+    font-size="148"
+    font-weight="800"
+    letter-spacing="0.06em"
+  >IOUX</text>
+</svg>

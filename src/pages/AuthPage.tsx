@@ -120,7 +120,7 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="fixed inset-0 bg-[#0E1F1A]" style={{ minHeight: '100dvh' }}>
+    <div className="fixed inset-0 h-[100dvh] max-h-[100dvh] overflow-hidden bg-[#0E1F1A]">
       <img
         src={authHero}
         alt=""
@@ -134,24 +134,24 @@ export default function AuthPage() {
         }}
       />
 
-      <div className="relative z-10 flex h-full min-h-[100dvh] flex-col lg:flex-row">
-        <div className="flex flex-1 flex-col justify-between px-6 py-6 sm:px-10 sm:py-8 lg:px-14 lg:py-10">
+      <div className="relative z-10 flex h-full min-h-0 flex-col lg:flex-row">
+        <div className="flex shrink-0 flex-col justify-between px-5 py-4 sm:px-8 sm:py-5 lg:min-h-0 lg:flex-1 lg:overflow-hidden lg:px-14 lg:py-8">
           <Link to="/" className="inline-flex items-center gap-2.5 w-fit">
-            <UzimaMark className="h-9 w-9" />
-            <span className="font-display text-xl font-extrabold tracking-tight text-white">{BRAND.name}</span>
+            <UzimaMark className="h-8 w-8 lg:h-9 lg:w-9" />
+            <span className="font-display text-lg lg:text-xl font-extrabold tracking-tight text-white">{BRAND.name}</span>
           </Link>
 
-          <div className="mt-10 max-w-md lg:mt-0">
+          <div className="mt-0 hidden max-w-md min-h-0 lg:block">
             <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#D3F36B]">
               Secure access
             </p>
-            <h1 className="mt-3 font-display text-3xl sm:text-4xl lg:text-[2.75rem] font-extrabold leading-[1.1] tracking-tight text-white">
+            <h1 className="mt-3 font-display text-[clamp(1.5rem,2.8vh+1rem,2.75rem)] font-extrabold leading-[1.1] tracking-tight text-white">
               {BRAND.tagline}
             </h1>
-            <p className="mt-4 text-sm sm:text-base font-medium leading-relaxed text-white/75 max-w-sm">
+            <p className="mt-3 text-sm font-medium leading-relaxed text-white/75 max-w-sm">
               Sign in with your organisation credentials to access your role portal.
             </p>
-            <div className="mt-6 flex items-start gap-2.5 max-w-sm">
+            <div className="mt-4 flex items-start gap-2.5 max-w-sm">
               <ShieldCheck size={16} className="shrink-0 mt-0.5 text-[#D3F36B]" />
               <p className="text-xs font-medium leading-relaxed text-white/55">
                 Accounts are provisioned by {BRAND.name} administrators. Contact your programme lead if you need access.
@@ -159,13 +159,13 @@ export default function AuthPage() {
             </div>
           </div>
 
-          <p className="mt-8 hidden text-xs font-medium text-white/35 lg:block">
+          <p className="hidden text-xs font-medium text-white/35 lg:block">
             © {new Date().getFullYear()} {BRAND.name} · Confidential
           </p>
         </div>
 
-        <div className="flex flex-1 items-end lg:items-center justify-center px-4 pb-6 sm:px-8 sm:pb-8 lg:px-10 lg:py-10">
-          <div className="auth-card relative w-full max-w-[400px] overflow-visible rounded-2xl bg-white p-6 sm:p-8 shadow-[0_24px_64px_rgba(0,0,0,0.35)]">
+        <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto overscroll-contain px-4 py-3 sm:px-8 lg:px-10 lg:py-6">
+          <div className="auth-card relative w-full max-w-[400px] shrink-0 overflow-visible rounded-2xl bg-white p-5 sm:p-7 shadow-[0_24px_64px_rgba(0,0,0,0.35)]">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="font-display text-xl font-extrabold text-[#0E1F1A]">

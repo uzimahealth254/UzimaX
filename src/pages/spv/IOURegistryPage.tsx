@@ -83,6 +83,16 @@ export default function IOURegistryPage() {
     { key: 'iou', header: 'IOU Registry ID', primary: true, render: (inv: Invoice) => <span className="font-mono text-xs font-semibold">{inv.iouRegistryId}</span> },
     { key: 'supplier', header: 'Supplier', render: (inv: Invoice) => <span className="font-medium">{inv.supplierName}</span> },
     { key: 'buyer', header: 'Buyer', render: (inv: Invoice) => inv.buyerName },
+    {
+      key: 'platform',
+      header: 'Platform',
+      hideOnMobile: true,
+      render: (inv: Invoice) => (
+        <span className="text-[11px] text-[#5A6B7D]">
+          {inv.sourcePlatformName || (inv.origin === 'api_upload' ? 'API' : '—')}
+        </span>
+      ),
+    },
     { key: 'amount', header: 'Face value', render: (inv: Invoice) => <span className="font-mono font-semibold">{formatCurrency(inv.amount)}</span> },
     { key: 'due', header: 'Maturity', hideOnMobile: true, render: (inv: Invoice) => formatDate(inv.dueDate) },
     {

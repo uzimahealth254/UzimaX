@@ -42,6 +42,14 @@ export default function AllInvoicesPage() {
     { key: 'origin', header: 'Origin', hideOnMobile: true, render: (inv: Invoice) => (
       <span className="text-xs">{inv.origin ? ORIGIN_LABELS[inv.origin] || inv.origin : '—'}</span>
     ) },
+    {
+      key: 'platform',
+      header: 'Platform',
+      hideOnMobile: true,
+      render: (inv: Invoice) => (
+        <span className="text-xs text-[#5A6B7D]">{inv.sourcePlatformName || '—'}</span>
+      ),
+    },
     { key: 'supplier', header: 'Supplier', render: (inv: Invoice) => <span className="font-medium">{inv.supplierName}</span> },
     { key: 'buyer', header: 'Buyer', render: (inv: Invoice) => inv.buyerName },
     { key: 'amount', header: 'Amount', render: (inv: Invoice) => <span className="font-mono font-semibold">{formatCurrency(inv.amount)}</span> },

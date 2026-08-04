@@ -7,6 +7,7 @@ import StatusBadge from '@/components/shared/StatusBadge';
 import ConfirmationModal from '@/components/shared/ConfirmationModal';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { computeTenorDays, priceReceivable } from '@/lib/pricing';
+import { api } from '@/lib/apiClient';
 import { toast } from 'sonner';
 import { HandCoins } from 'lucide-react';
 
@@ -18,6 +19,9 @@ export default function OptInInboxPage() {
   const [reason, setReason] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [sellAmount, setSellAmount] = useState('');
+  const [otp, setOtp] = useState('');
+  const [otpHint, setOtpHint] = useState<string | null>(null);
 
   const mine = optIns.filter(o => o.supplierId === user?.organisationId);
   const pending = mine.filter(o => o.status === 'pending');
@@ -28,21 +32,49 @@ export default function OptInInboxPage() {
     [pending, confirmId],
   );
 
+  const face = Number(confirmOpt?.amount || 0);
+  const listedForPreview = sellAmount ? Number(sellAmount) : face;
+
   const preview = useMemo(() => {
     if (!confirmOpt?.amount) return null;
     const tenorDays = confirmOpt.issueDate && confirmOpt.dueDate
       ? computeTenorDays(confirmOpt.issueDate, confirmOpt.dueDate)
       : 90;
-    return priceReceivable({ faceValue: Number(confirmOpt.amount), tenorDays });
-  }, [confirmOpt]);
+    return priceReceivable({ faceValue: listedForPreview || face, tenorDays });
+  }, [confirmOpt, listedForPreview, face]);
+
+  const requestOtp = async (id: string) => {
+    try {
+      const { data } = await api.post(`/opt-ins/${id}/request-otp`);
+      setOtpHint(data?.demoHint || null);
+      toast.success('OTP sent');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Could not send OTP');
+    }
+  };
 
   const accept = async () => {
     if (!confirmId) return;
+    const listed = sellAmount ? Number(sellAmount) : face;
+    if (!(listed > 0) || listed > face) {
+      toast.error('Amount to sell must be > 0 and ≤ face value');
+      return;
+    }
+    if (!otp.trim()) {
+      toast.error('Enter OTP to confirm sell');
+      return;
+    }
     setBusyId(confirmId);
     try {
-      await Promise.resolve(respondToOptIn(confirmId, true, undefined, actor));
+      await Promise.resolve(respondToOptIn(confirmId, true, undefined, actor, {
+        listedAmount: listed,
+        otp: otp.trim(),
+      }));
       toast.success('Opt-in recorded — receivable assigned to SPV');
       setConfirmId(null);
+      setSellAmount('');
+      setOtp('');
+      setOtpHint(null);
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Opt-in failed');
     } finally {
@@ -79,9 +111,6 @@ export default function OptInInboxPage() {
           <p className="text-[11px] text-[#5A6B7D] mt-0.5">
             When a buyer posts an instrument naming you, it appears here for opt-in / sell.
           </p>
-          <p className="text-[11px] text-[#5A6B7D] mt-0.5">
-            When a buyer posts an invoice naming you, it appears here to sell.
-          </p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -105,7 +134,7 @@ export default function OptInInboxPage() {
                       <p className="font-mono font-bold text-[#0E1F1A] mt-0.5">{formatCurrency(o.amount)}</p>
                     </div>
                     <div className="rounded-md bg-[#f7faf6] border border-[#0E1F1A]/6 p-2">
-                      <p className="text-[10px] font-semibold text-[#5A6B7D]">Indicative proceeds</p>
+                      <p className="text-[10px] font-semibold text-[#5A6B7D]">Indicative proceeds (full)</p>
                       <p className="font-mono font-bold text-[#0E1F1A] mt-0.5">{formatCurrency(quote.offerPrice)}</p>
                       <p className="text-[10px] text-[#5A6B7D] mt-0.5">~{quote.recommendedDiscount}% discount · {quote.tenorDays}d</p>
                     </div>
@@ -118,7 +147,13 @@ export default function OptInInboxPage() {
                     <button
                       type="button"
                       disabled={busy}
-                      onClick={() => setConfirmId(o.id)}
+                      onClick={() => {
+                        setConfirmId(o.id);
+                        setSellAmount(String(o.amount || ''));
+                        setOtp('');
+                        setOtpHint(null);
+                        void requestOtp(o.id);
+                      }}
                       className="inline-flex items-center justify-center px-3 py-1.5 min-h-[34px] rounded-lg bg-[#0E1F1A] text-white text-xs font-bold hover:bg-[#1A3A2E] disabled:opacity-50"
                     >
                       {busy ? '…' : 'Opt in & sell'}
@@ -166,42 +201,59 @@ export default function OptInInboxPage() {
         title="Confirm opt-in & sell?"
         description={
           preview
-            ? `If you sell, you'll receive ~${formatCurrency(preview.offerPrice)} now (${preview.recommendedDiscount}% discount on ${formatCurrency(confirmOpt?.amount || 0)}, ${preview.tenorDays}d tenor). This assigns the receivable to the SPV and cannot be undone from this inbox.`
-            : 'This assigns the receivable to the SPV and cannot be undone from this inbox.'
+            ? `If you sell ${formatCurrency(listedForPreview)}, you'll receive ~${formatCurrency(preview.offerPrice)} now (${preview.recommendedDiscount}% discount, ${preview.tenorDays}d tenor). Checker OTP required.`
+            : 'This assigns the receivable to the SPV. Checker OTP required.'
         }
         confirmLabel="Confirm sell"
-        onCancel={() => setConfirmId(null)}
+        onCancel={() => { setConfirmId(null); setSellAmount(''); setOtp(''); }}
         onConfirm={accept}
-      />
+      >
+        <div className="space-y-3 text-left mt-2">
+          <div>
+            <label className="block text-[11px] font-semibold text-[#0E1F1A] mb-1">
+              Amount to sell <span className="font-normal text-[#5A6B7D]">(partial OK · max {formatCurrency(face)})</span>
+            </label>
+            <input
+              type="number"
+              className="field-input text-xs"
+              min={1}
+              max={face}
+              value={sellAmount}
+              onChange={(e) => setSellAmount(e.target.value)}
+            />
+          </div>
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-[11px] font-semibold text-[#0E1F1A]">Confirmation OTP</label>
+              <button type="button" className="text-[11px] font-bold hover:underline" onClick={() => confirmId && void requestOtp(confirmId)}>Resend</button>
+            </div>
+            <input
+              className="field-input text-xs font-mono tracking-widest"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value)}
+              placeholder="6-digit code"
+              maxLength={8}
+            />
+            {otpHint && <p className="text-[10px] text-[#5A6B7D] mt-1">Demo: <span className="font-mono font-bold">{otpHint}</span></p>}
+          </div>
+        </div>
+      </ConfirmationModal>
 
       {declineId && (
         <div className="fixed inset-0 z-[85] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="absolute inset-0 bg-slate-900/40" onClick={() => { setDeclineId(null); setReason(''); }} />
-          <div className="relative bg-white border border-[#0E1F1A]/10 rounded-t-xl sm:rounded-xl p-4 w-full max-w-md space-y-3 safe-pad-bottom">
-            <h2 className="text-sm font-bold text-[#0E1F1A]">Decline opt-in?</h2>
-            <p className="text-xs text-[#5A6B7D]">The buyer will be notified. Optionally leave a reason.</p>
+          <div className="relative w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl bg-white p-4 shadow-xl space-y-3">
+            <h3 className="text-sm font-bold text-[#0E1F1A]">Decline opt-in?</h3>
+            <p className="text-xs text-[#5A6B7D]">Optional reason — buyer will be notified by email.</p>
             <textarea
+              className="field-input text-xs min-h-[72px]"
               value={reason}
-              onChange={e => setReason(e.target.value)}
-              rows={2}
-              placeholder="Reason (optional)"
-              className="field-input"
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Optional feedback"
             />
-            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
-              <button
-                type="button"
-                className="min-h-[36px] px-3 py-2 rounded-lg border border-[#0E1F1A]/15 text-xs font-semibold"
-                onClick={() => { setDeclineId(null); setReason(''); }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="min-h-[36px] px-3 py-2 rounded-lg bg-red-600 text-white text-xs font-bold"
-                onClick={decline}
-              >
-                Decline
-              </button>
+            <div className="flex gap-2 justify-end">
+              <button type="button" className="px-3 py-2 text-xs font-semibold" onClick={() => { setDeclineId(null); setReason(''); }}>Cancel</button>
+              <button type="button" className="px-3 py-2 text-xs font-bold rounded-lg bg-[#0E1F1A] text-white" onClick={() => void decline()}>Decline</button>
             </div>
           </div>
         </div>

@@ -22,6 +22,7 @@
     "db:migrate": "drizzle-kit push",
     "db:migrate:sql": "tsx server/db/migrate.ts",
     "db:seed": "tsx server/db/seed.ts",
+    "db:ensure-demo": "tsx scripts/ensure-demo-accounts.ts",
     "db:purge-demo": "tsx scripts/purge-demo-seed.ts",
     "db:setup": "drizzle-kit push && tsx server/db/seed.ts",
     "db:rls": "tsx server/db/apply-rls.ts",

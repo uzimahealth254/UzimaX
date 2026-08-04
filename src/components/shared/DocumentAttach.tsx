@@ -16,10 +16,11 @@ interface DocMeta {
 
 interface Props {
   onChange?: (docs: DocMeta[]) => void;
+  defaultDocType?: string;
 }
 
 /** Uploads to Uzima /documents/upload and returns metadata */
-export default function DocumentAttach({ onChange }: Props) {
+export default function DocumentAttach({ onChange, defaultDocType = 'supporting' }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [docs, setDocs] = useState<DocMeta[]>([]);
   const [busy, setBusy] = useState(false);
@@ -29,7 +30,7 @@ export default function DocumentAttach({ onChange }: Props) {
     try {
       const form = new FormData();
       form.append('file', file);
-      form.append('docType', 'supporting');
+      form.append('docType', defaultDocType);
       const base = `${getApiBaseUrl()}/api/v1`;
       const res = await fetch(`${base}/documents/upload`, {
         method: 'POST',
@@ -44,7 +45,7 @@ export default function DocumentAttach({ onChange }: Props) {
         size: file.size,
         url: data.fileUrl,
         fileUrl: data.fileUrl,
-        docType: data.docType || 'supporting',
+        docType: data.docType || defaultDocType,
       }];
       setDocs(next);
       onChange?.(next);
@@ -65,7 +66,7 @@ export default function DocumentAttach({ onChange }: Props) {
         onClick={() => inputRef.current?.click()}
         className="inline-flex items-center gap-2 text-sm text-primary"
       >
-        <Paperclip size={14} /> {busy ? 'Uploading…' : 'Attach supporting document'}
+        <Paperclip size={14} /> {busy ? 'Uploading…' : 'Attach invoice / proposal'}
       </button>
       <input
         ref={inputRef}

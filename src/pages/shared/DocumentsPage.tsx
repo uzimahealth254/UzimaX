@@ -9,14 +9,9 @@ import { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Upload, ExternalLink } from 'lucide-react';
 
-const DOC_TYPES = [
-  { value: 'board_resolution', label: 'Board resolution' },
-  { value: 'approval_certificate', label: 'Approval certificate' },
-  { value: 'specimen_signature', label: 'Specimen signature' },
-  { value: 'supporting', label: 'Supporting document' },
-  { value: 'purchase_note', label: 'Purchase note' },
-  { value: 'assignment_letter', label: 'Assignment letter' },
-];
+import { ORG_DOC_TYPES } from '@/lib/docAndDecline';
+
+const DOC_TYPES = ORG_DOC_TYPES.map((d) => ({ value: d.value, label: d.label }));
 
 type Doc = { id: string; docType: string; fileUrl: string; uploadedAt: string };
 

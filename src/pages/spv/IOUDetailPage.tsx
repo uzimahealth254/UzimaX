@@ -160,10 +160,21 @@ export default function IOUDetailPage() {
               <div className="rounded-md bg-[#f7faf6] border border-[#0E1F1A]/6 p-2">
                 <p className="text-[10px] font-semibold text-[#5A6B7D]">Face value</p>
                 <p className="font-mono font-bold text-[#0E1F1A] mt-0.5">{formatCurrency(inv.amount)}</p>
+                {inv.listedAmount != null && Number(inv.listedAmount) !== Number(inv.amount) && (
+                  <p className="text-[10px] text-[#5A6B7D] mt-0.5">
+                    Listed / sell: <span className="font-mono font-semibold text-[#0E1F1A]">{formatCurrency(Number(inv.listedAmount))}</span>
+                  </p>
+                )}
               </div>
               <div className="rounded-md bg-[#f7faf6] border border-[#0E1F1A]/6 p-2">
                 <p className="text-[10px] font-semibold text-[#5A6B7D]">Origin</p>
                 <p className="font-medium text-[#0E1F1A] mt-0.5">{inv.origin || 'supplier_listed'}</p>
+              </div>
+              <div className="rounded-md bg-[#f7faf6] border border-[#0E1F1A]/6 p-2">
+                <p className="text-[10px] font-semibold text-[#5A6B7D]">Platform / source</p>
+                <p className="font-medium text-[#0E1F1A] mt-0.5">
+                  {inv.sourcePlatformName || (inv.sourcePlatformOrgId ? 'External platform' : 'Direct portal')}
+                </p>
               </div>
               <div className="rounded-md bg-[#f7faf6] border border-[#0E1F1A]/6 p-2">
                 <p className="text-[10px] font-semibold text-[#5A6B7D]">Issue date</p>
