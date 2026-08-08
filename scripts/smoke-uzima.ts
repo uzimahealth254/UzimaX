@@ -29,7 +29,7 @@ async function main() {
   const supplier = await json('POST', '/auth/login', { email: 'supplier@ioux.africa', password: PASS });
 
   const orgs = await json('GET', '/organisations', undefined, buyer.accessToken);
-  const supplierOrg = orgs.data.find((o: { orgType: string; name: string }) => o.orgType === 'supplier' && o.name.includes('Savannah'));
+  const supplierOrg = orgs.data.find((o: { orgType: string; name: string }) => o.orgType === 'supplier' && o.name.includes('Supplier 1'));
 
   console.log('Buyer posts invoice…');
   const inv = await json('POST', '/invoices', {

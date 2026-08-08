@@ -17,7 +17,7 @@ const samples: { id: string; label: string; html: string }[] = [
   { id: 'password-reset', label: 'Password reset', html: templates.passwordReset('739104') },
   { id: 'password-changed', label: 'Password changed', html: templates.passwordChanged('Jane Wanjiku') },
   { id: 'opt-in', label: 'Supplier opt-in request', html: templates.optInRequest('IOU-KE-2026-0042-7', 'KES 2,500,000', 'Nairobi Pharma Ltd') },
-  { id: 'verify', label: 'Buyer verification request', html: templates.buyerVerificationRequest('IOU-KE-2026-0051-3', 'KES 1,200,000', 'Savannah Med Supplies') },
+  { id: 'verify', label: 'Buyer verification request', html: templates.buyerVerificationRequest('IOU-KE-2026-0051-3', 'KES 1,200,000', 'Supplier 1') },
   { id: 'offer-received', label: 'Offer received', html: templates.offerReceived('IOU-KE-2026-0042-7', '5.00%', 'KES 2,375,000') },
   { id: 'offer-accepted', label: 'Offer accepted', html: templates.offerAccepted('IOU-KE-2026-0042-7') },
   { id: 'offer-declined', label: 'Offer declined', html: templates.offerDeclined('IOU-KE-2026-0042-7') },

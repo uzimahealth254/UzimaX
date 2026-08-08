@@ -28,12 +28,12 @@ type DemoUser = {
 const ORGS: Record<string, { name: string; orgType: string; reg: string; sector?: string }> = {
   platform: { name: 'IOU Exchange Platform', orgType: 'platform', reg: 'KE-PLT-001' },
   spv: { name: 'IOU Exchange Capital SPV', orgType: 'spv', reg: 'KE-SPV-001', sector: 'securitisation' },
-  buyer1: { name: 'Kenya Breweries Corp', orgType: 'buyer', reg: 'KE-2010-10001', sector: 'FMCG / beverages' },
-  buyer2: { name: 'Safaricom PLC', orgType: 'buyer', reg: 'KE-2000-70010', sector: 'Telecom' },
-  buyer3: { name: 'Twiga Foods Ltd', orgType: 'buyer', reg: 'KE-2014-88221', sector: 'Agri distribution' },
-  supplier1: { name: 'Savannah Steel Ltd', orgType: 'supplier', reg: 'KE-2019-44521', sector: 'Industrial metals' },
-  supplier2: { name: 'Highland Logistics', orgType: 'supplier', reg: 'KE-2020-11234', sector: 'Transport & logistics' },
-  supplier3: { name: 'Nairobi Tech Solutions', orgType: 'supplier', reg: 'KE-2021-55789', sector: 'IT services' },
+  buyer1: { name: 'Insurance A', orgType: 'buyer', reg: 'KE-INS-A', sector: 'Insurance' },
+  buyer2: { name: 'Insurance B', orgType: 'buyer', reg: 'KE-INS-B', sector: 'Insurance' },
+  buyer3: { name: 'Corporate 1', orgType: 'buyer', reg: 'KE-CORP-1', sector: 'Corporate' },
+  supplier1: { name: 'Supplier 1', orgType: 'supplier', reg: 'KE-SUP-1', sector: 'Trade supplier' },
+  supplier2: { name: 'Supplier 2', orgType: 'supplier', reg: 'KE-SUP-2', sector: 'Trade supplier' },
+  supplier3: { name: 'Supplier 3', orgType: 'supplier', reg: 'KE-SUP-3', sector: 'Trade supplier' },
 };
 
 const USERS: DemoUser[] = [

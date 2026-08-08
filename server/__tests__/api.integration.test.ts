@@ -56,7 +56,7 @@ describe('Uzima API critical path', () => {
     if (!available || !buyerToken || !supplierToken) return;
     const orgs = await json('GET', '/organisations', undefined, buyerToken);
     const supplierOrg = orgs.data.data.find((o: { orgType: string; name: string }) =>
-      o.orgType === 'supplier' && o.name.includes('Savannah'));
+      o.orgType === 'supplier' && (o.name.includes('Supplier 1') || o.name.includes('Savannah')));
     expect(supplierOrg).toBeTruthy();
 
     const inv = await json('POST', '/invoices', {

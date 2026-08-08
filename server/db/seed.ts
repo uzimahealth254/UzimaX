@@ -64,31 +64,45 @@ async function main() {
     metadata: { kycStatus: 'verified', cmaReference: 'CMA-SPV-2024-014', sector: 'securitisation' },
   }).returning();
 
+  // Anonymised demo parties (no real brand names — client instruction Aug 2026).
+  // Pharmacies & hospitals relate to both wholesalers and insurers in invoice graphs.
   const buyerDefs = [
-    { name: 'Kenya Breweries Corp', reg: 'KE-2010-10001', sector: 'FMCG / beverages' },
-    { name: 'Safaricom PLC', reg: 'KE-2000-70010', sector: 'Telecom' },
-    { name: 'Twiga Foods Ltd', reg: 'KE-2014-88221', sector: 'Agri distribution' },
-    { name: 'Nairobi Hospital Group', reg: 'KE-1998-33001', sector: 'Healthcare' },
-    { name: 'East African Breweries Retail Co', reg: 'KE-2012-44110', sector: 'Retail wholesale' },
+    { name: 'Insurance A', reg: 'KE-INS-A', sector: 'Insurance', tag: 'insurance' },
+    { name: 'Insurance B', reg: 'KE-INS-B', sector: 'Insurance', tag: 'insurance' },
+    ...[1, 2, 3, 4, 5].map((n) => ({
+      name: `Pharmacy ${n}`, reg: `KE-PHARM-${n}`, sector: 'Pharmacy', tag: 'pharmacy',
+    })),
+    ...[1, 2, 3, 4, 5].map((n) => ({
+      name: `Hospital ${n}`, reg: `KE-HOSP-${n}`, sector: 'Hospital', tag: 'hospital',
+    })),
+    { name: 'Wholesaler 1', reg: 'KE-WHOLE-1', sector: 'Wholesaler', tag: 'wholesaler' },
+    { name: 'Wholesaler 2', reg: 'KE-WHOLE-2', sector: 'Wholesaler', tag: 'wholesaler' },
+    { name: 'Corporate 1', reg: 'KE-CORP-1', sector: 'Corporate', tag: 'corporate' },
+    { name: 'Corporate 2', reg: 'KE-CORP-2', sector: 'Corporate', tag: 'corporate' },
   ];
   const buyers = [];
   for (const b of buyerDefs) {
     const [row] = await db.insert(s.organisations).values({
       name: b.name, orgType: 'buyer', uzimaPartyId: generateUzimaPartyId('buyer'),
-      registrationNo: b.reg, metadata: { kycStatus: 'verified', sector: b.sector },
+      registrationNo: b.reg,
+      metadata: {
+        kycStatus: 'verified',
+        sector: b.sector,
+        demoTag: b.tag,
+        // Pharmacies/hospitals trade with wholesalers and insurers
+        relatedBuyerTypes: (b.tag === 'pharmacy' || b.tag === 'hospital')
+          ? ['wholesaler', 'insurance']
+          : undefined,
+      },
     }).returning();
     buyers.push(row);
   }
 
-  const supplierDefs = [
-    { name: 'Savannah Steel Ltd', reg: 'KE-2019-44521', sector: 'Industrial metals' },
-    { name: 'Highland Logistics', reg: 'KE-2020-11234', sector: 'Transport & logistics' },
-    { name: 'Nairobi Tech Solutions', reg: 'KE-2021-55789', sector: 'IT services' },
-    { name: 'Mombasa Port Packers', reg: 'KE-2017-22990', sector: 'Packaging' },
-    { name: 'Rift Valley Agri Supplies', reg: 'KE-2018-66120', sector: 'Agri inputs' },
-    { name: 'MedEquip Kenya Ltd', reg: 'KE-2016-77801', sector: 'Medical devices' },
-    { name: 'GreenGrid Solar EPCs', reg: 'KE-2022-99012', sector: 'Energy / EPC' },
-  ];
+  const supplierDefs = [1, 2, 3, 4, 5, 6].map((n) => ({
+    name: `Supplier ${n}`,
+    reg: `KE-SUP-${n}`,
+    sector: 'Trade supplier',
+  }));
   const suppliers = [];
   for (const sp of supplierDefs) {
     const [row] = await db.insert(s.organisations).values({
@@ -100,10 +114,16 @@ async function main() {
 
   // Suspended org for admin directory variety
   await db.insert(s.organisations).values({
-    name: 'Coastal Traders (Suspended)', orgType: 'supplier',
-    uzimaPartyId: generateUzimaPartyId('supplier'), registrationNo: 'KE-2015-00099',
-    status: 'suspended', metadata: { kycStatus: 'rejected', sector: 'General trade' },
+    name: 'Supplier Demo (Suspended)', orgType: 'supplier',
+    uzimaPartyId: generateUzimaPartyId('supplier'), registrationNo: 'KE-SUP-X',
+    status: 'suspended', metadata: { kycStatus: 'rejected', sector: 'Trade supplier' },
   });
+
+  const insurers = buyers.filter((_, i) => buyerDefs[i].tag === 'insurance');
+  const pharmacies = buyers.filter((_, i) => buyerDefs[i].tag === 'pharmacy');
+  const hospitals = buyers.filter((_, i) => buyerDefs[i].tag === 'hospital');
+  const wholesalers = buyers.filter((_, i) => buyerDefs[i].tag === 'wholesaler');
+  const corporates = buyers.filter((_, i) => buyerDefs[i].tag === 'corporate');
 
   // ── Users ───────────────────────────────────────────────────────────
   const [admin] = await db.insert(s.users).values({
@@ -114,13 +134,14 @@ async function main() {
     email: 'spv@ioux.africa', fullName: 'David Ochieng', role: 'spv',
     orgId: spv.id, passwordHash: hash, isSignatory: true,
   }).returning();
+  // Demo logins: Insurance A/B, Corporate 1, Supplier 1–3
   const [buyerUser] = await db.insert(s.users).values({
     email: 'buyer@ioux.africa', fullName: 'Grace Wanjiku', role: 'buyer',
-    orgId: buyers[0].id, passwordHash: hash, isSignatory: true,
+    orgId: insurers[0].id, passwordHash: hash, isSignatory: true,
   }).returning();
   const [buyer2User] = await db.insert(s.users).values({
     email: 'buyer2@ioux.africa', fullName: 'Amina Hassan', role: 'buyer',
-    orgId: buyers[1].id, passwordHash: hash, isSignatory: true,
+    orgId: insurers[1].id, passwordHash: hash, isSignatory: true,
   }).returning();
   const [supUser] = await db.insert(s.users).values({
     email: 'supplier@ioux.africa', fullName: 'James Mwangi', role: 'supplier',
@@ -132,15 +153,15 @@ async function main() {
   }).returning();
   await db.insert(s.users).values([
     { email: 'supplier3@ioux.africa', fullName: 'Lucy Achieng', role: 'supplier', orgId: suppliers[2].id, passwordHash: hash },
-    { email: 'buyer3@ioux.africa', fullName: 'Brian Otieno', role: 'buyer', orgId: buyers[2].id, passwordHash: hash, isSignatory: true },
+    { email: 'buyer3@ioux.africa', fullName: 'Brian Otieno', role: 'buyer', orgId: corporates[0].id, passwordHash: hash, isSignatory: true },
   ]);
 
   await db.insert(s.signatories).values([
-    { userId: buyerUser.id, orgId: buyers[0].id, roleTitle: 'CFO', isActive: true },
-    { userId: buyer2User.id, orgId: buyers[1].id, roleTitle: 'Treasury Lead', isActive: true },
-    { userId: spvUser.id, orgId: spv.id, roleTitle: 'Managing Director', isActive: true },
-    { userId: supUser.id, orgId: suppliers[0].id, roleTitle: 'Director', isActive: true },
-    { userId: sup2User.id, orgId: suppliers[1].id, roleTitle: 'Finance Manager', isActive: true },
+    { userId: buyerUser.id, orgId: insurers[0].id, roleTitle: 'CFO', isActive: true, capacity: 'both' },
+    { userId: buyer2User.id, orgId: insurers[1].id, roleTitle: 'Treasury Lead', isActive: true, capacity: 'checker' },
+    { userId: spvUser.id, orgId: spv.id, roleTitle: 'Managing Director', isActive: true, capacity: 'checker' },
+    { userId: supUser.id, orgId: suppliers[0].id, roleTitle: 'Director', isActive: true, capacity: 'both' },
+    { userId: sup2User.id, orgId: suppliers[1].id, roleTitle: 'Finance Manager', isActive: true, capacity: 'checker' },
   ]);
 
   // ── Wallets / fees / programmes ─────────────────────────────────────
@@ -161,17 +182,17 @@ async function main() {
 
   await db.insert(s.programmes).values([
     {
-      name: 'KBC Approved Payables', buyerOrgId: buyers[0].id, maxExposure: '500000000',
+      name: 'Insurance A Approved Payables', buyerOrgId: insurers[0].id, maxExposure: '500000000',
       buyerSublimit: '150000000', maxTenorDays: 120, discountBandMinBps: 350, discountBandMaxBps: 650,
       effectiveFrom: iso(addDays(today, -180)), expiresAt: iso(addDays(today, 185)), status: 'active',
     },
     {
-      name: 'Safaricom Vendor Finance', buyerOrgId: buyers[1].id, maxExposure: '300000000',
+      name: 'Insurance B Vendor Finance', buyerOrgId: insurers[1].id, maxExposure: '300000000',
       buyerSublimit: '80000000', maxTenorDays: 90, discountBandMinBps: 400, discountBandMaxBps: 700,
       effectiveFrom: iso(addDays(today, -90)), expiresAt: iso(addDays(today, 275)), status: 'active',
     },
     {
-      name: 'Healthcare Receivables Window', buyerOrgId: buyers[3].id, maxExposure: '120000000',
+      name: 'Hospital Receivables Window', buyerOrgId: hospitals[0].id, maxExposure: '120000000',
       maxTenorDays: 150, discountBandMinBps: 450, discountBandMaxBps: 750,
       effectiveFrom: iso(addDays(today, -30)), expiresAt: iso(addDays(today, 335)), status: 'active',
     },
@@ -180,18 +201,18 @@ async function main() {
       maxTenorDays: 180, discountBandMinBps: 400, discountBandMaxBps: 800, status: 'active',
     },
     {
-      name: 'Legacy Pilot (Paused)', buyerOrgId: buyers[2].id, maxExposure: '50000000',
+      name: 'Corporate 1 Pilot (Paused)', buyerOrgId: corporates[0].id, maxExposure: '50000000',
       maxTenorDays: 60, discountBandMinBps: 500, discountBandMaxBps: 900, status: 'paused',
     },
   ]);
 
   // ── Documents ───────────────────────────────────────────────────────
   await db.insert(s.orgDocuments).values([
-    { orgId: buyers[0].id, docType: 'kyc_certificate', fileUrl: '/mock/docs/kbc-kyc.pdf', uploadedBy: admin.id },
-    { orgId: buyers[0].id, docType: 'board_resolution', fileUrl: '/mock/docs/kbc-board.pdf', uploadedBy: buyerUser.id },
-    { orgId: suppliers[0].id, docType: 'tax_clearance', fileUrl: '/mock/docs/savannah-kra.pdf', uploadedBy: supUser.id },
+    { orgId: insurers[0].id, docType: 'kyc_certificate', fileUrl: '/mock/docs/ins-a-kyc.pdf', uploadedBy: admin.id },
+    { orgId: insurers[0].id, docType: 'board_resolution', fileUrl: '/mock/docs/ins-a-board.pdf', uploadedBy: buyerUser.id },
+    { orgId: suppliers[0].id, docType: 'tax_clearance', fileUrl: '/mock/docs/supplier-1-kra.pdf', uploadedBy: supUser.id },
     { orgId: spv.id, docType: 'cma_letter', fileUrl: '/mock/docs/spv-cma.pdf', uploadedBy: spvUser.id },
-    { orgId: buyers[1].id, docType: 'kyc_certificate', fileUrl: '/mock/docs/saf-kyc.pdf', uploadedBy: admin.id },
+    { orgId: insurers[1].id, docType: 'kyc_certificate', fileUrl: '/mock/docs/ins-b-kyc.pdf', uploadedBy: admin.id },
   ]);
 
   type InvRow = typeof s.invoices.$inferSelect;
@@ -219,7 +240,7 @@ async function main() {
       bankStandingOrderRef: i % 2 === 0 ? `SO-KCB-${1000 + i}` : null,
       standingOrderBank: i % 2 === 0 ? 'KCB Bank' : null,
       standingOrderSetAt: i % 2 === 0 ? addDays(today, -2 - i) : null,
-      metadata: { description: `Approved payable — ${pick(['packaging', 'haulage', 'IT retainers', 'steel supply', 'medical consumables', 'solar EPC'], i)}` },
+      metadata: { description: `Approved payable — ${pick(['pharma stock', 'hospital supplies', 'wholesale fill', 'corporate PO', 'medical consumables', 'distributor order'], i)}` },
     }).returning();
     await db.insert(s.optIns).values({ invoiceId: inv.id, supplierOrgId: supplier.id, status: 'pending' });
     await history(inv.id, 'awaiting_opt_in', buyerUser.id, 'Buyer posted IOU');
@@ -253,7 +274,7 @@ async function main() {
       issueDate: iso(addDays(today, -4 - i)), dueDate: iso(addDays(today, 60 + i * 5)),
       status: 'awaiting_buyer_verification', listingStatus: 'listed',
       supportingDocs: [{ name: 'Delivery note.pdf', url: '/mock/docs/dn.pdf' }, { name: 'Tax invoice.pdf', url: '/mock/docs/tax.pdf' }],
-      metadata: { description: `Supplier-listed receivable — ${pick(['goods delivered', 'milestone billing', 'retainer month', 'spare parts', 'cold-chain haul'], i)}` },
+      metadata: { description: `Supplier-listed receivable — ${pick(['goods delivered', 'insurance claim pack', 'pharmacy restock', 'hospital ward stock', 'wholesale delivery'], i)}` },
     }).returning();
     await db.insert(s.buyerVerifications).values({ invoiceId: inv.id, buyerOrgId: buyer.id, status: 'pending' });
     await history(inv.id, 'awaiting_buyer_verification', null, 'Supplier listed invoice');
@@ -373,7 +394,7 @@ async function main() {
         commitmentToPay: true, commitmentAckAt: addDays(today, -55 - i), commitmentAckBy: buyerUser.id,
         bankStandingOrderRef: `SO-LIVE-${5000 + i}`, standingOrderBank: pick(['KCB', 'Equity', 'Absa'], i),
         standingOrderSetAt: addDays(today, -54 - i),
-        metadata: { description: `${bucket.status} instrument — ${pick(['steel', 'logistics', 'IT', 'agri', 'med', 'energy'], i)}` },
+        metadata: { description: `${bucket.status} instrument — ${pick(['pharma', 'hospital', 'wholesale', 'insurance', 'corporate', 'supplier'], i)}` },
       }).returning();
 
       let offerId: string | null = null;
@@ -519,7 +540,7 @@ async function main() {
     { actorId: buyerUser.id, actorEmail: 'buyer@ioux.africa', action: 'consent.signed', resourceType: 'consent', details: { track: 'negotiated_offer' } },
     { actorId: spvUser.id, actorEmail: 'spv@ioux.africa', action: 'assignment.created', resourceType: 'assignment', details: { type: 'standard_confirmation' } },
     { actorId: admin.id, actorEmail: 'admin@ioux.africa', action: 'settlement.recorded', resourceType: 'invoice', details: { source: 'seed' } },
-    { actorId: admin.id, actorEmail: 'admin@ioux.africa', action: 'programme.created', resourceType: 'programme', details: { name: 'KBC Approved Payables' } },
+    { actorId: admin.id, actorEmail: 'admin@ioux.africa', action: 'programme.created', resourceType: 'programme', details: { name: 'Insurance A Approved Payables' } },
   ]);
 
   await db.insert(s.emailSendLog).values([
@@ -531,18 +552,61 @@ async function main() {
   ]);
 
   const afyaxKey = 'uzima_afyax_demo_key_9c2e1b7f';
-  const buyerKey = 'uzima_buyer_kbc_demo_7f3a9c2e';
+  const buyerKey = 'uzima_buyer_demo_7f3a9c2e';
   await db.insert(s.apiKeys).values([
     {
-      orgId: buyers[0].id, keyHash: await bcrypt.hash(buyerKey, 12), keyPrefix: buyerKey.slice(0, 12),
-      label: 'KBC Demo API Key', scopes: ['invoices:write', 'invoices:read', 'parties:read'],
+      orgId: insurers[0].id, keyHash: await bcrypt.hash(buyerKey, 12), keyPrefix: buyerKey.slice(0, 12),
+      label: 'Insurance A Demo API Key', scopes: ['invoices:write', 'invoices:read', 'parties:read'],
     },
     {
       orgId: platform.id, keyHash: await bcrypt.hash(afyaxKey, 12), keyPrefix: afyaxKey.slice(0, 12),
-      label: 'AfyaX Integration Key',
+      label: 'Platform Integration Key',
       scopes: ['parties:write', 'parties:read', 'invoices:write', 'invoices:read', 'payments:write'],
     },
   ]);
+
+  // Explicit pharmacy/hospital ↔ wholesaler + insurance relationship samples
+  for (let i = 0; i < 5; i++) {
+    const pharmacy = pharmacies[i];
+    const hospital = hospitals[i];
+    const wholesaler = pick(wholesalers, i);
+    const insurer = pick(insurers, i);
+    const supplier = pick(suppliers, i);
+    // Supplier → Pharmacy (pharmacy also linked to wholesaler/insurer in metadata)
+    {
+      const [inv] = await db.insert(s.invoices).values({
+        iouRegistryId: nextIou(), origin: 'supplier_listed', originatorId: supplier.id,
+        buyerOrgId: pharmacy.id, supplierOrgId: supplier.id,
+        invoiceNumber: `INV-PHARM-${7000 + i}`, faceValue: String(450_000 + i * 80_000),
+        issueDate: iso(addDays(today, -8 - i)), dueDate: iso(addDays(today, 40 + i * 3)),
+        status: 'listed', listingStatus: 'listed',
+        metadata: {
+          description: `Pharmacy restock — also trades with ${wholesaler.name} and ${insurer.name}`,
+          relatedWholesalerOrgId: wholesaler.id,
+          relatedInsurerOrgId: insurer.id,
+        },
+      }).returning();
+      await history(inv.id, 'listed', null, 'Pharmacy–wholesaler–insurer demo link');
+    }
+    // Supplier → Hospital with insurer relationship
+    {
+      const [inv] = await db.insert(s.invoices).values({
+        iouRegistryId: nextIou(), origin: 'buyer_posted', originatorId: hospital.id,
+        buyerOrgId: hospital.id, supplierOrgId: supplier.id,
+        invoiceNumber: `INV-HOSP-${7100 + i}`, faceValue: String(980_000 + i * 120_000),
+        issueDate: iso(addDays(today, -6 - i)), dueDate: iso(addDays(today, 55 + i * 4)),
+        status: 'awaiting_opt_in', listingStatus: 'unlisted',
+        commitmentToPay: true, commitmentAckBy: buyerUser.id, commitmentAckAt: addDays(today, -6 - i),
+        metadata: {
+          description: `Hospital payable — claims path via ${insurer.name}; stock via ${wholesaler.name}`,
+          relatedWholesalerOrgId: wholesaler.id,
+          relatedInsurerOrgId: insurer.id,
+        },
+      }).returning();
+      await db.insert(s.optIns).values({ invoiceId: inv.id, supplierOrgId: supplier.id, status: 'pending' });
+      await history(inv.id, 'awaiting_opt_in', buyerUser.id, 'Hospital–wholesaler–insurer demo link');
+    }
+  }
 
   const invCount = (await db.select().from(s.invoices)).length;
   const asgnCount = (await db.select().from(s.assignments)).length;

@@ -342,7 +342,7 @@ Seed: `npm run db:seed` (refuses hosted Supabase unless `ALLOW_PROD_SEED=1`)
 | `audit_log` | Audit |
 | `otp_codes` | OTP hashes |
 
-**Seed orgs (typical):** Platform, Capital SPV, Kenya Breweries Corp (buyer), Savannah Steel / Highland Logistics (suppliers).
+**Seed orgs (typical):** Platform, Capital SPV, Insurance A/B, Pharmacy 1–5, Hospital 1–5, Wholesaler 1–2, Corporate 1–2, Supplier 1–6 (anonymous labels — no real brands).
 
 ---
 
