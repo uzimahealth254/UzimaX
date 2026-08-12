@@ -40,18 +40,26 @@ export async function issueOtp(opts: {
     expiresAt: new Date(Date.now() + OTP_TTL_MS),
   });
 
+  let emailDelivered = false;
   if (opts.email) {
     const isReset = opts.purpose === 'password_reset';
     const purposeLabel = opts.purpose.replace(/[:_]/g, ' ').trim();
-    await sendEmail({
+    const sent = await sendEmail({
       to: opts.email,
       subject: isReset ? emailSubjects.passwordReset() : emailSubjects.otp(purposeLabel),
       html: isReset ? templates.passwordReset(code) : templates.otp(code, purposeLabel),
       text: `Your IOU Exchange code is ${code}. It expires in 10 minutes.`,
+      template: isReset ? 'password_reset' : 'otp',
     });
+    emailDelivered = Boolean(sent?.ok && sent.mode !== 'stub');
   }
 
-  return useDemo ? { demoHint: code } : {};
+  // Show code in API/UI when demo OTP is allowed, or when email cannot be delivered (stub),
+  // so portal demos still complete maker-checker confirms.
+  if (useDemo || !emailDelivered) {
+    return { demoHint: code };
+  }
+  return {};
 }
 
 export async function verifyOtp(userId: string, purpose: string, code: string): Promise<void> {

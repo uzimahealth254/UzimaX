@@ -40,6 +40,7 @@
     "smoke:tenant-isolation": "tsx scripts/security-cross-tenant.ts",
     "test:authz": "tsx scripts/security-authz-audit.ts",
     "smoke": "tsx scripts/smoke-uzima.ts",
+    "smoke:demo": "tsx scripts/smoke-demo-ready.ts",
     "smoke:dual": "tsx scripts/smoke-dual-origination.ts",
     "check:infra": "tsx scripts/check-infra.ts",
     "check:db": "tsx scripts/check-db-schema.ts",

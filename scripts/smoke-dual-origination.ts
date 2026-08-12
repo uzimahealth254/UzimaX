@@ -96,7 +96,12 @@ async function main() {
   const pendingOpt = (opts.data as any[]).find((o) => o.invoiceId === pathA.id && o.status === 'pending');
   if (!pendingOpt) throw new Error('Path A: expected pending opt-in');
   console.log('Path A: supplier opts in…');
-  await json('POST', `/opt-ins/${pendingOpt.id}/respond`, { accept: true }, supplierTok);
+  let optPayload: Record<string, unknown> = { accept: true };
+  try {
+    const otpRes = await json('POST', `/opt-ins/${pendingOpt.id}/request-otp`, {}, supplierTok);
+    if (otpRes.demoHint) optPayload = { accept: true, otp: otpRes.demoHint };
+  } catch { /* bootstrap orgs may not need OTP */ }
+  await json('POST', `/opt-ins/${pendingOpt.id}/respond`, optPayload, supplierTok);
 
   // —— Path B: supplier listed → buyer verify ——
   console.log('Path B: supplier posts invoice…');
@@ -109,13 +114,19 @@ async function main() {
     issueDate: new Date().toISOString().slice(0, 10),
     dueDate: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
     description: 'Smoke Path B — supplier listed',
+    supportingDocs: [{ name: 'invoice.pdf', url: '/mock/docs/invoice.pdf', docType: 'invoice' }],
   }, supplierTok);
 
   const vers = await json('GET', '/buyer-verifications', undefined, buyerTok);
   const pendingVer = (vers.data as any[]).find((v) => v.invoiceId === pathB.id && v.status === 'pending');
   if (!pendingVer) throw new Error('Path B: expected pending buyer verification');
   console.log('Path B: buyer verifies…');
-  await json('POST', `/buyer-verifications/${pendingVer.id}/respond`, { accept: true }, buyerTok);
+  let verPayload: Record<string, unknown> = { accept: true };
+  try {
+    const otpRes = await json('POST', `/buyer-verifications/${pendingVer.id}/request-otp`, {}, buyerTok);
+    if (otpRes.demoHint) verPayload = { accept: true, otp: otpRes.demoHint };
+  } catch { /* bootstrap */ }
+  await json('POST', `/buyer-verifications/${pendingVer.id}/respond`, verPayload, buyerTok);
 
   console.log('OK — dual origination smoke passed');
   console.log({

@@ -22,20 +22,22 @@ export async function assertCheckerOtp(user: AuthUser, purpose: string, otp?: st
     eq(s.signatories.isActive, true),
   )).limit(1);
 
-  // If org has no signatories yet, allow (bootstrap). Once any exist, actor must be checker.
+  // If org has no signatories yet, allow (bootstrap). Once any exist, actor must be checker + OTP.
   const orgSigs = await db.select().from(s.signatories).where(and(
     eq(s.signatories.orgId, orgId),
     eq(s.signatories.isActive, true),
   ));
 
-  if (orgSigs.length > 0) {
-    if (!sig) {
-      throw new AppError(403, 'checker_required', 'Only an active checker signatory can confirm this action');
-    }
-    const capacity = (sig as { capacity?: string | null }).capacity;
-    if (capacity && capacity !== 'checker' && capacity !== 'both') {
-      throw new AppError(403, 'checker_required', 'Maker accounts cannot confirm — a checker must approve with OTP');
-    }
+  if (orgSigs.length === 0) {
+    return;
+  }
+
+  if (!sig) {
+    throw new AppError(403, 'checker_required', 'Only an active checker signatory can confirm this action');
+  }
+  const capacity = (sig as { capacity?: string | null }).capacity;
+  if (capacity && capacity !== 'checker' && capacity !== 'both') {
+    throw new AppError(403, 'checker_required', 'Maker accounts cannot confirm — a checker must approve with OTP');
   }
 
   if (!otp?.trim()) {

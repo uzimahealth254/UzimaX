@@ -1,6 +1,6 @@
 /**
  * Critical-path smoke checks against a running API (npm run dev:api).
- * Usage: npx tsx scripts/smoke-IOU Exchange.ts
+ * Usage: npx tsx scripts/smoke-uzima.ts
  */
 const BASE = process.env.API_URL || 'http://localhost:8787/api/v1';
 const PASS = process.env.DEMO_PASSWORD || 'Uzima2026!';
@@ -48,7 +48,9 @@ async function main() {
   if (!pending) throw new Error('Expected pending opt-in');
 
   console.log('Supplier accepts opt-in…');
-  const asgn = await json('POST', `/opt-ins/${pending.id}/respond`, { accept: true }, supplier.accessToken);
+  const otpRes = await json('POST', `/opt-ins/${pending.id}/request-otp`, {}, supplier.accessToken);
+  const otp = otpRes.demoHint || process.env.DEMO_OTP || '123456';
+  const asgn = await json('POST', `/opt-ins/${pending.id}/respond`, { accept: true, otp }, supplier.accessToken);
   if (!asgn.assignment && !asgn.invoice) console.log('Opt-in response', asgn);
 
   console.log('AfyaX party lookup…');
