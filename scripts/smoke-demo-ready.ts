@@ -24,13 +24,20 @@ async function json(method: string, path: string, body?: unknown, token?: string
   return data;
 }
 
-async function otpFor(path: string, token: string): Promise<string | undefined> {
+async function otpFor(path: string, token: string, userId?: string, purpose?: string): Promise<string | undefined> {
   try {
     const data = await json('POST', path, {}, token);
-    return data.demoHint ? String(data.demoHint) : undefined;
+    if (data.demoHint) return String(data.demoHint);
   } catch {
-    return undefined;
+    /* continue */
   }
+  // Hosted production often has no demoHint; plant a known code when DATABASE_URL is available.
+  if (userId && purpose && process.env.SMOKE_PLANT_OTP === '1') {
+    const { plantOtp } = await import('./smoke-plant-otp.js');
+    await plantOtp(userId, purpose, '123456');
+    return '123456';
+  }
+  return undefined;
 }
 
 async function main() {
@@ -110,8 +117,13 @@ async function main() {
   const pendingOpt = (opts.data as any[]).find((o) => o.invoiceId === pathA.id && o.status === 'pending');
   if (!pendingOpt) throw new Error('Path A: pending opt-in missing on supplier side');
 
-  // Seed supplier (Insurance-linked) may also need OTP; new org has no signatories but still needs OTP
-  const optOtp = await otpFor(`/opt-ins/${pendingOpt.id}/request-otp`, newSupplierTok);
+  // Seed supplier (Insurance-linked) may also need OTP; new org has no signatories but still needs OTP on older deploys
+  const optOtp = await otpFor(
+    `/opt-ins/${pendingOpt.id}/request-otp`,
+    newSupplierTok,
+    newSupplier.user?.id || newSupplier.user?.userId,
+    `opt_in:${pendingOpt.id}`,
+  );
   await json('POST', `/opt-ins/${pendingOpt.id}/respond`, {
     accept: true,
     ...(optOtp ? { otp: optOtp } : {}),
@@ -135,7 +147,12 @@ async function main() {
   const pendingVer = (vers.data as any[]).find((v) => v.invoiceId === pathB.id && v.status === 'pending');
   if (!pendingVer) throw new Error('Path B: pending verification missing on buyer side');
 
-  const verOtp = await otpFor(`/buyer-verifications/${pendingVer.id}/request-otp`, newBuyerTok);
+  const verOtp = await otpFor(
+    `/buyer-verifications/${pendingVer.id}/request-otp`,
+    newBuyerTok,
+    newBuyer.user?.id || newBuyer.user?.userId,
+    `buyer_verify:${pendingVer.id}`,
+  );
   await json('POST', `/buyer-verifications/${pendingVer.id}/respond`, {
     accept: true,
     commitmentToPay: true,
