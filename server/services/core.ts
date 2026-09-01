@@ -524,7 +524,8 @@ async function completeAssignmentSettlement(opts: {
       escrowLegId: opts.escrowLegId,
       purchasePrice,
       settlementAmount: supplierNet,
-      paymentReference: `IOUX-ESC-${opts.escrowLegId.slice(0, 8)}`,
+      paymentReference: `IOUX-TXN-${opts.escrowLegId.replace(/-/g, '').slice(0, 12)}`,
+      iouxTransactionId: opts.escrowLegId,
       dvs: true,
     },
   );
@@ -741,7 +742,7 @@ export async function applyPaymentUpdate(data: {
   }
   if (!inv) throw new AppError(404, 'not_found', 'Invoice not found');
 
-  await db.insert(s.paymentUpdates).values({
+  const [paymentRow] = await db.insert(s.paymentUpdates).values({
     invoiceId: inv.id,
     source: 'afyax',
     amountPaid: String(data.amountPaid),
@@ -749,7 +750,7 @@ export async function applyPaymentUpdate(data: {
     nextDueDate: data.nextDueDate || null,
     paymentMethod: data.paymentMethod || null,
     afyaxReference: data.afyaxReference || null,
-  });
+  }).returning();
 
   // Apply payment against earliest unpaid installments (recording only — settlement partner moved the cash)
   const installments = await db.select().from(s.installmentSchedules)
@@ -858,14 +859,18 @@ export async function applyPaymentUpdate(data: {
     }
     await notifyOrgUsers(inv.buyerOrgId, settledPayload);
   } else {
-    emitPlatformWebhook(inv.id, 'iou.payment_updated', {
-      amountPaid: data.amountPaid,
-      outstandingBalance: data.outstandingBalance,
-      afyaxReference: data.afyaxReference,
-    });
+    // AfyaX does not require outbound payment webhooks — sync is AfyaX → IOUX API only.
   }
 
-  return { invoiceId: inv.id, received: true };
+  return {
+    invoiceId: inv.id,
+    iouRegistryId: inv.iouRegistryId,
+    iouxTransactionId: paymentRow.id,
+    amountPaid: data.amountPaid,
+    outstandingBalance: data.outstandingBalance,
+    received: true,
+    settled: data.outstandingBalance <= 0,
+  };
 }
 
 /**

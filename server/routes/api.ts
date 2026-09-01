@@ -2078,7 +2078,15 @@ apiRouter.post('/webhooks/payment-update', apiKeyAuth, requireScope('payments:wr
       const [dup] = await db.select().from(s.paymentUpdates).where(
         eq(s.paymentUpdates.afyaxReference, req.body.idempotencyKey),
       ).limit(1);
-      if (dup) return res.json({ ok: true, duplicate: true, update: dup });
+      if (dup) {
+        return res.json({
+          ok: true,
+          duplicate: true,
+          invoiceId: dup.invoiceId,
+          iouxTransactionId: dup.id,
+          update: dup,
+        });
+      }
     }
     const payload = {
       ...req.body,

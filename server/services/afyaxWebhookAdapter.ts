@@ -103,11 +103,12 @@ export function buildAfyaxPurchasePayload(
   const paymentMethod = (opts?.defaultPaymentMethod || 'bank') as AfyaxPaymentMethod;
   const paymentRef = String(
     extra?.paymentReference
+    ?? extra?.iouxTransactionId
     ?? extra?.escrowLegId
     ?? assignment?.id
     ?? iouxId,
   );
-  const reference = paymentRef.startsWith('IOUX-') ? paymentRef : `IOUX-ESC-${paymentRef.slice(0, 8)}`;
+  const reference = paymentRef.startsWith('IOUX-') ? paymentRef : `IOUX-TXN-${paymentRef.replace(/-/g, '').slice(0, 12)}`;
 
   const payload: AfyaxPurchasePayload = {
     buyer_name: buyerName,
@@ -116,12 +117,12 @@ export function buildAfyaxPurchasePayload(
     amount: Math.round(amount * 100) / 100,
   };
 
+  // IOUX settlement transaction id — AfyaX stores for reconciliation (Sule spec).
+  payload.transaction_id = reference;
+
   if (paymentMethod === 'mpesa') {
     payload.phone_number = process.env.AFYAX_DEFAULT_MPESA_PHONE || undefined;
-    payload.transaction_id = reference;
-  } else if (paymentMethod === 'wallet') {
-    payload.transaction_id = reference;
-  } else {
+  } else if (paymentMethod === 'bank') {
     payload.bank_reference = reference;
     if (opts?.bankName) payload.bank_name = opts.bankName;
   }

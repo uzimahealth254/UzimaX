@@ -33,14 +33,15 @@ describe('AfyaX purchase webhook adapter', () => {
       faceValue: 500000,
       buyer: { name: 'Test Buyer Ltd' },
       assignment: { id: 'abc-123-def', purchasePrice: 475000 },
-    }, { assignmentId: 'abc-123-def', paymentReference: 'IOUX-ESC-abc12345' }, { defaultPaymentMethod: 'bank' });
+    }, { assignmentId: 'abc-123-def', paymentReference: 'IOUX-TXN-abc12345' }, { defaultPaymentMethod: 'bank' });
     expect(payload).toMatchObject({
       buyer_name: 'Test Buyer Ltd',
       ioux_id: 'IOU-KE-2024-00060-0',
       payment_method: 'bank',
       amount: 475000,
+      transaction_id: 'IOUX-TXN-abc12345',
     });
-    expect(payload?.bank_reference).toBe('IOUX-ESC-abc12345');
+    expect(payload?.bank_reference).toBe('IOUX-TXN-abc12345');
   });
 
   it('skips assigned when acquired will follow', () => {
