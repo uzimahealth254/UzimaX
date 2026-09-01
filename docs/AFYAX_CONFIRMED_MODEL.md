@@ -126,19 +126,22 @@ AfyaX registers IOU as sold; supplier loses access; buyer repayments continue vi
 | Item | Value |
 |------|-------|
 | API base URL | `https://uzimax.onrender.com/api/v1` |
+| Platform org ID | `785d0f19-b81f-425f-bcb9-ad994d4c885f` |
+| Platform party ID | `UZ-PLT-9DDFSM` |
 | Purchase webhook (sandbox) | `https://manager.smplystore.com/api/v1/iou/purchase` |
 | IP whitelist | Sule handling |
 
-API key and payment HMAC secret — shared on secure channel.
+API key and payment HMAC secret — see `docs/AFYAX_API_FOR_SULE.md` §2.
 
 ---
 
 ## Open items
 
-- [ ] AfyaX platform org + API key on **production** Render DB (admin setup)
+- [x] AfyaX platform org + API key on production Render DB
+- [x] Integrations saved (purchase URLs, `iou.disbursed`)
 - [ ] Joint UAT: full cycle steps 1–5
-- [ ] Production API URL when custom domain live
+- [ ] Whitelist IOUX server IP on AfyaX
 
 ---
 
-*Technical reference: `docs/AFYAX_INTEGRATION_API.md`*
+*Full API reference for Sule: `docs/AFYAX_API_FOR_SULE.md`*

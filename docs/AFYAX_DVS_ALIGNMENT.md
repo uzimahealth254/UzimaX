@@ -45,9 +45,10 @@ IOUX has been updated to follow this model.
 
 ## Still needed from AfyaX
 
-1. **Lifecycle webhook URL** for `iou.created`, `payment_updated`, `settled` (separate from purchase)
-2. **Confirm** `IOU-KE-…` registry ID format as `ioux_id`
-3. **Whitelist** IOUX server IP after deploy
+1. **Whitelist** IOUX server outbound IP on your purchase webhook endpoint
+2. **Confirm** UAT received `POST /iou/purchase` after SPV disbursement test
+
+*(No separate lifecycle webhook URL required — agreed model uses API + purchase webhook only.)*
 
 ---
 
