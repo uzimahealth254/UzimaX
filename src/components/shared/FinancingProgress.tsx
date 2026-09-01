@@ -10,7 +10,7 @@ const STEPS: { key: InvoiceStatus; short: string }[] = [
 
 const ORDER: string[] = [
   'draft', 'awaiting_opt_in', 'listed', 'awaiting_buyer_verification', 'verified',
-  'offer_received', 'offer_accepted', 'assigned', 'packaged', 'disbursed', 'matured', 'settled',
+  'offer_received', 'offer_accepted', 'pending_settlement', 'assigned', 'packaged', 'disbursed', 'matured', 'settled',
 ];
 
 /** Compact financing progress for invoice list rows */

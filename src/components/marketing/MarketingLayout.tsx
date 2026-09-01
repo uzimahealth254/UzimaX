@@ -14,7 +14,7 @@ export default function MarketingLayout({
   overlayNav?: boolean;
 }) {
   return (
-    <div className="uzima-site relative min-h-screen flex flex-col overflow-x-clip">
+    <div className="uzima-site relative min-h-dvh flex flex-col overflow-x-clip">
       <SiteNav overlay={overlayNav} />
       <main className="relative flex-1 w-full">{children}</main>
       {showCtaBand && <SiteCtaBand />}

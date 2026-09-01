@@ -48,7 +48,7 @@ export default function HowItWorks({ role }: { role: Role }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 min-h-[36px] px-2.5 rounded-lg border border-[#0E1F1A]/15 text-xs font-bold text-[#0E1F1A] hover:bg-[#f7faf6]"
+        className="inline-flex items-center gap-1.5 min-h-[44px] px-3 rounded-lg border border-[#0E1F1A]/15 text-xs font-bold text-[#0E1F1A] hover:bg-[#f7faf6]"
         aria-label="How IOU Exchange works"
       >
         <HelpCircle size={13} />
@@ -57,10 +57,14 @@ export default function HowItWorks({ role }: { role: Role }) {
       {open && (
         <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="absolute inset-0 bg-slate-900/40" onClick={() => setOpen(false)} />
-          <div className="relative bg-white border border-[#0E1F1A]/10 rounded-t-xl sm:rounded-xl p-5 w-full max-w-lg space-y-3 safe-pad-bottom">
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="modal-sheet relative w-full max-w-lg max-h-[min(90dvh,100%)] overflow-y-auto overscroll-contain scroll-touch space-y-3"
+          >
             <div className="flex items-start justify-between gap-3">
-              <h2 className="text-sm font-bold text-[#0E1F1A]">{copy.title}</h2>
-              <button type="button" onClick={() => setOpen(false)} aria-label="Close">
+              <h2 className="text-sm font-bold text-[#0E1F1A] pr-2">{copy.title}</h2>
+              <button type="button" onClick={() => setOpen(false)} aria-label="Close" className="touch-target shrink-0 rounded-md hover:bg-[#f7faf6]">
                 <X size={16} className="text-[#5A6B7D]" />
               </button>
             </div>

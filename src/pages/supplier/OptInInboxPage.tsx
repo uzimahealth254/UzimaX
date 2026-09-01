@@ -242,7 +242,7 @@ export default function OptInInboxPage() {
       {declineId && (
         <div className="fixed inset-0 z-[85] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="absolute inset-0 bg-slate-900/40" onClick={() => { setDeclineId(null); setReason(''); }} />
-          <div className="relative w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl bg-white p-4 shadow-xl space-y-3">
+          <div className="relative w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl bg-white p-4 shadow-xl space-y-3 max-h-[min(85dvh,100%)] overflow-y-auto scroll-touch safe-pad-bottom">
             <h3 className="text-sm font-bold text-[#0E1F1A]">Decline opt-in?</h3>
             <p className="text-xs text-[#5A6B7D]">Optional reason — buyer will be notified by email.</p>
             <textarea
@@ -252,8 +252,8 @@ export default function OptInInboxPage() {
               placeholder="Optional feedback"
             />
             <div className="flex gap-2 justify-end">
-              <button type="button" className="px-3 py-2 text-xs font-semibold" onClick={() => { setDeclineId(null); setReason(''); }}>Cancel</button>
-              <button type="button" className="px-3 py-2 text-xs font-bold rounded-lg bg-[#0E1F1A] text-white" onClick={() => void decline()}>Decline</button>
+              <button type="button" className="min-h-[44px] px-3 py-2 text-xs font-semibold" onClick={() => { setDeclineId(null); setReason(''); }}>Cancel</button>
+              <button type="button" className="min-h-[44px] px-3 py-2 text-xs font-bold rounded-lg bg-[#0E1F1A] text-white" onClick={() => void decline()}>Decline</button>
             </div>
           </div>
         </div>

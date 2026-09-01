@@ -8,6 +8,7 @@ export type InvoiceStatus =
   | 'verified'
   | 'offer_received'
   | 'offer_accepted'
+  | 'pending_settlement'
   | 'assigned'
   | 'packaged'
   | 'disbursed'

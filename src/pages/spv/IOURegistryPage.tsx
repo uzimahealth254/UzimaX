@@ -20,7 +20,7 @@ const TABS: { id: RegistryTab; label: string }[] = [
   { id: 'declined', label: 'Declined / closed' },
 ];
 
-const ASSIGNED = new Set(['assigned', 'packaged', 'disbursed', 'matured', 'settled']);
+const ASSIGNED = new Set(['pending_settlement', 'assigned', 'packaged', 'disbursed', 'matured', 'settled']);
 const OPEN_OFFER = new Set([
   'listed', 'verified', 'awaiting_opt_in', 'awaiting_buyer_verification', 'offer_received',
 ]);

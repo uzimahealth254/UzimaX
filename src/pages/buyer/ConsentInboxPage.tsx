@@ -282,7 +282,7 @@ export default function ConsentInboxPage() {
       {declineOpen && selected && (
         <div className="fixed inset-0 z-[85] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="absolute inset-0 bg-slate-900/40" onClick={() => { setDeclineOpen(false); setDeclineReason(''); }} />
-          <div className="relative bg-white border border-[#0E1F1A]/10 rounded-t-xl sm:rounded-xl p-4 w-full max-w-md space-y-3 safe-pad-bottom">
+          <div className="relative bg-white border border-[#0E1F1A]/10 rounded-t-xl sm:rounded-xl p-4 w-full max-w-md space-y-3 max-h-[min(85dvh,100%)] overflow-y-auto scroll-touch safe-pad-bottom">
             <h2 className="text-sm font-bold text-[#0E1F1A]">Decline assignment consent?</h2>
             <p className="text-xs text-[#5A6B7D]">
               The SPV will be notified. This refuses assignment of {selected.iouRegistryId}.
@@ -297,7 +297,7 @@ export default function ConsentInboxPage() {
             <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
               <button
                 type="button"
-                className="min-h-[36px] px-3 py-2 rounded-lg border border-[#0E1F1A]/15 text-xs font-semibold"
+                className="min-h-[44px] px-3 py-2 rounded-lg border border-[#0E1F1A]/15 text-xs font-semibold"
                 onClick={() => { setDeclineOpen(false); setDeclineReason(''); }}
               >
                 Cancel

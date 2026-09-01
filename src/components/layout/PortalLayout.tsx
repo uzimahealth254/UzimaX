@@ -12,7 +12,7 @@ import {
   Database, Send, Layers, GitBranch, Cpu, Users, Activity,
   BarChart3, Menu, X, MoreHorizontal, HandCoins,
   Wallet, Briefcase, FolderOpen, Percent, Receipt,
-  Settings
+  Settings, Plug,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -83,6 +83,7 @@ function getNavItems(role: UserRole): NavItem[] {
         { label: 'Fees', short: 'Fees', path: '/admin/fees', icon: <Percent size={s} strokeWidth={sw} /> },
         { label: 'Reconciliation', short: 'Reconcile', path: '/admin/reconciliation', icon: <Activity size={s} strokeWidth={sw} /> },
         { label: 'Users & Orgs', short: 'Users', path: '/admin/users', icon: <Users size={s} strokeWidth={sw} /> },
+        { label: 'Integrations', short: 'API', path: '/admin/integrations', icon: <Plug size={s} strokeWidth={sw} /> },
         { label: 'Workflow', short: 'Workflow', path: '/admin/workflow', icon: <Activity size={s} strokeWidth={sw} /> },
         { label: 'Analytics', short: 'Analytics', path: '/admin/analytics', icon: <BarChart3 size={s} strokeWidth={sw} /> },
         { label: 'Profile', short: 'Profile', path: '/admin/profile', icon: <User size={s} strokeWidth={sw} /> },
@@ -245,9 +246,9 @@ export default function PortalLayout() {
             <button onClick={() => setMobileOpen(true)} className="touch-target rounded-xl hover:bg-secondary" aria-label="Open menu">
               <Menu size={22} />
             </button>
-            <div className="flex items-center gap-2">
-              <UzimaMark className="w-7 h-7" />
-              <span className="font-display font-extrabold text-lg text-[#0B1F33]">{BRAND.name}</span>
+            <div className="flex items-center gap-2 min-w-0 flex-1 justify-center px-2">
+              <UzimaMark className="w-7 h-7 shrink-0" />
+              <span className="font-display font-extrabold text-base sm:text-lg text-[#0B1F33] truncate">{BRAND.name}</span>
             </div>
             <button onClick={() => setNotifOpen(true)} className="relative touch-target rounded-xl hover:bg-secondary" aria-label="Notifications">
               <Bell size={20} />

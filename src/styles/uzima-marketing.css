@@ -323,8 +323,8 @@
 
 .uzima-site .nav-burger {
   display: none;
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   border-radius: 10px;
   border: none;
   background: rgba(14, 31, 26, 0.08);
@@ -332,6 +332,7 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .uzima-site .mobile-sheet {
@@ -342,8 +343,11 @@
   color: #fff;
   display: flex;
   flex-direction: column;
-  padding: 20px 24px;
+  padding: max(20px, env(safe-area-inset-top, 0px)) 24px max(20px, env(safe-area-inset-bottom, 0px));
   animation: uzimaFadeIn 0.22s ease;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 .uzima-site .mobile-sheet a {
   display: block;
@@ -357,6 +361,16 @@
   font-size: 15px;
   font-weight: 500;
   color: var(--white-80);
+}
+.uzima-site .mobile-sheet .sheet-actions {
+  margin-top: auto;
+  padding-top: 28px;
+  display: grid;
+  gap: 12px;
+  position: sticky;
+  bottom: 0;
+  background: linear-gradient(180deg, transparent, var(--forest-dark) 18%);
+  padding-bottom: max(4px, env(safe-area-inset-bottom, 0px));
 }
 
 /* Hero */
@@ -373,10 +387,10 @@
   min-height: 0;
 }
 .uzima-site .hero-tall {
-  min-height: 62vh;
+  min-height: 62dvh;
 }
 .uzima-site .hero-mid {
-  min-height: 52vh;
+  min-height: 52dvh;
 }
 .uzima-site .hero-bg {
   position: absolute;
@@ -1070,8 +1084,33 @@
   .uzima-site .nav-burger {
     display: inline-flex;
   }
-  .uzima-site .nav-right .signin {
+  .uzima-site .nav-right .signin,
+  .uzima-site .nav-right .btn-dark {
     display: none;
+  }
+  .uzima-site .nav-inner {
+    height: 72px;
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .uzima-site .nav .brand {
+    font-size: 18px;
+    gap: 8px;
+    min-width: 0;
+  }
+  .uzima-site .nav .mark {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    flex-shrink: 0;
+  }
+  .uzima-site .nav .mark svg {
+    width: 20px;
+    height: 20px;
+  }
+  .uzima-site .brand-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .uzima-site .two-col,
   .uzima-site .two-col.rev,
@@ -1103,6 +1142,16 @@
   }
   .uzima-site .hero-inner {
     padding: 110px 0 70px;
+  }
+}
+
+@media (max-width: 480px) {
+  .uzima-site .foot-grid {
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+  .uzima-site .nav .brand {
+    font-size: 16px;
   }
 }
 

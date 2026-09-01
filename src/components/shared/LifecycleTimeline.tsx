@@ -6,6 +6,7 @@ const pipeline: { key: InvoiceStatus; label: string; owner: string }[] = [
   { key: 'verified', label: 'Verified', owner: 'Buyer' },
   { key: 'offer_received', label: 'Offer', owner: 'SPV' },
   { key: 'offer_accepted', label: 'Accepted', owner: 'Supplier' },
+  { key: 'pending_settlement', label: 'Pending settlement', owner: 'DvS' },
   { key: 'assigned', label: 'Assigned', owner: 'SPV' },
   { key: 'packaged', label: 'Packaged', owner: 'SPV' },
   { key: 'disbursed', label: 'Disbursed', owner: 'Escrow' },
@@ -14,7 +15,7 @@ const pipeline: { key: InvoiceStatus; label: string; owner: string }[] = [
 
 const order: InvoiceStatus[] = [
   'draft', 'awaiting_opt_in', 'listed', 'verified', 'offer_received', 'offer_accepted',
-  'assigned', 'packaged', 'disbursed', 'matured', 'settled', 'opt_in_declined',
+  'assigned', 'pending_settlement', 'packaged', 'disbursed', 'matured', 'settled', 'opt_in_declined',
 ];
 
 function stepState(currentStatus: InvoiceStatus, stepKey: InvoiceStatus) {

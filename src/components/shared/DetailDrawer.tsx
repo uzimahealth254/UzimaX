@@ -40,7 +40,7 @@ export default function DetailDrawer({
             <h2 className="text-sm font-bold text-[#0E1F1A] truncate">{title}</h2>
             {subtitle && <p className="text-[11px] text-[#5A6B7D] mt-0.5 font-mono truncate">{subtitle}</p>}
           </div>
-          <button type="button" onClick={onClose} className="p-1.5 rounded-md hover:bg-[#f7faf6]" aria-label="Close drawer">
+          <button type="button" onClick={onClose} className="touch-target shrink-0 rounded-md hover:bg-[#f7faf6]" aria-label="Close drawer">
             <X size={16} className="text-[#5A6B7D]" />
           </button>
         </header>

@@ -201,7 +201,7 @@ export default function BuyerApiPage({ embedded = false }: { embedded?: boolean 
       {newKey && (
         <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setNewKey(null)} />
-          <div className="relative bg-white rounded-xl border border-[#0E1F1A]/10 shadow-none p-6 w-full sm:max-w-md animate-fade-in safe-pad-bottom">
+          <div className="relative bg-white rounded-xl border border-[#0E1F1A]/10 shadow-none p-6 w-full sm:max-w-md animate-fade-in max-h-[min(90dvh,100%)] overflow-y-auto scroll-touch safe-pad-bottom">
             <div className="mx-auto w-10 h-1 rounded-full bg-muted-foreground/20 mb-4 sm:hidden" />
             <h2 className="text-lg font-semibold mb-2">Save your API key</h2>
             <p className="text-sm text-muted-foreground mb-4 leading-relaxed">

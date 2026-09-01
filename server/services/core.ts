@@ -10,6 +10,7 @@ import { generatePurchaseNote, generatePaymentReceipt } from './pdf.js';
 import { writeAudit } from '../middleware/audit.js';
 import { notifyOrgUsers } from './notificationService.js';
 import { templates, emailSubjects } from './email.js';
+import { emitPlatformWebhook } from './platformWebhooks.js';
 
 async function nextIouRegistryId(): Promise<string> {
   const year = new Date().getFullYear();
@@ -28,12 +29,14 @@ async function nextIouRegistryId(): Promise<string> {
 
 const VALID: Record<string, string[]> = {
   draft: ['awaiting_opt_in', 'awaiting_buyer_verification', 'listed', 'cancelled'],
-  awaiting_opt_in: ['listed', 'assigned', 'opt_in_declined', 'cancelled'],
-  awaiting_buyer_verification: ['verified', 'assigned', 'buyer_rejected', 'cancelled'],
-  listed: ['offer_received', 'assigned', 'cancelled'],
-  verified: ['assigned', 'listed', 'cancelled'],
+  awaiting_opt_in: ['listed', 'pending_settlement', 'opt_in_declined', 'cancelled'],
+  awaiting_buyer_verification: ['verified', 'pending_settlement', 'buyer_rejected', 'cancelled'],
+  listed: ['offer_received', 'pending_settlement', 'assigned', 'cancelled'],
+  verified: ['pending_settlement', 'assigned', 'listed', 'cancelled'],
   offer_received: ['offer_accepted', 'listed', 'cancelled'],
-  offer_accepted: ['assigned', 'cancelled'],
+  offer_accepted: ['pending_settlement', 'assigned', 'cancelled'],
+  /** DvS: offer accepted — assignment recorded, payment/settlement pending */
+  pending_settlement: ['disbursed', 'cancelled'],
   assigned: ['packaged', 'disbursed', 'settled', 'cancelled'],
   packaged: ['disbursed', 'settled', 'cancelled'],
   disbursed: ['matured', 'settled', 'cancelled'],
@@ -50,6 +53,7 @@ export async function transitionInvoice(
   toStatus: string,
   actorId?: string | null,
   reason?: string,
+  webhookExtra?: Record<string, unknown>,
 ) {
   const [inv] = await db.select().from(s.invoices).where(eq(s.invoices.id, invoiceId)).limit(1);
   if (!inv) throw new AppError(404, 'not_found', 'Invoice not found');
@@ -65,6 +69,15 @@ export async function transitionInvoice(
     changedBy: actorId || null,
     reason: reason || null,
   });
+
+  if (toStatus === 'settled') {
+    emitPlatformWebhook(invoiceId, 'iou.settled', { fromStatus: inv.status, toStatus, reason, ...webhookExtra });
+  } else if (toStatus === 'disbursed') {
+    emitPlatformWebhook(invoiceId, 'iou.disbursed', { fromStatus: inv.status, toStatus, reason, ...webhookExtra });
+  } else {
+    emitPlatformWebhook(invoiceId, 'iou.status_changed', { fromStatus: inv.status, toStatus, reason, ...webhookExtra });
+  }
+
   return { ...inv, status: toStatus };
 }
 
@@ -173,6 +186,8 @@ export async function createBuyerOriginatedInvoice(data: {
     details: { origin: 'buyer_posted', iou },
   });
 
+  emitPlatformWebhook(inv.id, 'iou.created', { origin: 'buyer_posted' });
+
   return { invoice: inv, optIn };
 }
 
@@ -189,6 +204,7 @@ export async function createSupplierOriginatedInvoice(data: {
   supportingDocs?: unknown[];
   commitmentToPay?: boolean;
   bankStandingOrderRef?: string;
+  sourcePlatformOrgId?: string | null;
 }, actorId?: string) {
   await assertProgrammeAllows({
     buyerOrgId: data.buyerOrgId,
@@ -209,6 +225,7 @@ export async function createSupplierOriginatedInvoice(data: {
     originatorId: data.supplierOrgId,
     buyerOrgId: data.buyerOrgId,
     supplierOrgId: data.supplierOrgId,
+    sourcePlatformOrgId: data.sourcePlatformOrgId || null,
     invoiceNumber: data.invoiceNumber,
     faceValue: String(data.faceValue),
     listedAmount: String(listed),
@@ -248,6 +265,8 @@ export async function createSupplierOriginatedInvoice(data: {
     actorId, action: 'invoice.created', resourceType: 'invoice', resourceId: inv.id,
     details: { origin: 'supplier_listed', iou },
   });
+
+  emitPlatformWebhook(inv.id, 'iou.created', { origin: 'supplier_listed' });
 
   return { invoice: inv, verification };
 }
@@ -373,7 +392,7 @@ export async function createAssignment(opts: {
     assignmentType,
     purchasePrice: String(purchasePrice),
     faceValue: String(face),
-    status: 'active',
+    status: 'pending_settlement',
   }).returning();
 
   await db.insert(s.escrowLegs).values([
@@ -393,32 +412,18 @@ export async function createAssignment(opts: {
     });
   }
 
-  // Simulation wallets
-  await walletDebit(spv.id, purchasePrice, `assignment:${asgn.id}`, 'Purchase of receivable');
-  await walletCredit(inv.supplierOrgId, supplierNet, `assignment:${asgn.id}`, 'Receivable sale proceeds');
-  if (platform && fees.total > 0) {
-    await walletCredit(platform.id, fees.total, `fee:${asgn.id}`, 'Platform fees');
-  }
+  // DvS: wallets and listing transfer happen at escrow disbursement (releaseEscrowLeg), not here.
 
+  await transitionInvoice(inv.id, 'pending_settlement', opts.actorId, `Offer accepted — ${assignmentType} (awaiting settlement)`);
   await db.update(s.invoices).set({
-    status: 'assigned',
     discountRateBps: bps,
-    listingStatus: 'sold',
     updatedAt: new Date(),
   }).where(eq(s.invoices.id, inv.id));
 
-  await db.insert(s.invoiceStatusHistory).values({
-    invoiceId: inv.id,
-    fromStatus: inv.status,
-    toStatus: 'assigned',
-    changedBy: opts.actorId || null,
-    reason: `Assignment ${assignmentType} (from ${opts.type})`,
-  });
-
   await notifyOrgUsers(spv.id, {
-    type: 'assignment_created',
-    title: 'Receivable assigned',
-    body: `${inv.iouRegistryId} assigned to SPV`,
+    type: 'assignment_pending_settlement',
+    title: 'Receivable accepted — pending settlement',
+    body: `${inv.iouRegistryId} — release escrow disbursement to complete DvS`,
     referenceType: 'assignment',
     referenceId: asgn.id,
     emailHtml: templates.assignmentCreated(inv.iouRegistryId || inv.id, assignmentType),
@@ -426,18 +431,18 @@ export async function createAssignment(opts: {
     smsBody: `IOUX: ${inv.iouRegistryId} assigned to SPV`,
   });
   await notifyOrgUsers(inv.buyerOrgId, {
-    type: 'assignment_created',
-    title: 'Receivable assigned to SPV',
-    body: `${inv.iouRegistryId} is now assigned`,
+    type: 'assignment_pending_settlement',
+    title: 'Receivable accepted — pending settlement',
+    body: `${inv.iouRegistryId} — payment and assignment complete when SPV settles`,
     referenceType: 'assignment',
     referenceId: asgn.id,
     emailHtml: templates.assignmentCreated(inv.iouRegistryId || inv.id, assignmentType),
     emailSubject: emailSubjects.assignment(inv.iouRegistryId || inv.id),
   });
   await notifyOrgUsers(inv.supplierOrgId, {
-    type: 'assignment_created',
-    title: 'Receivable assigned to SPV',
-    body: `${inv.iouRegistryId} is now assigned`,
+    type: 'assignment_pending_settlement',
+    title: 'Receivable accepted — pending settlement',
+    body: `${inv.iouRegistryId} — funds release when SPV completes payment`,
     referenceType: 'assignment',
     referenceId: asgn.id,
     emailHtml: templates.assignmentCreated(inv.iouRegistryId || inv.id, assignmentType),
@@ -471,10 +476,58 @@ export async function createAssignment(opts: {
     action: 'assignment.created',
     resourceType: 'assignment',
     resourceId: asgn.id,
-    details: { type: assignmentType, legacyType: opts.type, invoiceId: inv.id },
+    details: { type: assignmentType, legacyType: opts.type, invoiceId: inv.id, dvs: 'pending_settlement' },
   });
 
   return asgn;
+}
+
+/** DvS settlement: SPV payment + IOU delivery (assignment activation) on disbursement. */
+async function completeAssignmentSettlement(opts: {
+  assignmentId: string;
+  escrowLegId: string;
+  actorId?: string;
+}): Promise<void> {
+  const [asgn] = await db.select().from(s.assignments).where(eq(s.assignments.id, opts.assignmentId)).limit(1);
+  if (!asgn) return;
+  if (asgn.status === 'active') return;
+
+  const [inv] = await db.select().from(s.invoices).where(eq(s.invoices.id, asgn.invoiceId)).limit(1);
+  if (!inv) return;
+
+  const spv = await getSpvOrg();
+  const platform = await getPlatformOrg();
+  const purchasePrice = Number(asgn.purchasePrice);
+  const face = Number(asgn.faceValue);
+  const fees = await calculateAssignmentFees(face);
+  const supplierNet = purchasePrice - Math.round(fees.total / 2);
+
+  await walletDebit(spv.id, purchasePrice, `settlement:${asgn.id}`, 'Purchase of receivable (DvS)');
+  await walletCredit(asgn.supplierOrgId, supplierNet, `settlement:${asgn.id}`, 'Receivable sale proceeds');
+  if (platform && fees.total > 0) {
+    await walletCredit(platform.id, fees.total, `fee:${asgn.id}`, 'Platform fees');
+  }
+
+  await db.update(s.assignments).set({ status: 'active' }).where(eq(s.assignments.id, asgn.id));
+  await db.update(s.invoices).set({
+    listingStatus: 'sold',
+    updatedAt: new Date(),
+  }).where(eq(s.invoices.id, inv.id));
+
+  await transitionInvoice(
+    inv.id,
+    'disbursed',
+    opts.actorId,
+    'Delivery vs settlement — payment and assignment completed',
+    {
+      assignmentId: asgn.id,
+      escrowLegId: opts.escrowLegId,
+      purchasePrice,
+      settlementAmount: supplierNet,
+      paymentReference: `IOUX-ESC-${opts.escrowLegId.slice(0, 8)}`,
+      dvs: true,
+    },
+  );
 }
 
 export async function respondToOptIn(
@@ -603,7 +656,11 @@ export async function releaseEscrowLeg(legId: string, actorId?: string) {
   if (leg.legType === 'disbursement_to_supplier') {
     const [asgn] = await db.select().from(s.assignments).where(eq(s.assignments.id, leg.assignmentId)).limit(1);
     if (asgn) {
-      await transitionInvoice(asgn.invoiceId, 'disbursed', actorId, 'Escrow disbursement released');
+      await completeAssignmentSettlement({
+        assignmentId: asgn.id,
+        escrowLegId: leg.id,
+        actorId,
+      });
       const [inv] = await db.select().from(s.invoices).where(eq(s.invoices.id, asgn.invoiceId)).limit(1);
       const iou = inv?.iouRegistryId || asgn.invoiceId;
       const amount = `KES ${Number(leg.amount).toLocaleString()}`;
@@ -800,6 +857,12 @@ export async function applyPaymentUpdate(data: {
       await notifyOrgUsers(asgn.supplierOrgId, settledPayload);
     }
     await notifyOrgUsers(inv.buyerOrgId, settledPayload);
+  } else {
+    emitPlatformWebhook(inv.id, 'iou.payment_updated', {
+      amountPaid: data.amountPaid,
+      outstandingBalance: data.outstandingBalance,
+      afyaxReference: data.afyaxReference,
+    });
   }
 
   return { invoiceId: inv.id, received: true };

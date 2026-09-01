@@ -267,7 +267,7 @@ export default function OffersPage() {
       {bulkOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="absolute inset-0 bg-slate-900/40" onClick={() => { setBulkOpen(false); setAgreed(false); }} />
-          <div className="relative bg-white rounded-t-xl sm:rounded-xl border border-[#0E1F1A]/10 p-5 sm:p-6 w-full max-w-md animate-fade-in safe-pad-bottom">
+          <div className="relative bg-white rounded-t-xl sm:rounded-xl border border-[#0E1F1A]/10 p-5 sm:p-6 w-full max-w-md animate-fade-in max-h-[85dvh] overflow-y-auto scroll-touch safe-pad-bottom">
             <h2 className="text-sm font-bold text-[#0E1F1A] mb-1">Bulk purchase offers</h2>
             <p className="text-[11px] text-[#5A6B7D] mb-4">
               Submit the same discount rate to {selectedIds.size} selected IOU{selectedIds.size === 1 ? '' : 's'}.

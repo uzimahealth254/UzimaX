@@ -12,6 +12,7 @@ const statusConfig: Record<string, { label: string; className: string }> = {
   verified: { label: 'Verified', className: 'bg-[#F4FBE3] text-[#1A3A2E]' },
   offer_received: { label: 'Offer Received', className: 'bg-[#FFF8E0] text-[#8A6A00]' },
   offer_accepted: { label: 'Offer Accepted', className: 'bg-[#F4FBE3] text-[#1A3A2E]' },
+  pending_settlement: { label: 'Pending Settlement', className: 'bg-[#FFF8E0] text-[#8A6A00]' },
   assigned: { label: 'Assigned', className: 'bg-indigo-50 text-indigo-700' },
   packaged: { label: 'Packaged', className: 'bg-purple-50 text-purple-700' },
   disbursed: { label: 'Disbursed', className: 'bg-[#F4FBE3] text-[#1A3A2E]' },

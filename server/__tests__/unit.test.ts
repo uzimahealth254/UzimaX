@@ -10,6 +10,53 @@ import {
   weightedAvgDiscountBps,
   weightedAvgTenorDays,
 } from '../lib/packageMetrics.ts';
+import { signOutboundWebhook } from '../services/platformWebhooks.ts';
+import {
+  buildAfyaxPurchasePayload,
+  resolveAfyaxPurchaseUrl,
+  shouldSendAfyaxPurchase,
+  skipAfyaxPurchaseForAssignedWhenAcquired,
+} from '../services/afyaxWebhookAdapter.ts';
+
+describe('AfyaX purchase webhook adapter', () => {
+  it('resolves purchase URL from base URL', () => {
+    const url = resolveAfyaxPurchaseUrl({
+      sandboxBaseUrl: 'https://manager.smplystore.com',
+      activeEnvironment: 'sandbox',
+    });
+    expect(url).toBe('https://manager.smplystore.com/api/v1/iou/purchase');
+  });
+
+  it('builds purchase payload with bank reference', () => {
+    const payload = buildAfyaxPurchasePayload({
+      iouRegistryId: 'IOU-KE-2024-00060-0',
+      faceValue: 500000,
+      buyer: { name: 'Test Buyer Ltd' },
+      assignment: { id: 'abc-123-def', purchasePrice: 475000 },
+    }, { assignmentId: 'abc-123-def', paymentReference: 'IOUX-ESC-abc12345' }, { defaultPaymentMethod: 'bank' });
+    expect(payload).toMatchObject({
+      buyer_name: 'Test Buyer Ltd',
+      ioux_id: 'IOU-KE-2024-00060-0',
+      payment_method: 'bank',
+      amount: 475000,
+    });
+    expect(payload?.bank_reference).toBe('IOUX-ESC-abc12345');
+  });
+
+  it('skips assigned when acquired will follow', () => {
+    expect(skipAfyaxPurchaseForAssignedWhenAcquired('iou.assigned', { offerId: 'x' })).toBe(false);
+    expect(shouldSendAfyaxPurchase('iou.disbursed')).toBe(true);
+    expect(shouldSendAfyaxPurchase('iou.assigned')).toBe(false);
+  });
+});
+
+describe('outbound webhook signing', () => {
+  it('produces stable HMAC hex', () => {
+    const sig = signOutboundWebhook('{"a":1}', 'test-secret', '1234567890');
+    expect(sig).toMatch(/^[a-f0-9]{64}$/);
+    expect(signOutboundWebhook('{"a":1}', 'test-secret', '1234567890')).toBe(sig);
+  });
+});
 
 describe('IOU registry IDs', () => {
   it('generates valid Luhn-checked IDs', () => {

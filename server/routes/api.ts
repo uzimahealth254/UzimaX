@@ -287,33 +287,43 @@ authRouter.post('/reset-password', validate(z.object({
 });
 
 // ——— Parties (AfyaX) ———
-apiRouter.post('/parties', apiKeyAuth, requireScope('parties:write'), validate(z.object({
+const kycDocumentSchema = z.object({
+  docType: z.string().min(1),
+  fileUrl: z.string().url(),
+  name: z.string().optional(),
+  verifiedAt: z.string().optional(),
+});
+
+const partyUpsertSchema = z.object({
   name: z.string().min(1),
   registrationNo: z.string().optional(),
   orgType: z.enum(['buyer', 'supplier']),
   afyaxId: z.string().optional(),
+  externalOrganisationId: z.string().optional(),
+  kraPin: z.string().optional(),
+  address: z.string().optional(),
+  contactEmail: z.string().email().optional(),
+  contactPhone: z.string().optional(),
+  ppbRegistration: z.string().optional(),
+  ppbLicence: z.string().optional(),
+  businessType: z.string().optional(),
+  county: z.string().optional(),
+  kycStatus: z.enum(['pending', 'verified', 'rejected']).optional(),
+  kycVerifiedAt: z.string().optional(),
+  kycDocuments: z.array(kycDocumentSchema).optional(),
   metadata: z.record(z.unknown()).optional(),
-})), async (req, res, next) => {
+});
+
+apiRouter.post('/parties', apiKeyAuth, requireScope('parties:write'), validate(partyUpsertSchema), async (req, res, next) => {
   try {
-    const body = req.body;
-    if (body.afyaxId) {
-      const [existing] = await db.select().from(s.organisations).where(eq(s.organisations.afyaxId, body.afyaxId)).limit(1);
-      if (existing) {
-        return res.json({ uzimaPartyId: existing.uzimaPartyId, id: existing.id, existing: true });
-      }
-    }
-    const uzimaPartyId = generateUzimaPartyId(body.orgType);
-    const [org] = await db.insert(s.organisations).values({
-      name: body.name,
-      registrationNo: body.registrationNo,
-      orgType: body.orgType,
-      afyaxId: body.afyaxId,
-      uzimaPartyId,
-      metadata: body.metadata || {},
-    }).returning();
-    await getOrCreateWallet(org.id);
-    await writeAudit({ action: 'party.created', resourceType: 'organisation', resourceId: org.id, actorEmail: req.apiClient?.label });
-    res.status(201).json({ uzimaPartyId: org.uzimaPartyId, id: org.id, existing: false });
+    const { upsertIntegrationParty } = await import('../services/integrationParties.js');
+    const result = await upsertIntegrationParty(req.body, req.apiClient?.label);
+    res.status(result.existing ? 200 : 201).json({
+      id: result.id,
+      uzimaPartyId: result.uzimaPartyId,
+      organisationId: result.id,
+      existing: result.existing,
+    });
   } catch (e) { next(e); }
 });
 
@@ -322,6 +332,85 @@ apiRouter.get('/parties/:uzimaPartyId', apiKeyAuth, requireScope('parties:read')
     const [org] = await db.select().from(s.organisations).where(eq(s.organisations.uzimaPartyId, req.params.uzimaPartyId)).limit(1);
     if (!org) throw new AppError(404, 'not_found', 'Party not found');
     res.json(org);
+  } catch (e) { next(e); }
+});
+
+apiRouter.get('/organisations/:id', apiKeyAuth, requireScope('parties:read'), async (req, res, next) => {
+  try {
+    const param = req.params.id;
+    let org;
+    if (param.includes('-') && param.length === 36) {
+      [org] = await db.select().from(s.organisations).where(eq(s.organisations.id, param)).limit(1);
+    }
+    if (!org) {
+      [org] = await db.select().from(s.organisations).where(eq(s.organisations.uzimaPartyId, param)).limit(1);
+    }
+    if (!org) throw new AppError(404, 'not_found', 'Organisation not found');
+    res.json(org);
+  } catch (e) { next(e); }
+});
+
+// ——— Users (AfyaX provisioning) ———
+const integrationUserSchema = z.object({
+  email: z.string().email(),
+  fullName: z.string().min(1),
+  role: z.enum(['buyer', 'supplier']),
+  orgId: z.string().uuid().optional(),
+  uzimaPartyId: z.string().optional(),
+  organisationId: z.string().uuid().optional(),
+  afyaxUserId: z.string().optional(),
+  externalUserId: z.string().optional(),
+  phone: z.string().optional(),
+  isSignatory: z.boolean().optional(),
+  capacity: z.enum(['maker', 'checker', 'both']).optional(),
+  sendInviteEmail: z.boolean().optional(),
+});
+
+apiRouter.post('/users', apiKeyAuth, requireScope('users:write'), validate(integrationUserSchema), async (req, res, next) => {
+  try {
+    const { createIntegrationUser } = await import('../services/integrationUsers.js');
+    const body = req.body;
+    const result = await createIntegrationUser({
+      email: body.email,
+      fullName: body.fullName,
+      role: body.role,
+      orgId: body.orgId || body.organisationId,
+      uzimaPartyId: body.uzimaPartyId,
+      afyaxUserId: body.afyaxUserId || body.externalUserId,
+      phone: body.phone,
+      isSignatory: body.isSignatory,
+      capacity: body.capacity,
+      sendInviteEmail: body.sendInviteEmail,
+    }, req.apiClient?.label);
+    res.status(result.existing ? 200 : 201).json({
+      id: result.user.id,
+      iouxUserId: result.user.id,
+      email: result.user.email,
+      fullName: result.user.fullName,
+      role: result.user.role,
+      orgId: result.user.orgId,
+      afyaxUserId: result.user.afyaxUserId,
+      existing: result.existing,
+      emailSent: result.emailSent,
+    });
+  } catch (e) { next(e); }
+});
+
+apiRouter.get('/users/:id', apiKeyAuth, requireScope('users:read'), async (req, res, next) => {
+  try {
+    const [user] = await db.select({
+      id: s.users.id,
+      email: s.users.email,
+      fullName: s.users.fullName,
+      role: s.users.role,
+      orgId: s.users.orgId,
+      afyaxUserId: s.users.afyaxUserId,
+      phone: s.users.phone,
+      status: s.users.status,
+      isSignatory: s.users.isSignatory,
+    }).from(s.users).where(eq(s.users.id, req.params.id)).limit(1);
+    if (!user) throw new AppError(404, 'not_found', 'User not found');
+    res.json(user);
   } catch (e) { next(e); }
 });
 
@@ -358,6 +447,16 @@ const invoiceCreateSchema = z.object({
   bankStandingOrderRef: z.string().max(128).optional(),
   standingOrderBank: z.string().max(128).optional(),
   sourcePlatformOrgId: z.string().uuid().optional(),
+  /** buyer_credit_sale (default) | supplier_list */
+  submissionType: z.enum(['buyer_credit_sale', 'supplier_list']).optional(),
+  externalInvoiceId: z.string().optional(),
+  externalOrderId: z.string().optional(),
+  lineItems: z.array(z.object({
+    description: z.string().optional(),
+    quantity: z.number().optional(),
+    unitPrice: z.number().optional(),
+    amount: z.number().optional(),
+  })).optional(),
 });
 
 apiRouter.post('/invoices', authenticateAny, validate(invoiceCreateSchema), async (req, res, next) => {
@@ -478,7 +577,6 @@ apiRouter.post('/external/invoices', apiKeyAuth, requireScope('invoices:write'),
       if (!sp) throw new AppError(400, 'supplier_not_found', 'supplierPartyId not found');
       supplierOrgId = sp.id;
     }
-    // Bind to API key org unless platform AfyaX key (label afyax / org type platform)
     const [keyOrg] = await db.select().from(s.organisations).where(eq(s.organisations.id, client.orgId)).limit(1);
     const isPlatform = keyOrg?.orgType === 'platform' || client.scopes.includes('*');
     if (!isPlatform) {
@@ -491,23 +589,118 @@ apiRouter.post('/external/invoices', apiKeyAuth, requireScope('invoices:write'),
     const sourcePlatformOrgId = isPlatform
       ? (body.sourcePlatformOrgId || client.orgId)
       : (body.sourcePlatformOrgId || null);
+
+    const face = body.faceValue || body.amount;
+    const metadata: Record<string, unknown> = {};
+    if (body.description) metadata.description = body.description;
+    if (body.externalInvoiceId) metadata.externalInvoiceId = body.externalInvoiceId;
+    if (body.externalOrderId) metadata.externalOrderId = body.externalOrderId;
+    if (body.lineItems) metadata.lineItems = body.lineItems;
+
+    const submissionType = body.submissionType || body.origin || 'buyer_credit_sale';
+
+    if (submissionType === 'supplier_list' || submissionType === 'supplier_listed') {
+      const docs = body.supportingDocs || [];
+      const listed = body.listedAmount != null ? Number(body.listedAmount) : face;
+      const result = await createSupplierOriginatedInvoice({
+        buyerOrgId,
+        supplierOrgId,
+        invoiceNumber: body.invoiceNumber,
+        faceValue: face,
+        listedAmount: listed,
+        currency: body.currency,
+        issueDate: body.issueDate,
+        dueDate: body.dueDate,
+        supportingDocs: docs,
+        commitmentToPay: body.commitmentToPay ?? true,
+        bankStandingOrderRef: body.bankStandingOrderRef,
+        sourcePlatformOrgId,
+      });
+      if (Object.keys(metadata).length) {
+        await db.update(s.invoices).set({
+          metadata: { ...(result.invoice.metadata as object || {}), ...metadata },
+          lineItems: body.lineItems || result.invoice.lineItems,
+          updatedAt: new Date(),
+        }).where(eq(s.invoices.id, result.invoice.id));
+      }
+      return res.status(201).json({
+        invoiceId: result.invoice.id,
+        id: result.invoice.id,
+        iouRegistryId: result.invoice.iouRegistryId,
+        status: result.invoice.status,
+        sourcePlatformOrgId,
+        submissionType: 'supplier_list',
+      });
+    }
+
     const result = await createBuyerOriginatedInvoice({
       buyerOrgId, supplierOrgId,
       invoiceNumber: body.invoiceNumber, poReference: body.poReference,
-      faceValue: body.faceValue || body.amount,
+      faceValue: face,
       currency: body.currency, issueDate: body.issueDate, dueDate: body.dueDate,
       description: body.description, interestRate: body.interestRate,
       installmentSchedule: body.installmentSchedule, origin: 'api_upload',
-      commitmentToPay: body.commitmentToPay,
+      supportingDocs: body.supportingDocs,
+      commitmentToPay: body.commitmentToPay ?? true,
       bankStandingOrderRef: body.bankStandingOrderRef,
+      standingOrderBank: body.standingOrderBank,
       sourcePlatformOrgId,
     });
+    if (Object.keys(metadata).length) {
+      await db.update(s.invoices).set({
+        metadata: { ...(result.invoice.metadata as object || {}), ...metadata },
+        lineItems: body.lineItems || result.invoice.lineItems,
+        updatedAt: new Date(),
+      }).where(eq(s.invoices.id, result.invoice.id));
+    }
     res.status(201).json({
       invoiceId: result.invoice.id,
       id: result.invoice.id,
       iouRegistryId: result.invoice.iouRegistryId,
       status: result.invoice.status,
-      sourcePlatformOrgId: result.invoice.sourcePlatformOrgId,
+      sourcePlatformOrgId: result.invoice.sourcePlatformOrgId || sourcePlatformOrgId,
+      submissionType: 'buyer_credit_sale',
+    });
+  } catch (e) { next(e); }
+});
+
+apiRouter.post('/ious', apiKeyAuth, requireScope('invoices:write'), validate(invoiceCreateSchema), async (req, res, next) => {
+  try {
+    const body = req.body;
+    const client = req.apiClient!;
+    let buyerOrgId = body.buyerOrgId;
+    let supplierOrgId = body.supplierOrgId;
+    if (body.buyerPartyId) {
+      const [b] = await db.select().from(s.organisations).where(eq(s.organisations.uzimaPartyId, body.buyerPartyId)).limit(1);
+      if (!b) throw new AppError(400, 'buyer_not_found', 'buyerPartyId not found');
+      buyerOrgId = b.id;
+    }
+    if (body.supplierPartyId) {
+      const [sp] = await db.select().from(s.organisations).where(eq(s.organisations.uzimaPartyId, body.supplierPartyId)).limit(1);
+      if (!sp) throw new AppError(400, 'supplier_not_found', 'supplierPartyId not found');
+      supplierOrgId = sp.id;
+    }
+    const [keyOrg] = await db.select().from(s.organisations).where(eq(s.organisations.id, client.orgId)).limit(1);
+    const isPlatform = keyOrg?.orgType === 'platform' || client.scopes.includes('*');
+    if (!buyerOrgId || !supplierOrgId) throw new AppError(400, 'validation_error', 'buyer and supplier required');
+    const sourcePlatformOrgId = isPlatform ? (body.sourcePlatformOrgId || client.orgId) : null;
+    const face = body.faceValue || body.amount;
+    const result = await createBuyerOriginatedInvoice({
+      buyerOrgId, supplierOrgId,
+      invoiceNumber: body.invoiceNumber,
+      faceValue: face,
+      currency: body.currency,
+      issueDate: body.issueDate,
+      dueDate: body.dueDate,
+      origin: 'api_upload',
+      supportingDocs: body.supportingDocs,
+      commitmentToPay: body.commitmentToPay ?? true,
+      sourcePlatformOrgId,
+    });
+    res.status(201).json({
+      invoiceId: result.invoice.id,
+      iouRegistryId: result.invoice.iouRegistryId,
+      status: result.invoice.status,
     });
   } catch (e) { next(e); }
 });
@@ -542,11 +735,19 @@ apiRouter.get('/invoices/:id/status', authenticateAny, async (req, res, next) =>
   } catch (e) { next(e); }
 });
 
-apiRouter.get('/ious/:iouRegistryId', authenticate, async (req, res, next) => {
+apiRouter.get('/ious/:iouRegistryId', authenticateAny, async (req, res, next) => {
   try {
+    if (req.apiClient) {
+      if (!(req.apiClient.scopes.includes('invoices:read') || req.apiClient.scopes.includes('invoices:write') || req.apiClient.scopes.includes('*'))) {
+        throw new AppError(403, 'forbidden', 'Missing scopes: invoices:read');
+      }
+    }
     const [inv] = await db.select().from(s.invoices).where(eq(s.invoices.iouRegistryId, req.params.iouRegistryId)).limit(1);
-    assertInvoiceAccess(req.user!, inv);
-    res.json(inv);
+    if (!inv) throw new AppError(404, 'not_found', 'IOU not found');
+    if (req.user) assertInvoiceAccess(req.user, inv);
+    const history = await db.select().from(s.invoiceStatusHistory).where(eq(s.invoiceStatusHistory.invoiceId, inv.id));
+    const [asgn] = await db.select().from(s.assignments).where(eq(s.assignments.invoiceId, inv.id)).limit(1);
+    res.json({ ...inv, statusHistory: history, assignment: asgn || null });
   } catch (e) { next(e); }
 });
 
@@ -2036,9 +2237,12 @@ apiRouter.get('/api-keys', authenticate, authorize('buyer', 'admin'), async (req
 apiRouter.post('/api-keys', authenticate, authorize('buyer', 'admin'), validate(z.object({
   label: z.string().min(1).max(80).optional(),
   scopes: z.array(z.string()).optional(),
+  orgId: z.string().uuid().optional(),
 })), async (req, res, next) => {
   try {
-    const orgId = req.user!.orgId;
+    const orgId = req.user!.role === 'admin' && req.body.orgId
+      ? req.body.orgId
+      : req.user!.orgId;
     if (!orgId) throw new AppError(400, 'no_org', 'Organisation required');
     const { raw, prefix } = generateApiKey();
     const keyHash = await bcrypt.hash(raw, 12);
@@ -2047,7 +2251,7 @@ apiRouter.post('/api-keys', authenticate, authorize('buyer', 'admin'), validate(
       keyHash,
       keyPrefix: prefix,
       label: req.body.label || 'AfyaX / ERP key',
-      scopes: req.body.scopes || ['invoices:write', 'parties:write', 'payments:write'],
+      scopes: req.body.scopes || ['invoices:write', 'parties:write', 'payments:write', 'users:write', 'users:read', 'invoices:read', 'parties:read'],
       isActive: true,
     }).returning();
     await writeAudit({
@@ -2159,6 +2363,19 @@ apiRouter.post('/organisations', authenticate, authorize('admin'), validate(z.ob
         text: `Organisation ${body.name} (${body.orgType}) was registered on IOU Exchange. Party ID: ${uzimaPartyId}.`,
       });
     }
+    if (body.orgType === 'platform') {
+      const secret = crypto.randomBytes(24).toString('hex');
+      const [existingCfg] = await db.select().from(s.platformIntegrations)
+        .where(eq(s.platformIntegrations.platformOrgId, row.id)).limit(1);
+      if (!existingCfg) {
+        await db.insert(s.platformIntegrations).values({
+          platformOrgId: row.id,
+          webhookSecret: secret,
+          activeEnvironment: 'sandbox',
+          isActive: true,
+        });
+      }
+    }
     res.status(201).json(row);
   } catch (e) { next(e); }
 });
@@ -2239,6 +2456,154 @@ apiRouter.get('/system/health', authenticate, authorize('admin'), async (_req, r
       lastAfyaXWebhookAt: lastWebhook,
       unreadNotifications: unread,
       time: new Date().toISOString(),
+    });
+  } catch (e) { next(e); }
+});
+
+// ——— Platform integrations (Admin) ———
+apiRouter.get('/admin/integrations', authenticate, authorize('admin'), async (_req, res, next) => {
+  try {
+    const platforms = await db.select().from(s.organisations).where(eq(s.organisations.orgType, 'platform'));
+    const configs = await db.select().from(s.platformIntegrations);
+    const byOrg = new Map(configs.map((c) => [c.platformOrgId, c]));
+    res.json({
+      data: platforms.map((p) => ({
+        platformOrgId: p.id,
+        name: p.name,
+        uzimaPartyId: p.uzimaPartyId,
+        integration: byOrg.get(p.id) || null,
+      })),
+    });
+  } catch (e) { next(e); }
+});
+
+apiRouter.put('/admin/integrations/:platformOrgId', authenticate, authorize('admin'), validate(z.object({
+  webhookFormat: z.enum(['afyax_purchase', 'ioux_envelope']).optional(),
+  sandboxBaseUrl: z.string().url().optional().nullable(),
+  productionBaseUrl: z.string().url().optional().nullable(),
+  sandboxWebhookUrl: z.string().url().optional().nullable(),
+  productionWebhookUrl: z.string().url().optional().nullable(),
+  sandboxLifecycleWebhookUrl: z.string().url().optional().nullable(),
+  productionLifecycleWebhookUrl: z.string().url().optional().nullable(),
+  webhookSecret: z.string().min(16).optional(),
+  activeEnvironment: z.enum(['sandbox', 'production']).optional(),
+  enabledEvents: z.array(z.string()).optional(),
+  isActive: z.boolean().optional(),
+})), async (req, res, next) => {
+  try {
+    const platformOrgId = req.params.platformOrgId;
+    const [org] = await db.select().from(s.organisations).where(eq(s.organisations.id, platformOrgId)).limit(1);
+    if (!org || org.orgType !== 'platform') throw new AppError(400, 'invalid_platform', 'Not a platform organisation');
+
+    const [existing] = await db.select().from(s.platformIntegrations)
+      .where(eq(s.platformIntegrations.platformOrgId, platformOrgId)).limit(1);
+
+    const generatedNewSecret = !req.body.webhookSecret && !existing?.webhookSecret;
+    const patch = {
+      webhookFormat: req.body.webhookFormat ?? existing?.webhookFormat ?? 'afyax_purchase',
+      sandboxBaseUrl: req.body.sandboxBaseUrl ?? existing?.sandboxBaseUrl ?? null,
+      productionBaseUrl: req.body.productionBaseUrl ?? existing?.productionBaseUrl ?? null,
+      sandboxWebhookUrl: req.body.sandboxWebhookUrl ?? existing?.sandboxWebhookUrl ?? null,
+      productionWebhookUrl: req.body.productionWebhookUrl ?? existing?.productionWebhookUrl ?? null,
+      sandboxLifecycleWebhookUrl: req.body.sandboxLifecycleWebhookUrl ?? existing?.sandboxLifecycleWebhookUrl ?? null,
+      productionLifecycleWebhookUrl: req.body.productionLifecycleWebhookUrl ?? existing?.productionLifecycleWebhookUrl ?? null,
+      webhookSecret: req.body.webhookSecret ?? existing?.webhookSecret ?? crypto.randomBytes(24).toString('hex'),
+      activeEnvironment: req.body.activeEnvironment ?? existing?.activeEnvironment ?? 'sandbox',
+      enabledEvents: req.body.enabledEvents ?? existing?.enabledEvents ?? [
+        'iou.created', 'iou.status_changed', 'iou.assigned', 'iou.acquired', 'iou.payment_updated', 'iou.settled',
+      ],
+      isActive: req.body.isActive ?? existing?.isActive ?? true,
+      updatedAt: new Date(),
+    };
+
+    let row;
+    if (existing) {
+      [row] = await db.update(s.platformIntegrations).set(patch)
+        .where(eq(s.platformIntegrations.id, existing.id)).returning();
+    } else {
+      [row] = await db.insert(s.platformIntegrations).values({
+        platformOrgId,
+        ...patch,
+      }).returning();
+    }
+
+    await writeAudit({
+      actorId: req.user!.userId,
+      action: 'integration.updated',
+      resourceType: 'platform_integration',
+      resourceId: row.id,
+      details: { platformOrgId, activeEnvironment: row.activeEnvironment },
+    });
+
+    res.json({
+      ...row,
+      webhookSecret: row.webhookSecret ? `${row.webhookSecret.slice(0, 6)}…` : null,
+      webhookSecretSet: Boolean(row.webhookSecret),
+      /** Full secret — only when you typed it on save or it was auto-generated this request */
+      webhookSecretPlain: req.body.webhookSecret || (generatedNewSecret ? patch.webhookSecret : undefined),
+    });
+  } catch (e) { next(e); }
+});
+
+apiRouter.post('/admin/integrations/:platformOrgId/rotate-secret', authenticate, authorize('admin'), async (req, res, next) => {
+  try {
+    const platformOrgId = req.params.platformOrgId;
+    const secret = crypto.randomBytes(24).toString('hex');
+    const [existing] = await db.select().from(s.platformIntegrations)
+      .where(eq(s.platformIntegrations.platformOrgId, platformOrgId)).limit(1);
+    if (!existing) throw new AppError(404, 'not_found', 'Integration not configured');
+    const [row] = await db.update(s.platformIntegrations).set({
+      webhookSecret: secret,
+      updatedAt: new Date(),
+    }).where(eq(s.platformIntegrations.id, existing.id)).returning();
+    res.json({ webhookSecret: secret, rotatedAt: row.updatedAt });
+  } catch (e) { next(e); }
+});
+
+apiRouter.get('/admin/webhook-deliveries', authenticate, authorize('admin'), async (req, res, next) => {
+  try {
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const rows = await db.select().from(s.webhookDeliveries).orderBy(desc(s.webhookDeliveries.createdAt)).limit(limit);
+    res.json({ data: rows });
+  } catch (e) { next(e); }
+});
+
+apiRouter.post('/admin/webhook-deliveries/:id/retry', authenticate, authorize('admin'), async (req, res, next) => {
+  try {
+    const { retryWebhookDelivery } = await import('../services/platformWebhooks.js');
+    const row = await retryWebhookDelivery(req.params.id);
+    res.json(row);
+  } catch (e) { next(e); }
+});
+
+apiRouter.get('/admin/integration/activity', authenticate, authorize('admin'), async (_req, res, next) => {
+  try {
+    const invoices = await db.select().from(s.invoices);
+    const optIns = await db.select().from(s.optIns);
+    const verifications = await db.select().from(s.buyerVerifications);
+    const assignments = await db.select().from(s.assignments);
+    const payments = await db.select().from(s.paymentUpdates);
+
+    const countBy = (status: string) => invoices.filter((i) => i.status === status).length;
+    res.json({
+      pipeline: {
+        posted: invoices.length,
+        awaitingOptIn: countBy('awaiting_opt_in'),
+        awaitingBuyerVerification: countBy('awaiting_buyer_verification'),
+        verified: countBy('verified'),
+        assigned: countBy('assigned'),
+        settled: countBy('settled'),
+        optInPending: optIns.filter((o) => o.status === 'pending').length,
+        optInAccepted: optIns.filter((o) => o.status === 'accepted').length,
+        verificationPending: verifications.filter((v) => v.status === 'pending').length,
+        assignmentsTotal: assignments.length,
+        paymentsRecorded: payments.length,
+      },
+      byOrigin: {
+        buyerPosted: invoices.filter((i) => i.origin === 'buyer_posted').length,
+        supplierListed: invoices.filter((i) => i.origin === 'supplier_listed').length,
+        apiUpload: invoices.filter((i) => i.origin === 'api_upload').length,
+      },
     });
   } catch (e) { next(e); }
 });

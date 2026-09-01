@@ -102,10 +102,16 @@ export async function optionalAuth(req: Request, _res: Response, next: NextFunct
 }
 
 export async function apiKeyAuth(req: Request, _res: Response, next: NextFunction) {
-  const key = (req.headers['x-api-key'] as string) || null;
+  let key = (req.headers['x-api-key'] as string) || null;
+  if (!key) {
+    const auth = req.headers.authorization;
+    if (auth?.startsWith('Bearer uzima_')) {
+      key = auth.slice(7);
+    }
+  }
 
   if (!key) {
-    return next(new AppError(401, 'unauthorized', 'Missing API key'));
+    return next(new AppError(401, 'unauthorized', 'Missing API key (X-API-Key or Bearer uzima_…)'));
   }
 
   const prefix = key.slice(0, 12);
@@ -149,12 +155,13 @@ export function requireScope(...scopes: string[]) {
   };
 }
 
-/** Prefer X-API-Key for machine auth; Bearer JWT for users. */
+/** Prefer X-API-Key or Bearer uzima_* for machine auth; Bearer JWT for users. */
 export async function authenticateAny(req: Request, res: Response, next: NextFunction) {
-  if (req.headers['x-api-key']) {
+  const auth = req.headers.authorization;
+  if (req.headers['x-api-key'] || auth?.startsWith('Bearer uzima_')) {
     return apiKeyAuth(req, res, next);
   }
-  if (req.headers.authorization?.startsWith('Bearer ')) {
+  if (auth?.startsWith('Bearer ')) {
     return authenticate(req, res, next);
   }
   next(new AppError(401, 'unauthorized', 'Authentication required'));

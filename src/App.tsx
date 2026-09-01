@@ -56,6 +56,7 @@ import ProgramsPage from '@/pages/admin/ProgramsPage';
 import ReconciliationPage from '@/pages/admin/ReconciliationPage';
 import FeesPage from '@/pages/admin/FeesPage';
 import AdminProfilePage from '@/pages/admin/AdminProfilePage';
+import IntegrationsPage from '@/pages/admin/IntegrationsPage';
 import NotFound from '@/pages/NotFound';
 
 const walletEnabled = import.meta.env.VITE_ENABLE_WALLET === 'true';
@@ -74,7 +75,7 @@ function EngineRoute() {
 function AppRoutes() {
   const { isAuthenticated, user, loading } = useAuth();
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center text-sm text-muted-foreground">Loading {BRAND.name}…</div>;
+    return <div className="min-h-dvh flex items-center justify-center text-sm text-muted-foreground">Loading {BRAND.name}…</div>;
   }
 
   return (
@@ -147,6 +148,7 @@ function AppRoutes() {
         <Route path="fees" element={<FeesPage />} />
         <Route path="reconciliation" element={<ReconciliationPage />} />
         <Route path="users" element={<UsersPage />} />
+        <Route path="integrations" element={<IntegrationsPage />} />
         <Route path="workflow" element={<WorkflowMonitorPage />} />
         <Route path="analytics" element={<AnalyticsPage />} />
         <Route path="profile" element={<AdminProfilePage />} />

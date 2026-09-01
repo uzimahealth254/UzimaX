@@ -89,7 +89,7 @@ export default function SiteNav({ overlay = false }: { overlay?: boolean }) {
         <div className="container nav-inner">
           <Link to="/" className="brand">
             <BrandMark />
-            {BRAND.name}
+            <span className="brand-text">{BRAND.name}</span>
           </Link>
 
           <div className="nav-links">
@@ -146,18 +146,19 @@ export default function SiteNav({ overlay = false }: { overlay?: boolean }) {
 
       {mobileOpen && (
         <div className="mobile-sheet">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-            <Link to="/" className="brand" onClick={() => setMobileOpen(false)} style={{ color: '#fff' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, gap: 12 }}>
+            <Link to="/" className="brand" onClick={() => setMobileOpen(false)} style={{ color: '#fff', minWidth: 0 }}>
               <BrandMark />
-              {BRAND.name}
+              <span className="brand-text">{BRAND.name}</span>
             </Link>
             <button
               type="button"
               aria-label="Close"
               onClick={() => setMobileOpen(false)}
-              style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer' }}
+              className="touch-target"
+              style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', cursor: 'pointer', borderRadius: 10, flexShrink: 0 }}
             >
-              <X size={24} />
+              <X size={22} />
             </button>
           </div>
           <Link to="/" onClick={() => setMobileOpen(false)}>Home</Link>
@@ -175,7 +176,7 @@ export default function SiteNav({ overlay = false }: { overlay?: boolean }) {
               {r.label}
             </Link>
           ))}
-          <div style={{ marginTop: 'auto', paddingTop: 28, display: 'grid', gap: 12 }}>
+          <div className="sheet-actions">
             <Link to="/login" className="btn btn-lime" onClick={() => setMobileOpen(false)} style={{ justifyContent: 'center' }}>
               Sign in <span className="node">→</span>
             </Link>

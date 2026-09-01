@@ -23,6 +23,9 @@ export const users = pgTable('users', {
   fullName: text('full_name').notNull(),
   role: text('role').notNull(), // admin | buyer | supplier | spv
   orgId: uuid('org_id').references(() => organisations.id),
+  /** Stable AfyaX / originator user reference */
+  afyaxUserId: text('afyax_user_id').unique(),
+  phone: text('phone'),
   isSignatory: boolean('is_signatory').default(false),
   mustChangePassword: boolean('must_change_password').default(false),
   status: text('status').notNull().default('active'),
@@ -350,6 +353,54 @@ export const otpCodes = pgTable('otp_codes', {
   consumedAt: timestamp('consumed_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+/** Per-platform AfyaX / aggregator webhook configuration */
+export const platformIntegrations = pgTable('platform_integrations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  platformOrgId: uuid('platform_org_id').notNull().references(() => organisations.id).unique(),
+  /** afyax_purchase = Sule /iou/purchase spec; ioux_envelope = generic signed events */
+  webhookFormat: text('webhook_format').notNull().default('afyax_purchase'),
+  sandboxBaseUrl: text('sandbox_base_url'),
+  productionBaseUrl: text('production_base_url'),
+  sandboxWebhookUrl: text('sandbox_webhook_url'),
+  productionWebhookUrl: text('production_webhook_url'),
+  sandboxLifecycleWebhookUrl: text('sandbox_lifecycle_webhook_url'),
+  productionLifecycleWebhookUrl: text('production_lifecycle_webhook_url'),
+  /** HMAC secret for signing IOUX → platform outbound webhooks (ioux_envelope mode) */
+  webhookSecret: text('webhook_secret'),
+  activeEnvironment: text('active_environment').notNull().default('sandbox'), // sandbox | production
+  enabledEvents: text('enabled_events').array().default([
+    'iou.created',
+    'iou.status_changed',
+    'iou.assigned',
+    'iou.acquired',
+    'iou.payment_updated',
+    'iou.settled',
+  ]),
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Outbound webhook delivery log (IOUX → AfyaX) */
+export const webhookDeliveries = pgTable('webhook_deliveries', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  platformOrgId: uuid('platform_org_id').notNull().references(() => organisations.id),
+  eventId: text('event_id').notNull(),
+  eventType: text('event_type').notNull(),
+  targetUrl: text('target_url').notNull(),
+  payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
+  status: text('status').notNull().default('pending'), // pending | delivered | failed
+  httpStatus: integer('http_status'),
+  attempts: integer('attempts').notNull().default(0),
+  lastError: text('last_error'),
+  deliveredAt: timestamp('delivered_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('webhook_deliveries_event_id_idx').on(t.eventId),
+  index('idx_webhook_deliveries_platform').on(t.platformOrgId),
+  index('idx_webhook_deliveries_created').on(t.createdAt),
+]);
 
 /** WS-07 — every outbound email attempt for admin visibility */
 export const emailSendLog = pgTable('email_send_log', {

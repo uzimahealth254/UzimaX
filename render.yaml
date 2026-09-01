@@ -63,6 +63,14 @@
         value: IOUX
       - key: AFYAX_WEBHOOK_SECRET
         generateValue: true
+      - key: AFYAX_SANDBOX_BASE_URL
+        value: https://manager.smplystore.com
+      - key: AFYAX_PRODUCTION_BASE_URL
+        value: https://vendor.afyax.health
+      - key: AFYAX_DEFAULT_PAYMENT_METHOD
+        value: bank
+      - key: IOUX_WEBHOOK_SECRET
+        sync: false
       - key: S3_ENDPOINT
         sync: false
       - key: S3_ACCESS_KEY_ID

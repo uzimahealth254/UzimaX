@@ -39,14 +39,19 @@ export default function PasswordChangeGate({ children }: { children: React.React
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0E1F1A]/70 p-4">
-      <div className="w-full max-w-md rounded-xl bg-white border border-[#0E1F1A]/10 p-6 space-y-4 shadow-xl">
+    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-[#0E1F1A]/70 p-0 sm:p-4">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="password-gate-title"
+        className="modal-sheet w-full max-w-md max-h-[min(92dvh,100%)] overflow-y-auto overscroll-contain scroll-touch space-y-4 shadow-xl"
+      >
         <div className="flex items-start gap-2.5">
           <div className="w-9 h-9 rounded-lg bg-[#D3F36B] flex items-center justify-center shrink-0">
             <Lock size={16} className="text-[#0E1F1A]" />
           </div>
-          <div>
-            <h2 className="text-sm font-bold text-[#0E1F1A]">Set a new password</h2>
+          <div className="min-w-0">
+            <h2 id="password-gate-title" className="text-sm font-bold text-[#0E1F1A]">Set a new password</h2>
             <p className="text-[11px] text-[#5A6B7D] mt-0.5 leading-relaxed">
               Your account was provisioned with a temporary password. Choose a permanent password to continue.
             </p>
@@ -54,8 +59,9 @@ export default function PasswordChangeGate({ children }: { children: React.React
         </div>
         <form onSubmit={submit} className="space-y-3">
           <div>
-            <label className="text-[10px] font-semibold text-[#5A6B7D]">Temporary password</label>
+            <label className="text-[10px] font-semibold text-[#5A6B7D]" htmlFor="pw-gate-current">Temporary password</label>
             <input
+              id="pw-gate-current"
               type="password"
               required
               className="field-input mt-1"
@@ -65,8 +71,9 @@ export default function PasswordChangeGate({ children }: { children: React.React
             />
           </div>
           <div>
-            <label className="text-[10px] font-semibold text-[#5A6B7D]">New password</label>
+            <label className="text-[10px] font-semibold text-[#5A6B7D]" htmlFor="pw-gate-new">New password</label>
             <input
+              id="pw-gate-new"
               type="password"
               required
               minLength={12}
@@ -78,8 +85,9 @@ export default function PasswordChangeGate({ children }: { children: React.React
             />
           </div>
           <div>
-            <label className="text-[10px] font-semibold text-[#5A6B7D]">Confirm new password</label>
+            <label className="text-[10px] font-semibold text-[#5A6B7D]" htmlFor="pw-gate-confirm">Confirm new password</label>
             <input
+              id="pw-gate-confirm"
               type="password"
               required
               minLength={12}
@@ -97,7 +105,7 @@ export default function PasswordChangeGate({ children }: { children: React.React
           <button
             type="submit"
             disabled={busy}
-            className="flex w-full min-h-[40px] items-center justify-center gap-1.5 rounded-lg bg-[#0E1F1A] text-white text-xs font-bold hover:bg-[#1A3A2E] disabled:opacity-60"
+            className="flex w-full min-h-[48px] items-center justify-center gap-1.5 rounded-lg bg-[#0E1F1A] text-white text-xs font-bold hover:bg-[#1A3A2E] disabled:opacity-60"
           >
             {busy ? 'Updating…' : 'Update password & continue'}
             {!busy && <ArrowRight size={13} />}
@@ -105,7 +113,7 @@ export default function PasswordChangeGate({ children }: { children: React.React
           <button
             type="button"
             onClick={logout}
-            className="w-full text-[11px] font-bold text-[#5A6B7D] hover:text-[#0E1F1A]"
+            className="w-full min-h-[44px] text-[11px] font-bold text-[#5A6B7D] hover:text-[#0E1F1A]"
           >
             Sign out
           </button>

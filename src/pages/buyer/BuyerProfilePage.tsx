@@ -78,7 +78,7 @@ export default function BuyerProfilePage() {
         {creditRisk && (
           <div>
             <p className="text-[10px] font-bold uppercase tracking-wider text-[#5A6B7D] mb-2">Credit risk</p>
-            <div className="grid grid-cols-3 gap-2 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm">
               <div className="rounded-md bg-[#f7faf6] border border-[#0E1F1A]/6 p-2.5">
                 <p className="text-[10px] font-semibold text-[#5A6B7D]">Score</p>
                 <p className="text-xl font-mono font-bold text-[#0E1F1A] mt-0.5 leading-none">{creditRisk.score}</p>
