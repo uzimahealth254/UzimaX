@@ -137,7 +137,7 @@ Required headers:
 ```http
 X-API-Key: uzima_…
 X-AfyaX-Signature: <hex-hmac-sha256>
-X-AfyaX-Timestamp: <unix-seconds>
+X-AfyaX-Timestamp: <unix-seconds **or** unix-milliseconds>
 ```
 
 **Sign the raw JSON body:**
@@ -154,7 +154,7 @@ header_value = signature_as_lowercase_hex   // or prefix "sha256=" + hex
 const crypto = require('crypto');
 
 function signPaymentWebhook(bodyObject, secret) {
-  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const timestamp = Math.floor(Date.now() / 1000).toString(); // unix seconds — milliseconds also accepted
   const rawBody = JSON.stringify(bodyObject);
   const signature = crypto
     .createHmac('sha256', secret)

@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import crypto from 'crypto';
 import { generateIOURegistryId, isValidIOURegistryId, luhnCheckDigit } from '../lib/iouId.ts';
 import { checkProgramCapacity, computeTenorDays, priceReceivable } from '../lib/pricing.ts';
 import {
@@ -11,6 +12,7 @@ import {
   weightedAvgTenorDays,
 } from '../lib/packageMetrics.ts';
 import { signOutboundWebhook } from '../services/platformWebhooks.ts';
+import { verifyWebhookSignature, webhookTimestampToMs } from '../lib/security.ts';
 import {
   buildAfyaxPurchasePayload,
   resolveAfyaxPurchaseUrl,
@@ -48,6 +50,32 @@ describe('AfyaX purchase webhook adapter', () => {
     expect(skipAfyaxPurchaseForAssignedWhenAcquired('iou.assigned', { offerId: 'x' })).toBe(false);
     expect(shouldSendAfyaxPurchase('iou.disbursed')).toBe(true);
     expect(shouldSendAfyaxPurchase('iou.assigned')).toBe(false);
+  });
+});
+
+describe('inbound AfyaX payment HMAC', () => {
+  const secret = 'test-afyax-webhook-secret-min-16';
+  const body = '{"iouRegistryId":"IOU-KE-2026-00001-0","amountPaid":1,"outstandingBalance":0}';
+
+  it('accepts unix seconds timestamps from the Sule doc', () => {
+    process.env.AFYAX_WEBHOOK_SECRET = secret;
+    const ts = String(Math.floor(Date.now() / 1000));
+    const sig = crypto.createHmac('sha256', secret).update(`${ts}.${body}`).digest('hex');
+    expect(() => verifyWebhookSignature(body, sig, ts)).not.toThrow();
+    expect(webhookTimestampToMs(ts)).toBe(Number(ts) * 1000);
+  });
+
+  it('accepts millisecond timestamps', () => {
+    process.env.AFYAX_WEBHOOK_SECRET = secret;
+    const ts = String(Date.now());
+    const sig = crypto.createHmac('sha256', secret).update(`${ts}.${body}`).digest('hex');
+    expect(() => verifyWebhookSignature(body, `sha256=${sig}`, ts)).not.toThrow();
+  });
+
+  it('rejects bad HMAC even with a fresh timestamp', () => {
+    process.env.AFYAX_WEBHOOK_SECRET = secret;
+    const ts = String(Math.floor(Date.now() / 1000));
+    expect(() => verifyWebhookSignature(body, 'deadbeef', ts)).toThrow(/Invalid webhook signature/);
   });
 });
 

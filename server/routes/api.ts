@@ -2058,7 +2058,10 @@ apiRouter.post('/webhooks/payment-update', apiKeyAuth, requireScope('payments:wr
   idempotencyKey: z.string().min(8).optional(),
 })), async (req, res, next) => {
   try {
-    const raw = (req as typeof req & { rawBody?: string }).rawBody || JSON.stringify(req.body);
+    const raw = (req as typeof req & { rawBody?: string }).rawBody;
+    if (!raw) {
+      throw new AppError(401, 'invalid_signature', 'Missing raw request body for webhook signature');
+    }
     try {
       verifyWebhookSignature(
         raw,

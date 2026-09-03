@@ -120,6 +120,15 @@ export function refreshCookieOptions() {
   };
 }
 
+const WEBHOOK_SKEW_MS = 5 * 60 * 1000;
+
+/** Accept unix seconds (~1e9) or unix milliseconds (~1e12). HMAC still uses the header string as sent. */
+export function webhookTimestampToMs(timestampHeader: string): number | null {
+  const ts = Number(timestampHeader);
+  if (!Number.isFinite(ts) || ts <= 0) return null;
+  return ts < 1e12 ? ts * 1000 : ts;
+}
+
 /** HMAC verify for AfyaX webhooks when AFYAX_WEBHOOK_SECRET is set */
 export function verifyWebhookSignature(
   rawBody: string,
@@ -136,17 +145,23 @@ export function verifyWebhookSignature(
   if (!signatureHeader || !timestampHeader) {
     throw new AppError(401, 'invalid_signature', 'Missing webhook signature');
   }
-  const ts = Number(timestampHeader);
-  if (!Number.isFinite(ts) || Math.abs(Date.now() - ts) > 5 * 60 * 1000) {
+  const tsMs = webhookTimestampToMs(timestampHeader);
+  if (tsMs == null || Math.abs(Date.now() - tsMs) > WEBHOOK_SKEW_MS) {
     throw new AppError(401, 'invalid_signature', 'Webhook timestamp skew too large');
   }
   const expected = crypto
     .createHmac('sha256', secret)
     .update(`${timestampHeader}.${rawBody}`)
     .digest('hex');
-  const provided = signatureHeader.replace(/^sha256=/, '');
-  const a = Buffer.from(expected, 'hex');
-  const b = Buffer.from(provided, 'hex');
+  const provided = signatureHeader.replace(/^sha256=/, '').trim().toLowerCase();
+  let a: Buffer;
+  let b: Buffer;
+  try {
+    a = Buffer.from(expected, 'hex');
+    b = Buffer.from(provided, 'hex');
+  } catch {
+    throw new AppError(401, 'invalid_signature', 'Invalid webhook signature');
+  }
   if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
     throw new AppError(401, 'invalid_signature', 'Invalid webhook signature');
   }
