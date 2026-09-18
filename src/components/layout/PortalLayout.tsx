@@ -82,6 +82,7 @@ function getNavItems(role: UserRole): NavItem[] {
         { label: 'Programmes', short: 'Programs', path: '/admin/programs', icon: <Briefcase size={s} strokeWidth={sw} /> },
         { label: 'Fees', short: 'Fees', path: '/admin/fees', icon: <Percent size={s} strokeWidth={sw} /> },
         { label: 'Reconciliation', short: 'Reconcile', path: '/admin/reconciliation', icon: <Activity size={s} strokeWidth={sw} /> },
+        { label: 'Escrow', short: 'Escrow', path: '/admin/escrow', icon: <Wallet size={s} strokeWidth={sw} /> },
         { label: 'Users & Orgs', short: 'Users', path: '/admin/users', icon: <Users size={s} strokeWidth={sw} /> },
         { label: 'Integrations', short: 'API', path: '/admin/integrations', icon: <Plug size={s} strokeWidth={sw} /> },
         { label: 'Workflow', short: 'Workflow', path: '/admin/workflow', icon: <Activity size={s} strokeWidth={sw} /> },

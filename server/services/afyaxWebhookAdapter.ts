@@ -43,6 +43,19 @@ function trimSlash(url: string): string {
   return url.replace(/\/+$/, '');
 }
 
+function envPurchaseUrl(env: 'sandbox' | 'production'): string | null {
+  const explicit = env === 'production'
+    ? process.env.AFYAX_PRODUCTION_PURCHASE_URL
+    : process.env.AFYAX_SANDBOX_PURCHASE_URL;
+  if (explicit?.trim()) return explicit.trim();
+
+  const base = env === 'production'
+    ? process.env.AFYAX_PRODUCTION_BASE_URL
+    : process.env.AFYAX_SANDBOX_BASE_URL;
+  if (!base?.trim()) return null;
+  return `${trimSlash(base.trim())}${PURCHASE_PATH}`;
+}
+
 export function resolveAfyaxPurchaseUrl(cfg: AfyaxIntegrationUrls): string | null {
   const env = cfg.activeEnvironment;
   const explicit = env === 'production' ? cfg.productionWebhookUrl : cfg.sandboxWebhookUrl;
@@ -52,7 +65,7 @@ export function resolveAfyaxPurchaseUrl(cfg: AfyaxIntegrationUrls): string | nul
     return `${trimSlash(u)}${PURCHASE_PATH}`;
   }
   const base = env === 'production' ? cfg.productionBaseUrl : cfg.sandboxBaseUrl;
-  if (!base) return null;
+  if (!base) return envPurchaseUrl(env);
   return `${trimSlash(base)}${PURCHASE_PATH}`;
 }
 
@@ -83,20 +96,25 @@ export function buildAfyaxPurchasePayload(
   const iouxId = String(invoicePayload.iouRegistryId || '');
   if (!iouxId) return null;
 
+  // AfyaX `buyer_name` = SPV that acquired the receivable on IOUX (not the obligor pharmacy).
+  const spv = invoicePayload.spv as { name?: string } | null;
   const buyer = invoicePayload.buyer as { name?: string } | null;
-  const buyerName = buyer?.name || 'Unknown Buyer';
+  const buyerName = spv?.name || String(extra?.spvName || '') || buyer?.name || 'Unknown SPV';
 
   const assignment = invoicePayload.assignment as {
     id?: string;
     purchasePrice?: number | null;
   } | null;
 
+  // AfyaX validates against the listing asking price, so send listed/face value
+  // by default and keep settlement refs in transaction_id / bank_reference.
   const amount = Number(
-    extra?.purchasePrice
-    ?? extra?.settlementAmount
-    ?? assignment?.purchasePrice
+    extra?.purchaseWebhookAmount
     ?? invoicePayload.listedAmount
-    ?? invoicePayload.faceValue,
+    ?? invoicePayload.faceValue
+    ?? extra?.purchasePrice
+    ?? extra?.settlementAmount
+    ?? assignment?.purchasePrice,
   );
   if (!(amount > 0)) return null;
 

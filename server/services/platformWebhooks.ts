@@ -52,6 +52,13 @@ export async function buildInvoiceWebhookPayload(
   }
 
   const [asgn] = await db.select().from(s.assignments).where(eq(s.assignments.invoiceId, inv.id)).limit(1);
+  let spv: { id: string; uzimaPartyId: string | null; name: string } | null = null;
+  if (asgn?.spvOrgId) {
+    const [spvOrg] = await db.select().from(s.organisations).where(eq(s.organisations.id, asgn.spvOrgId)).limit(1);
+    if (spvOrg) {
+      spv = { id: spvOrg.id, uzimaPartyId: spvOrg.uzimaPartyId, name: spvOrg.name };
+    }
+  }
 
   return {
     invoiceId: inv.id,
@@ -70,12 +77,14 @@ export async function buildInvoiceWebhookPayload(
     sourcePlatformName: platformName,
     buyer: buyer ? { id: buyer.id, uzimaPartyId: buyer.uzimaPartyId, afyaxId: buyer.afyaxId, name: buyer.name } : null,
     supplier: supplier ? { id: supplier.id, uzimaPartyId: supplier.uzimaPartyId, afyaxId: supplier.afyaxId, name: supplier.name } : null,
+    spv,
     assignment: asgn ? {
       id: asgn.id,
       assignmentType: asgn.assignmentType,
       purchasePrice: asgn.purchasePrice != null ? Number(asgn.purchasePrice) : null,
       assignedAt: asgn.assignedAt,
       status: asgn.status,
+      spvOrgId: asgn.spvOrgId,
     } : null,
     updatedAt: inv.updatedAt,
     ...extra,

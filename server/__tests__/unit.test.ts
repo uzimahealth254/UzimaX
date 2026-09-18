@@ -29,18 +29,30 @@ describe('AfyaX purchase webhook adapter', () => {
     expect(url).toBe('https://manager.smplystore.com/api/v1/iou/purchase');
   });
 
-  it('builds purchase payload with bank reference', () => {
+  it('falls back to env purchase URL when integration row has null URLs', () => {
+    process.env.AFYAX_SANDBOX_PURCHASE_URL = 'https://manager.smplystore.com/api/v1/iou/purchase';
+    const url = resolveAfyaxPurchaseUrl({
+      sandboxBaseUrl: null,
+      sandboxWebhookUrl: null,
+      activeEnvironment: 'sandbox',
+    });
+    expect(url).toBe('https://manager.smplystore.com/api/v1/iou/purchase');
+  });
+
+  it('builds purchase payload with bank reference and SPV as buyer_name', () => {
     const payload = buildAfyaxPurchasePayload({
       iouRegistryId: 'IOU-KE-2024-00060-0',
       faceValue: 500000,
-      buyer: { name: 'Test Buyer Ltd' },
+      listedAmount: 500000,
+      buyer: { name: 'Mercy Life Pharmacy' },
+      spv: { name: 'IOUX SPV Limited' },
       assignment: { id: 'abc-123-def', purchasePrice: 475000 },
     }, { assignmentId: 'abc-123-def', paymentReference: 'IOUX-TXN-abc12345' }, { defaultPaymentMethod: 'bank' });
     expect(payload).toMatchObject({
-      buyer_name: 'Test Buyer Ltd',
+      buyer_name: 'IOUX SPV Limited',
       ioux_id: 'IOU-KE-2024-00060-0',
       payment_method: 'bank',
-      amount: 475000,
+      amount: 500000,
       transaction_id: 'IOUX-TXN-abc12345',
     });
     expect(payload?.bank_reference).toBe('IOUX-TXN-abc12345');

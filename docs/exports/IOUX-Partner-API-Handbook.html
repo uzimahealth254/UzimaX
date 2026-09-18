@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>IOUX Partner API Integration Handbook</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,650&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+  :root {
+    --ink: #14222a;
+    --teal: #0b3d4a;
+    --teal-deep: #072c36;
+    --sand: #c4a574;
+    --paper: #f7f4ef;
+    --line: #d5cdc0;
+    --muted: #5c6b73;
+    --white: #fffcf7;
+  }
+  * { box-sizing: border-box; }
+  @page { size: A4; margin: 14mm 12mm 16mm; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Source Sans 3", system-ui, sans-serif;
+    font-size: 9.5pt;
+    line-height: 1.45;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .sheet { max-width: 190mm; margin: 0 auto; padding: 0 2mm 8mm; }
+  .cover {
+    background: linear-gradient(125deg, var(--teal-deep), var(--teal) 55%, #145566);
+    color: var(--paper);
+    padding: 22px 20px 18px;
+    margin-bottom: 16px;
+  }
+  .cover .brand {
+    font-family: Fraunces, Georgia, serif;
+    font-size: 22pt;
+    font-weight: 650;
+    line-height: 1.1;
+  }
+  .cover .brand small {
+    display: block;
+    margin-top: 6px;
+    font-family: "Source Sans 3", sans-serif;
+    font-size: 8pt;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    opacity: 0.85;
+    font-weight: 600;
+  }
+  .cover .meta {
+    margin-top: 14px;
+    font-size: 8.5pt;
+    opacity: 0.92;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 16px;
+  }
+  h1.doc-title { display: none; }
+  h2 {
+    font-family: Fraunces, Georgia, serif;
+    font-size: 12pt;
+    color: var(--teal);
+    margin: 16px 0 8px;
+    padding-bottom: 3px;
+    border-bottom: 1px solid var(--sand);
+    page-break-after: avoid;
+  }
+  h3 {
+    font-family: Fraunces, Georgia, serif;
+    font-size: 10.5pt;
+    color: var(--teal-deep);
+    margin: 12px 0 6px;
+    page-break-after: avoid;
+  }
+  p { margin: 0 0 7px; }
+  ul, ol { margin: 0 0 8px; padding-left: 18px; }
+  li { margin-bottom: 3px; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0 0 10px;
+    font-size: 8.2pt;
+    page-break-inside: auto;
+  }
+  tr { page-break-inside: avoid; }
+  th, td {
+    text-align: left;
+    padding: 5px 6px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  th {
+    background: #ebe4d8;
+    color: var(--teal-deep);
+    font-size: 7pt;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    font-weight: 700;
+  }
+  tr:nth-child(even) td { background: rgba(255,255,255,0.4); }
+  code {
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 8pt;
+    background: #ebe4d8;
+    padding: 1px 4px;
+  }
+  pre.code {
+    background: #12262e;
+    color: #e8f0f2;
+    padding: 10px 12px;
+    overflow-x: auto;
+    font-size: 7.5pt;
+    line-height: 1.35;
+    margin: 0 0 10px;
+    page-break-inside: avoid;
+  }
+  pre.code code { background: transparent; color: inherit; padding: 0; }
+  blockquote {
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    border-left: 3px solid var(--sand);
+    background: var(--white);
+    font-size: 9pt;
+    color: var(--muted);
+  }
+  hr {
+    border: none;
+    border-top: 1px solid var(--line);
+    margin: 14px 0;
+  }
+  .footer-note {
+    margin-top: 18px;
+    padding-top: 8px;
+    border-top: 1px solid var(--line);
+    font-size: 7.5pt;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+  }
+</style>
+</head>
+<body>
+  <div class="sheet">
+    <div class="cover">
+      <div class="brand">IOU Exchange<small>Partner API Integration Handbook</small></div>
+      <div class="meta">
+        <div><strong>Document</strong> IOUX-PARTNER-API-001 · v1.0</div>
+        <div><strong>Date</strong> 15 September 2026</div>
+        <div><strong>Audience</strong> API partner platforms &amp; tech teams</div>
+        <div><strong>API</strong> https://uzimax.onrender.com/api/v1</div>
+        <div><strong>Shareable</strong> No production secrets in this document</div>
+        <div><strong>Owner</strong> IOUX engineering</div>
+      </div>
+    </div>
+    <h1 class="doc-title">IOU Exchange (IOUX) — Partner API Integration Handbook</h1>
+<p><strong>Document ID:</strong> IOUX-PARTNER-API-001  </p>
+<p><strong>Version:</strong> 1.0  </p>
+<p><strong>Date:</strong> 15 September 2026  </p>
+<p><strong>Audience:</strong> Any platform, fund, broker, or tech team integrating with IOUX via API  </p>
+<p><strong>Product:</strong> IOU Exchange — trade receivables registry &amp; securitisation management (<code>ioux.africa</code>)  </p>
+<p><strong>Live API (current):</strong> <code>https://uzimax.onrender.com/api/v1</code>  </p>
+<p><strong>Health check (no auth):</strong> <code>GET /api/v1/health</code></p>
+<blockquote>This document is <strong>shareable</strong>. It contains <strong>no production secrets</strong>.  <br />API keys, HMAC secrets, and org UUIDs are issued separately via a secure handoff after onboarding approval.</blockquote>
+<p><strong>Related:</strong> Teams integrating the AfyaX platform may also use the AfyaX field-level API examples doc once credentials are issued (secure handoff).</p>
+<hr />
+<h2>1. What IOUX is (and is not)</h2>
+<table>
+<thead><tr><th>IOUX <strong>is</strong></th><th>IOUX <strong>is not</strong></th></tr></thead>
+<tbody>
+<tr><td>A registry for invoices / IOUs (unique <code>IOU-KE-…</code> IDs)</td><td>A bank or licensed payments processor</td></tr>
+<tr><td>A workflow for opt-in / verification, SPV assignment, escrow <strong>recording</strong></td><td>A mover of real cash (wallets are simulated until a licensed rail is added)</td></tr>
+<tr><td>An API layer for partner platforms to push parties, invoices, and repayments</td><td>A replacement for your trading / commerce / claims system</td></tr>
+<tr><td>A place for SPV / admin / supplier / buyer portals to complete financing steps</td><td>NSE listing or legal trust-deed execution (process support only)</td></tr>
+</tbody></table>
+<p><strong>Separate databases.</strong> Your system and IOUX never share a DB. You store and reconcile using IDs we return (<code>organisationId</code>, <code>uzimaPartyId</code>, <code>invoiceId</code>, <code>iouRegistryId</code>, <code>iouxTransactionId</code>).</p>
+<hr />
+<h2>2. Who does what in the partnership</h2>
+<h3>2.1 Roles in plain language</h3>
+<table>
+<thead><tr><th>Role</th><th>Who typically</th><th>Responsibility</th></tr></thead>
+<tbody>
+<tr><td><strong>Partner platform</strong></td><td>e.g. AfyaX, Mint-linked systems, other B2B apps</td><td>Originate buyers/suppliers/trades; push clean data to IOUX; receive purchase confirmation; push repayments</td></tr>
+<tr><td><strong>IOUX</strong></td><td>Uzima Exchange / IOU Exchange</td><td>Issue party &amp; IOU IDs; run lifecycle; host portals; call your purchase webhook at disbursement</td></tr>
+<tr><td><strong>Supplier (originator)</strong></td><td>Clinic, pharmacy, wholesaler, provider</td><td>Opts in (or lists) via IOUX portal / agreed path</td></tr>
+<tr><td><strong>Buyer (obligor)</strong></td><td>Insurer, hospital, corporate buyer</td><td>Owes the invoice; commitment to pay; may verify on supplier-listed path</td></tr>
+<tr><td><strong>SPV</strong></td><td>IOU Exchange Capital SPV (or nominated vehicle)</td><td>Buys the receivable; records disbursement in IOUX escrow</td></tr>
+<tr><td><strong>Settlement agent / PSP</strong></td><td>Your bank, M-Pesa, or licensed processor</td><td>Moves real money; IOUX only <strong>records</strong> outcomes</td></tr>
+</tbody></table>
+<h3>2.2 Responsibility matrix</h3>
+<table>
+<thead><tr><th>Activity</th><th>Partner provides</th><th>IOUX provides</th></tr></thead>
+<tbody>
+<tr><td>Legal / commercial go-ahead to integrate</td><td>Signed intent / PoC approval from your side + UzimaX</td><td>Platform access policy + this handbook</td></tr>
+<tr><td>Technical counterpart named</td><td>One engineer + backup contact</td><td>One IOUX engineer for UAT</td></tr>
+<tr><td>Environments</td><td>Your sandbox + production base URLs</td><td>IOUX UAT/prod API base + portal URL</td></tr>
+<tr><td>Credentials</td><td>Secure vault on your side</td><td>Platform API key, scopes, HMAC secret, platform org UUID (secure channel)</td></tr>
+<tr><td>Buyer &amp; supplier master data</td><td>Legal name, reg/KYC fields you hold, your external IDs</td><td><code>uzimaPartyId</code> + org UUID</td></tr>
+<tr><td>Users who must use IOUX portal</td><td>Emails + roles (supplier checker, etc.)</td><td>Invite emails / temp passwords (optional)</td></tr>
+<tr><td>Invoice / IOU commercial data</td><td>Face value, dates, parties, your invoice/order IDs, docs URLs</td><td><code>iouRegistryId</code>, status machine, registry search</td></tr>
+<tr><td>Asking / list price semantics</td><td>Confirm what “asking price” means on your listing</td><td>Send purchase webhook <code>amount</code> = listed/asking amount (not net discount only)</td></tr>
+<tr><td>Purchase notification endpoint</td><td>HTTPS URL that accepts IOUX purchase payload</td><td>Outbound <code>POST</code> on <strong>disbursement only</strong> (DvS)</td></tr>
+<tr><td>IP allowlisting / auth on your webhook</td><td>Whitelist IOUX egress and/or shared secret policy you choose</td><td>Stable event payload + retries logged</td></tr>
+<tr><td>Supplier opt-in / buyer verify</td><td>Users ready and briefed</td><td>Portal screens + notifications</td></tr>
+<tr><td>SPV disbursement</td><td>—</td><td>Escrow release in IOUX (recorded)</td></tr>
+<tr><td>Buyer repayments</td><td>Signed payment-update webhooks</td><td>Balance / status updates on the instrument</td></tr>
+<tr><td>UAT evidence</td><td>Sample payloads + your logs</td><td>Webhook delivery logs + registry IDs</td></tr>
+<tr><td>Go-live sign-off</td><td>Written UAT acceptance</td><td>Checklist + production enablement</td></tr>
+</tbody></table>
+<hr />
+<h2>3. Integration models we support</h2>
+<p>Pick <strong>one primary model</strong> before build. Do not mix casually.</p>
+<h3>Model A — Partner originates credit sales (most common)</h3>
+<p>Partner’s marketplace / credit flow creates the receivable. Partner pushes parties + invoice to IOUX. Supplier <strong>opts in</strong> on IOUX. SPV disburses on IOUX. IOUX notifies partner that the receivable was purchased.</p>
+<pre class="code"><code class="">Partner                         IOUX                              Partner
+───────                         ────                              ───────
+POST /parties (buyer, supplier)
+POST /users (optional)
+POST /external/invoices  ─────►  awaiting_opt_in
+                                 supplier opts in
+                                 pending_settlement
+                                 SPV disburses
+                                 disbursed / sold
+                      ◄──────── POST {your}/iou/purchase
+POST /webhooks/payment-update
+  (buyer repayments)  ─────────► balances update → settled</code></pre>
+<h3>Model B — Supplier lists on IOUX; buyer verifies</h3>
+<p>Same APIs with <code>submissionType: "supplier_list"</code>. Status starts at <code>awaiting_buyer_verification</code>. Buyer confirms in portal, then assignment / settlement path continues.</p>
+<h3>Model C — Portal-only (no partner API)</h3>
+<p>For early PoCs with a few providers: IOUX issues portal logins only. No API. Useful for Mint-style trials before full system integration. Escalate to Model A when volumes justify it.</p>
+<hr />
+<h2>4. What we expect from you (partner checklist)</h2>
+<p>Before we issue production credentials, please provide:</p>
+<h3>4.1 Organisation &amp; contacts</h3>
+<ul>
+<li>[ ] Legal entity name and primary commercial contact  </li>
+<li>[ ] Technical lead name, email, phone  </li>
+<li>[ ] Escalation contact for UAT week  </li>
+<li>[ ] Intended go-live window and approximate monthly IOU volume  </li>
+</ul>
+<h3>4.2 Environments</h3>
+<ul>
+<li>[ ] Sandbox base URL (if you expose one)  </li>
+<li>[ ] Production base URL  </li>
+<li>[ ] Exact <strong>purchase webhook path</strong> (e.g. <code>/api/v1/iou/purchase</code>)  </li>
+<li>[ ] Confirmation whether auth is IP allowlist, shared secret, mTLS, or open+HTTPS  </li>
+</ul>
+<h3>4.3 Data readiness</h3>
+<ul>
+<li>[ ] How you identify buyers and suppliers internally (external IDs)  </li>
+<li>[ ] Sample JSON for: one buyer, one supplier, one invoice/IOU  </li>
+<li>[ ] Confirmation of currency (default <strong>KES</strong>) and max tenor you will send (IOUX programmes may cap, e.g. <strong>120 days</strong>)  </li>
+<li>[ ] What field is your <strong>asking / list price</strong> (must match purchase webhook amount validation on your side)  </li>
+<li>[ ] Whether documents are public HTTPS URLs or need alternate intake  </li>
+</ul>
+<h3>4.4 People for first UAT</h3>
+<ul>
+<li>[ ] At least one <strong>supplier</strong> user who can log into IOUX and opt in  </li>
+<li>[ ] At least one <strong>buyer</strong> party already known in your system  </li>
+<li>[ ] Agreement that SPV disbursement will be done by IOUX operators during UAT  </li>
+</ul>
+<h3>4.5 Security</h3>
+<ul>
+<li>[ ] Secret storage location (vault / env) confirmed — no secrets in chat  </li>
+<li>[ ] Ability to sign outbound payment webhooks (HMAC)  </li>
+<li>[ ] Ability to receive and log IOUX purchase callbacks  </li>
+</ul>
+<hr />
+<h2>5. What IOUX will provide to you</h2>
+<p>After approval, you receive (secure channel — not in this PDF/handbook copy):</p>
+<table>
+<thead><tr><th>Item</th><th>Purpose</th></tr></thead>
+<tbody>
+<tr><td>API base URL</td><td>All Partner → IOUX REST calls</td></tr>
+<tr><td>Platform API key (<code>uzima_…</code>)</td><td>Auth header <code>X-API-Key</code> or <code>Authorization: Bearer</code></td></tr>
+<tr><td>Platform org UUID / party ID</td><td>Your platform identity on IOUX</td></tr>
+<tr><td>HMAC secret</td><td>Sign <code>POST /webhooks/payment-update</code></td></tr>
+<tr><td>Portal URL</td><td>Human workflows (opt-in, escrow, registry)</td></tr>
+<tr><td>Demo / UAT operator accounts (if agreed)</td><td>SPV / admin assisted testing</td></tr>
+<tr><td>Webhook delivery visibility</td><td>IOUX logs HTTP status from your purchase endpoint</td></tr>
+<tr><td>This handbook + OpenAPI / Postman (where published)</td><td>Implementation reference</td></tr>
+<tr><td>Named IOUX engineer for joint UAT window</td><td>Debug + payload review</td></tr>
+</tbody></table>
+<p><strong>IOUX also provides operationally during UAT:</strong></p>
+<ul>
+<li>Creation / enablement of your platform integration row (purchase URL, environment)  </li>
+<li>Confirmation when outbound purchase webhook is configured  </li>
+<li>Joint walkthrough of one happy-path IOU end-to-end  </li>
+<li>Written note of open items (business rules vs transport)</li>
+</ul>
+<hr />
+<h2>6. Authentication</h2>
+<h3>6.1 Partner → IOUX (API key)</h3>
+<pre class="code"><code class="http">X-API-Key: uzima_&lt;issued-to-you&gt;
+Content-Type: application/json</code></pre>
+<p>or</p>
+<pre class="code"><code class="http">Authorization: Bearer uzima_&lt;issued-to-you&gt;</code></pre>
+<p>Scopes typically include: <code>parties:write</code>, <code>parties:read</code>, <code>invoices:write</code>, <code>payments:write</code> (exact set on your key).</p>
+<h3>6.2 Partner → IOUX payment updates (HMAC)</h3>
+<p><code>POST /api/v1/webhooks/payment-update</code> requires:</p>
+<table>
+<thead><tr><th>Header</th><th>Value</th></tr></thead>
+<tbody>
+<tr><td><code>X-Afyax-Timestamp</code></td><td>Unix <strong>seconds</strong> (or ms — both accepted)</td></tr>
+<tr><td><code>X-Afyax-Signature</code></td><td><code>hex(HMAC_SHA256(secret, "{timestamp}.{rawBody}"))</code> or <code>sha256=&lt;hex&gt;</code></td></tr>
+<tr><td><code>X-API-Key</code></td><td>Your platform key</td></tr>
+</tbody></table>
+<p>Sign the <strong>exact raw JSON body</strong> bytes. Clock skew beyond the allowed window → <code>401</code>.</p>
+<h3>6.3 IOUX → Partner (purchase webhook)</h3>
+<p>Default model: HTTPS POST JSON to your purchase URL.  </p>
+<p>You should:</p>
+<ol>
+<li>Accept JSON body (see §8)  </li>
+<li>Validate listing still <strong>available</strong> and <code>amount</code> ≥ / = your asking price  </li>
+<li>Return <code>2xx</code> on success; <code>4xx</code> with clear JSON error on business rejection  </li>
+<li>Be idempotent on repeated delivery of the same <code>ioux_id</code> / transaction ref  </li>
+</ol>
+<hr />
+<h2>7. Core API map (Partner → IOUX)</h2>
+<table>
+<thead><tr><th>#</th><th>Method &amp; path</th><th>You use it to…</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>POST /parties</code></td><td>Register / upsert buyer or supplier</td></tr>
+<tr><td>2</td><td><code>GET /parties/{uzimaPartyId}</code></td><td>Read back a party</td></tr>
+<tr><td>3</td><td><code>POST /users</code></td><td>Create IOUX portal user under an org</td></tr>
+<tr><td>4</td><td><code>POST /external/invoices</code></td><td>Submit credit sale / receivable (creates IOU)</td></tr>
+<tr><td>5</td><td><code>POST /ious</code></td><td>Alias of invoice create</td></tr>
+<tr><td>6</td><td><code>GET /ious/{iouRegistryId}</code></td><td>Poll status</td></tr>
+<tr><td>7</td><td><code>GET /invoices/{id}/status</code></td><td>Poll by invoice UUID</td></tr>
+<tr><td>8</td><td><code>POST /webhooks/payment-update</code></td><td>Report buyer repayment</td></tr>
+</tbody></table>
+<p>Full field schemas: see OpenAPI (<code>docs/openapi.yaml</code>) and AfyaX worked examples (<code>docs/AFYAX_API_FOR_SULE.md</code>).</p>
+<h3>7.1 Minimum invoice fields we need</h3>
+<table>
+<thead><tr><th>Field</th><th>Required</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td>Buyer identity</td><td>Yes</td><td><code>buyerOrgId</code> <strong>or</strong> <code>buyerPartyId</code></td></tr>
+<tr><td>Supplier identity</td><td>Yes</td><td><code>supplierOrgId</code> <strong>or</strong> <code>supplierPartyId</code></td></tr>
+<tr><td><code>faceValue</code></td><td>Yes</td><td>Positive number</td></tr>
+<tr><td><code>issueDate</code>, <code>dueDate</code></td><td>Yes</td><td><code>YYYY-MM-DD</code>; tenor limits may apply</td></tr>
+<tr><td><code>commitmentToPay</code></td><td>Yes for credit sale</td><td>Should be <code>true</code> when buyer owes</td></tr>
+<tr><td><code>listedAmount</code></td><td>Strongly recommended</td><td>Your <strong>asking / list price</strong>; drives purchase webhook amount</td></tr>
+<tr><td><code>externalInvoiceId</code></td><td>Recommended</td><td>Your ID for reconciliation</td></tr>
+<tr><td><code>submissionType</code></td><td>Optional</td><td><code>buyer_credit_sale</code> (default) or <code>supplier_list</code></td></tr>
+<tr><td>Supporting docs</td><td>Recommended</td><td><code>{ name, fileUrl, docType }</code></td></tr>
+</tbody></table>
+<p><strong>Response you must store:</strong> <code>invoiceId</code>, <code>iouRegistryId</code>, initial <code>status</code>.</p>
+<hr />
+<h2>8. IOUX → Partner purchase webhook (critical)</h2>
+<h3>8.1 When it fires</h3>
+<p><strong>Only on <code>iou.disbursed</code></strong> — after SPV records disbursement to the supplier (Delivery vs Settlement).  </p>
+<p>It does <strong>not</strong> fire at invoice create or at supplier opt-in alone.</p>
+<h3>8.2 Example payload</h3>
+<pre class="code"><code class="json">{
+  "buyer_name": "IOU Exchange Capital SPV",
+  "ioux_id": "IOU-KE-2026-00006-7",
+  "payment_method": "bank",
+  "amount": 5830.00,
+  "transaction_id": "IOUX-TXN-8c449a779bd5",
+  "bank_reference": "IOUX-TXN-8c449a779bd5"
+}</code></pre>
+<table>
+<thead><tr><th>Field</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>buyer_name</code></td><td><strong>SPV / purchaser of the receivable on IOUX</strong> (not the pharmacy/obligor)</td></tr>
+<tr><td><code>ioux_id</code></td><td>Same as <code>iouRegistryId</code></td></tr>
+<tr><td><code>amount</code></td><td>Asking / listed amount (align with your listing price validation)</td></tr>
+<tr><td><code>transaction_id</code> / <code>bank_reference</code></td><td>IOUX settlement reference for reconciliation</td></tr>
+</tbody></table>
+<h3>8.3 What we expect your endpoint to do</h3>
+<ol>
+<li>Find listing by <code>ioux_id</code>  </li>
+<li>Ensure listing is still <strong>open / available</strong>  </li>
+<li>Validate <code>amount</code> against asking price  </li>
+<li>Mark sold / transferred; notify your users if needed  </li>
+<li>Return success JSON  </li>
+</ol>
+<p><strong>Common UAT failures (learn from AfyaX pilot):</strong></p>
+<table>
+<thead><tr><th>Your HTTP response</th><th>Typical cause</th><th>Fix</th></tr></thead>
+<tbody>
+<tr><td>400 amount &amp;lt; asking price</td><td>IOUX sent discounted net; you validate face/ask</td><td>Align on listed/asking amount</td></tr>
+<tr><td>400 listing already sold</td><td>Listing closed before webhook, or retry after success</td><td>Keep listing open until purchase accepted; make handler idempotent</td></tr>
+<tr><td>Timeout / 5xx</td><td>Endpoint down or IP blocked</td><td>Whitelist + monitoring</td></tr>
+</tbody></table>
+<p>IOUX retries failed deliveries; design for <strong>at-least-once</strong> delivery.</p>
+<hr />
+<h2>9. Lifecycle statuses (what you will see)</h2>
+<table>
+<thead><tr><th>Status</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>awaiting_opt_in</code></td><td>Buyer-originated credit sale waiting for supplier</td></tr>
+<tr><td><code>awaiting_buyer_verification</code></td><td>Supplier-listed path waiting for buyer</td></tr>
+<tr><td><code>pending_settlement</code></td><td>Accepted; assignment recorded; payment not yet disbursed</td></tr>
+<tr><td><code>disbursed</code></td><td>SPV disbursement recorded; purchase webhook sent</td></tr>
+<tr><td><code>settled</code></td><td>Repayments brought outstanding to closure (no purchase webhook)</td></tr>
+<tr><td><code>opt_in_declined</code> / <code>buyer_rejected</code> / <code>cancelled</code></td><td>Closed without purchase</td></tr>
+</tbody></table>
+<p>Listing flag <code>sold</code> on IOUX means the receivable was acquired on our side.</p>
+<hr />
+<h2>10. Joint UAT script (use with any new partner)</h2>
+<p><strong>Goal:</strong> One clean IOU from create → purchase accept on your side.</p>
+<table>
+<thead><tr><th>Step</th><th>Actor</th><th>Action</th><th>Pass criteria</th></tr></thead>
+<tbody>
+<tr><td>0</td><td>Both</td><td>Confirm API key + purchase URL configured</td><td><code>GET /health</code> ok; test auth 401 without key</td></tr>
+<tr><td>1</td><td>Partner</td><td><code>POST /parties</code> buyer + supplier</td><td><code>uzimaPartyId</code> returned; store both</td></tr>
+<tr><td>2</td><td>Partner</td><td><code>POST /users</code> for supplier checker (optional)</td><td>Invite received / login works</td></tr>
+<tr><td>3</td><td>Partner</td><td><code>POST /external/invoices</code> with <code>listedAmount</code> = asking price</td><td><code>iouRegistryId</code> + <code>awaiting_opt_in</code></td></tr>
+<tr><td>4</td><td>Supplier</td><td>Opt in on IOUX portal</td><td>Status → <code>pending_settlement</code></td></tr>
+<tr><td>5</td><td>SPV / IOUX ops</td><td>Release disbursement escrow leg</td><td>Status → <code>disbursed</code></td></tr>
+<tr><td>6</td><td>Partner</td><td>Receive purchase webhook</td><td><code>2xx</code>; listing marked sold <strong>once</strong></td></tr>
+<tr><td>7</td><td>Partner</td><td><code>POST /webhooks/payment-update</code> sample repayment</td><td><code>iouxTransactionId</code> returned</td></tr>
+<tr><td>8</td><td>Both</td><td>Sign UAT note</td><td>Open items listed explicitly</td></tr>
+</tbody></table>
+<p><strong>Do not reuse a listing that you already marked sold</strong> for a fresh purchase test. Always create a <strong>new</strong> IOU / listing.</p>
+<hr />
+<h2>11. Onboarding process (how we start with you)</h2>
+<ol>
+<li><strong>Commercial intro</strong> — UzimaX / Githuku introduces the partner.  </li>
+<li><strong>Scope call</strong> — Choose Model A/B/C; name technical leads.  </li>
+<li><strong>You return §4 checklist</strong> (contacts, URLs, sample JSON).  </li>
+<li><strong>IOUX provisions</strong> platform org + API key + HMAC (secure handoff).  </li>
+<li><strong>Configure</strong> your purchase webhook URL on IOUX integrations.  </li>
+<li><strong>Sandbox / prod UAT</strong> using §10 script (target: one clean pass).  </li>
+<li><strong>Written sign-off</strong> + production monitoring.  </li>
+<li><strong>Operate</strong> — support channel for incidents; rotate secrets on schedule.</li>
+</ol>
+<p>Typical first joint UAT window: <strong>half-day to two days</strong> if data and users are ready.</p>
+<hr />
+<h2>12. Security &amp; compliance expectations</h2>
+<ul>
+<li>Never commit API keys or HMAC secrets to git or group chats.  </li>
+<li>Use HTTPS only.  </li>
+<li>Prefer least-privilege scopes on API keys.  </li>
+<li>Log webhook receipts with <code>ioux_id</code> and your listing id for audit.  </li>
+<li>IOUX does not store card PANs; keep payment card data in your PCI scope.  </li>
+<li>KYC documents: send metadata + URLs you control; agree retention with UzimaX legal if required.  </li>
+<li>Personal data: process under your privacy notice and applicable Kenya Data Protection Act obligations.</li>
+</ul>
+<hr />
+<h2>13. What IOUX will not do for you</h2>
+<ul>
+<li>Rebuild your commerce / claims / underwriting product  </li>
+<li>Guarantee your listing remains unsold if your own system closes it early  </li>
+<li>Move real money without a licensed processor integration (separate scope)  </li>
+<li>Provide formal legal opinions, trust deeds, or NSE listing fees  </li>
+<li>Unlimited unpaid parallel “dummy” environments without an agreed UAT plan  </li>
+</ul>
+<hr />
+<h2>14. Support &amp; escalation</h2>
+<table>
+<thead><tr><th>Topic</th><th>Contact pattern</th></tr></thead>
+<tbody>
+<tr><td>Commercial / PoC scheduling</td><td>UzimaX commercial lead (e.g. Githuku / Jugo Limited)</td></tr>
+<tr><td>API / webhook technical</td><td>Named IOUX engineer (issued at onboarding)</td></tr>
+<tr><td>Partner platform bugs</td><td>Your technical lead</td></tr>
+<tr><td>Production outage</td><td>Email + phone escalation list exchanged at go-live</td></tr>
+</tbody></table>
+<p>When reporting an issue, include: <code>iouRegistryId</code>, UTC timestamp, request/response bodies (redact secrets), and whether the failure is <strong>transport</strong> (5xx/timeout) or <strong>business rule</strong> (4xx with message).</p>
+<hr />
+<h2>15. Glossary</h2>
+<table>
+<thead><tr><th>Term</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><strong>IOU / receivable</strong></td><td>Right to receive payment recorded in the registry</td></tr>
+<tr><td><strong><code>iouRegistryId</code></strong></td><td>Canonical public ID, e.g. <code>IOU-KE-2026-00006-7</code></td></tr>
+<tr><td><strong>Asking / listed amount</strong></td><td>Price your platform treats as the purchase amount</td></tr>
+<tr><td><strong>DvS</strong></td><td>Delivery versus settlement — purchase notify at disbursement</td></tr>
+<tr><td><strong>SPV</strong></td><td>Special purpose vehicle that acquires the receivable</td></tr>
+<tr><td><strong>Obligor</strong></td><td>Buyer who owes on the invoice</td></tr>
+<tr><td><strong>Originator</strong></td><td>Supplier who is owed / may sell the receivable</td></tr>
+</tbody></table>
+<hr />
+<h2>16. Document control</h2>
+<table>
+<thead><tr><th>Version</th><th>Date</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td>1.0</td><td>15 Sep 2026</td><td>First shareable partner handbook (post AfyaX pilot lessons)</td></tr>
+</tbody></table>
+<p><strong>Owner:</strong> IOUX engineering / Alfred Mulinge  </p>
+<p><strong>Approved for sharing with:</strong> Prospective API partners under NDA or PoC letter as required by UzimaX</p>
+<hr />
+<h2>Appendix A — Quick “bring this to the kickoff” pack</h2>
+<p>Send IOUX these five items to start fast:</p>
+<ol>
+<li>Tech lead contact  </li>
+<li>Purchase webhook URL (sandbox)  </li>
+<li>One sample buyer JSON + one sample supplier JSON  </li>
+<li>One sample invoice JSON with asking price field identified  </li>
+<li>Two named humans for first UAT (supplier user + your engineer)</li>
+</ol>
+<p>We will return:</p>
+<ol>
+<li>API base + key + HMAC (secure)  </li>
+<li>Portal links + any UAT logins  </li>
+<li>Scheduled UAT slot  </li>
+<li>This handbook acknowledged as the working contract for technical expectations  </li>
+</ol>
+<hr />
+<h2>Appendix B — Email template you can forward</h2>
+<p><strong>Subject:</strong> IOUX partner API onboarding — what we need from you</p>
+<blockquote>Please find the IOUX Partner API Integration Handbook.  <br /> <br />In short: you push parties and invoices into IOUX; your users complete opt-in/verify on the IOUX portal where required; when the SPV disburses, we call your purchase webhook; you later push repayments.  <br /> <br />Reply with Appendix A items so we can issue credentials and book a joint UAT.  <br /> <br />Handbook: *(attach or link IOUX-PARTNER-API-001)*</blockquote>
+    <div class="footer-note">
+      <span>IOUX-PARTNER-API-001 · Commercial in confidence when distributed under PoC/NDA</span>
+      <span>ioux.africa</span>
+    </div>
+  </div>
+</body>
+</html>

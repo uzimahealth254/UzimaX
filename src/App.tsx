@@ -147,6 +147,7 @@ function AppRoutes() {
         <Route path="programs" element={<ProgramsPage />} />
         <Route path="fees" element={<FeesPage />} />
         <Route path="reconciliation" element={<ReconciliationPage />} />
+        <Route path="escrow" element={<EscrowPage />} />
         <Route path="users" element={<UsersPage />} />
         <Route path="integrations" element={<IntegrationsPage />} />
         <Route path="workflow" element={<WorkflowMonitorPage />} />

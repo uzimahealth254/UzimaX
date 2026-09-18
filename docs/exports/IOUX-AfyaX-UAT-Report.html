@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>IOUX AfyaX UAT Report</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,650&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --ink: #14222a;
+      --teal: #0b3d4a;
+      --sand: #c4a574;
+      --paper: #f7f4ef;
+      --line: #d5cdc0;
+      --muted: #5c6b73;
+      --ok: #1f6b4a;
+    }
+    * { box-sizing: border-box; }
+    @page { size: A4; margin: 12mm 11mm; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: "Source Sans 3", system-ui, sans-serif;
+      font-size: 9.5pt;
+      line-height: 1.4;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .sheet { max-width: 190mm; margin: 0 auto; padding: 2mm; }
+    .head {
+      background: linear-gradient(115deg, #072c36, #0b3d4a 60%, #145566);
+      color: var(--paper);
+      padding: 14px 16px;
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .brand {
+      font-family: Fraunces, Georgia, serif;
+      font-size: 18pt;
+      font-weight: 650;
+      line-height: 1.05;
+    }
+    .brand small {
+      display: block;
+      margin-top: 4px;
+      font-family: "Source Sans 3", sans-serif;
+      font-size: 7.5pt;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      opacity: 0.85;
+      font-weight: 600;
+    }
+    .docid { text-align: right; font-size: 8pt; opacity: 0.9; }
+    .docid strong {
+      display: block;
+      font-family: Fraunces, Georgia, serif;
+      font-size: 10pt;
+      color: #e8d9c0;
+      margin-bottom: 2px;
+    }
+    h1 {
+      font-family: Fraunces, Georgia, serif;
+      font-size: 13pt;
+      color: var(--teal);
+      margin: 0 0 8px;
+    }
+    h2 {
+      font-family: Fraunces, Georgia, serif;
+      font-size: 10.5pt;
+      color: var(--teal);
+      margin: 12px 0 5px;
+      padding-bottom: 2px;
+      border-bottom: 1px solid var(--sand);
+    }
+    p { margin: 0 0 6px; }
+    .meta {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 3px 12px;
+      margin-bottom: 8px;
+      font-size: 8.5pt;
+    }
+    .meta span {
+      color: var(--muted);
+      font-size: 7pt;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      display: block;
+    }
+    table { width: 100%; border-collapse: collapse; margin: 0 0 6px; font-size: 8.5pt; }
+    th, td { text-align: left; padding: 4px 5px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th {
+      background: #ebe4d8;
+      color: var(--teal);
+      font-size: 7pt;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .pass {
+      display: inline-block;
+      background: #d8eee3;
+      color: var(--ok);
+      font-weight: 700;
+      font-size: 7.5pt;
+      padding: 1px 5px;
+      white-space: nowrap;
+    }
+    .note { font-size: 8pt; color: var(--muted); margin: 2px 0 6px; }
+    .verdict {
+      background: #ebe4d8;
+      border-left: 3px solid var(--teal);
+      padding: 7px 9px;
+      font-size: 9pt;
+      margin: 6px 0 4px;
+    }
+    .pay {
+      margin-top: 12px;
+      background: #fff;
+      border: 1.5px solid var(--teal);
+      padding: 10px 12px;
+    }
+    .pay h2 { margin: 0 0 6px; border: none; padding: 0; }
+    .pay-grid {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 2px 14px;
+      font-size: 9.5pt;
+    }
+    .pay-grid dt { color: var(--muted); }
+    .pay-grid dd { margin: 0; font-weight: 700; color: var(--teal); }
+    .footer {
+      margin-top: 12px;
+      padding-top: 5px;
+      border-top: 1px solid var(--line);
+      font-size: 7pt;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+    }
+  </style>
+</head>
+<body>
+  <div class="sheet">
+    <div class="head">
+      <div class="brand">IOU Exchange<small>AfyaX integration · UAT report</small></div>
+      <div class="docid">
+        <strong>IOUX-AfyaX-UAT-Report</strong>
+        15 September 2026
+      </div>
+    </div>
+
+    <h1>AfyaX Partner Integration — UAT Report</h1>
+    <div class="meta">
+      <div><span>To</span>Uzima Exchange Ltd / Jugo Limited (Githuku)</div>
+      <div><span>From</span>Alfred Mulinge</div>
+      <div><span>Contract</span>UZIMA-SYS-PLAN-001 v1.6 · Annex A</div>
+      <div><span>Partner platform</span>AfyaX</div>
+      <div><span>AfyaX engineering</span>David Sule (technical counterpart)</div>
+      <div><span>Portal</span>https://uzimax.onrender.com</div>
+      <div><span>API</span>https://uzimax.onrender.com/api/v1</div>
+    </div>
+
+    <h2>1. Purpose</h2>
+    <p>
+      Confirm Phase 1 integration between <strong>IOUX</strong> and the <strong>AfyaX</strong> platform on
+      <strong>production</strong> — live API calls and portal workflows.
+      AfyaX-side engineering was coordinated with David Sule.
+    </p>
+
+    <h2>2. Environment</h2>
+    <table>
+      <tbody>
+        <tr><td>Portal / API</td><td>uzimax.onrender.com · <code>/api/v1</code></td></tr>
+        <tr><td>Database</td><td>Production Postgres</td></tr>
+        <tr><td>AfyaX purchase URL (UAT)</td><td><code>manager.smplystore.com/api/v1/iou/purchase</code></td></tr>
+        <tr><td>Auth</td><td>Platform API key + portal JWT</td></tr>
+      </tbody>
+    </table>
+
+    <h2>3. What was built and passed</h2>
+    <table>
+      <thead><tr><th>#</th><th>Area</th><th>Detail</th><th>Result</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>Health</td><td><code>GET /api/v1/health</code></td><td><span class="pass">Pass</span></td></tr>
+        <tr><td>2</td><td>Parties</td><td><code>POST /parties</code> — buyer &amp; supplier; <code>uzimaPartyId</code></td><td><span class="pass">Pass</span></td></tr>
+        <tr><td>3</td><td>Users</td><td><code>POST /users</code> — portal users linked to orgs</td><td><span class="pass">Pass</span></td></tr>
+        <tr><td>4</td><td>IOU intake</td><td><code>POST /external/invoices</code> → <code>iouRegistryId</code></td><td><span class="pass">Pass</span></td></tr>
+        <tr><td>5</td><td>Status read</td><td><code>GET /ious/{iouRegistryId}</code></td><td><span class="pass">Pass</span></td></tr>
+        <tr><td>6</td><td>Opt-in</td><td>Supplier portal → assignment / pending settlement</td><td><span class="pass">Pass</span></td></tr>
+        <tr><td>7</td><td>Disbursement</td><td>Escrow release → <code>disbursed</code> / listing <code>sold</code></td><td><span class="pass">Pass</span></td></tr>
+        <tr><td>8</td><td>Purchase webhook</td><td>IOUX → AfyaX on <code>iou.disbursed</code> (DvS)</td><td><span class="pass">Pass</span></td></tr>
+        <tr><td>9</td><td>Payment updates</td><td><code>POST /webhooks/payment-update</code> HMAC</td><td><span class="pass">Configured</span></td></tr>
+        <tr><td>10</td><td>Portals</td><td>Admin / SPV / Supplier show live IOUs</td><td><span class="pass">Pass</span></td></tr>
+      </tbody>
+    </table>
+
+    <h2>4. Instruments exercised</h2>
+    <table>
+      <thead><tr><th>IOU registry ID</th><th>IOUX outcome</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code>IOU-KE-2026-00003-0</code></td>
+          <td>Opt-in → disbursed</td>
+          <td>Integration URLs corrected mid-UAT</td>
+        </tr>
+        <tr>
+          <td><code>IOU-KE-2026-00004-9</code></td>
+          <td>Lifecycle + webhook attempted</td>
+          <td>Partner listing-state follow-up</td>
+        </tr>
+        <tr>
+          <td><code>IOU-KE-2026-00005-8</code></td>
+          <td>Disbursed / sold; webhook delivered</td>
+          <td>Asking-price alignment follow-up</td>
+        </tr>
+        <tr>
+          <td><code>IOU-KE-2026-00006-7</code></td>
+          <td>Disbursed / sold; asking/face amount sent</td>
+          <td>Fresh open listing for clean partner accept</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="note">
+      IOUX registry, assignment, disbursement, and outbound webhook delivery work end-to-end on production.
+    </p>
+
+    <div class="verdict">
+      <strong>Verdict:</strong> Phase 1 partner APIs are <strong>built and live</strong>.
+      AfyaX technical UAT covering intake → opt-in → assignment → disbursement → purchase webhook
+      <strong>passed</strong> on production.
+    </div>
+
+    <div class="pay">
+      <h2>Payment details</h2>
+      <dl class="pay-grid">
+        <dt>Payee</dt><dd>ALFRED MULINGE</dd>
+        <dt>M-Pesa</dt><dd>+254 708 758 500</dd>
+        <dt>Email</dt><dd>binfred.ke@gmail.com</dd>
+        <dt>Reference</dt><dd>IOUX-INV-2026-09-001</dd>
+      </dl>
+    </div>
+
+    <div class="footer">
+      <span>IOUX-AfyaX-UAT-Report · Confidential</span>
+      <span>Alfred Mulinge · IOU Exchange</span>
+    </div>
+  </div>
+</body>
+</html>
