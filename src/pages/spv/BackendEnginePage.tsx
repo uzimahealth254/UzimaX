@@ -21,7 +21,9 @@ export default function BackendEnginePage() {
   }, [organisations]);
 
   const settlement = (escrowLegs || []).slice(0, 20);
-  const distributions = (packages || []).filter((p: any) => ['listed', 'placed', 'settled'].includes(p.status));
+  const distributions = (packages || []).filter((p: any) =>
+    ['listed', 'placed', 'settled', 'ready_for_submission', 'structured'].includes(p.status),
+  );
 
   return (
     <div className="portal-page animate-fade-in">

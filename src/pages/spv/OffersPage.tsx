@@ -30,10 +30,13 @@ export default function OffersPage() {
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<TabId>('available');
 
-  const available = invoices.filter(inv => inv.status === 'verified' || inv.status === 'assigned');
+  // Align with registry "Open to offer" — Path A lands on `listed` after supplier opt-in.
+  const available = invoices.filter(inv =>
+    ['listed', 'verified', 'awaiting_opt_in', 'awaiting_buyer_verification', 'offer_received'].includes(inv.status),
+  );
   const pendingOffers = offers.filter(o => o.status === 'pending');
   const acceptedOffers = offers.filter(o => o.status === 'accepted');
-  const closedOffers = offers.filter(o => ['rejected', 'expired', 'withdrawn'].includes(o.status));
+  const closedOffers = offers.filter(o => ['rejected', 'declined', 'expired', 'withdrawn'].includes(o.status));
 
   const tabs: { id: TabId; label: string; count: number }[] = [
     { id: 'available', label: 'Available', count: available.length },
@@ -159,7 +162,7 @@ export default function OffersPage() {
   ];
 
   const tabData: Record<TabId, { columns: any[]; data: any[]; empty: string }> = {
-    available: { columns: availableColumns, data: available, empty: 'No verified IOUs available for offers' },
+    available: { columns: availableColumns, data: available, empty: 'No IOUs open for offers yet' },
     pending: { columns: offersColumns, data: pendingOffers, empty: 'No pending offers' },
     accepted: { columns: offersColumns, data: acceptedOffers, empty: 'No accepted offers' },
     closed: { columns: offersColumns, data: closedOffers, empty: 'No closed offers' },

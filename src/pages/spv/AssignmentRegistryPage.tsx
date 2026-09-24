@@ -15,7 +15,13 @@ export default function AssignmentRegistryPage() {
   const actor = useActor();
   const [selectedAssignment, setSelectedAssignment] = useState<ReceivableAssignment | null>(null);
 
-  const acceptedInvoices = invoices.filter(inv => inv.status === 'offer_accepted');
+  const acceptedInvoices = invoices.filter((inv) => {
+    if (inv.status !== 'offer_accepted') return false;
+    const hasConsent = consents.some(
+      (c) => c.invoiceId === inv.id && ['pending', 'signed'].includes(c.status),
+    );
+    return !hasConsent;
+  });
   const autoAssigned = invoices.filter(inv => inv.origin === 'buyer_posted' || inv.origin === 'api_upload');
 
   const handleRequestConsent = async (inv: Invoice) => {

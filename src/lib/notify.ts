@@ -1,8 +1,6 @@
 /**
- * Optional client-side notify hooks (outbox). Server email is authoritative via Resend/SMTP.
+ * Optional client-side notify outbox. Server email/SMS via notificationService is authoritative.
  */
-
-import { getApiBaseUrl } from '@/lib/apiBase';
 
 export type NotifyChannel = 'email' | 'sms' | 'in_app';
 
@@ -15,7 +13,6 @@ export interface NotifyPayload {
 }
 
 const OUTBOX_KEY = 'ioux-notify-outbox';
-const apiBase = () => getApiBaseUrl();
 
 function pushOutbox(entry: NotifyPayload & { at: string; status: string }) {
   try {
@@ -28,42 +25,14 @@ function pushOutbox(entry: NotifyPayload & { at: string; status: string }) {
   }
 }
 
+/** Local outbox only — no dedicated /notify/* routes on the API. */
 export async function sendEmailHook(payload: Omit<NotifyPayload, 'channel'>): Promise<{ ok: boolean; mode: string }> {
-  const enabled = import.meta.env.VITE_NOTIFY_EMAIL_ENABLED === 'true';
-  if (enabled) {
-    try {
-      const res = await fetch(`${apiBase()}/api/v1/notify/email`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (res.ok) {
-        pushOutbox({ ...payload, channel: 'email', at: new Date().toISOString(), status: 'sent' });
-        return { ok: true, mode: 'provider' };
-      }
-    } catch {
-      /* fall through */
-    }
-  }
   pushOutbox({ ...payload, channel: 'email', at: new Date().toISOString(), status: 'stub' });
   return { ok: true, mode: 'stub' };
 }
 
 export async function sendSmsStub(payload: { to: string; body: string }): Promise<{ ok: boolean; mode: string }> {
-  try {
-    const res = await fetch(`${apiBase()}/api/v1/notify/sms`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (res.ok) {
-      pushOutbox({ ...payload, channel: 'sms', at: new Date().toISOString(), status: 'sent' });
-      return { ok: true, mode: 'provider' };
-    }
-  } catch {
-    /* stub */
-  }
-  pushOutbox({ ...payload, channel: 'sms', at: new Date().toISOString(), status: 'stub' });
+  pushOutbox({ ...payload, body: payload.body, channel: 'sms', at: new Date().toISOString(), status: 'stub' });
   return { ok: true, mode: 'stub' };
 }
 

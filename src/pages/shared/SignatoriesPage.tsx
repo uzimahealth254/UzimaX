@@ -23,10 +23,10 @@ export default function SignatoriesPage({ embedded = false }: { embedded?: boole
   });
 
   const { data: users = [] } = useQuery({
-    queryKey: ['admin-users-lite'],
+    queryKey: ['org-users', user?.organisationId],
     queryFn: async () => {
       try {
-        return (await api.get('/admin/users')).data.data as Array<{ id: string; fullName: string; email: string; orgId: string }>;
+        return (await api.get('/org/users')).data.data as Array<{ id: string; fullName: string; email: string; orgId: string }>;
       } catch {
         return [{ id: user!.id, fullName: user!.name, email: user!.email, orgId: user!.organisationId! }];
       }
@@ -34,7 +34,7 @@ export default function SignatoriesPage({ embedded = false }: { embedded?: boole
     enabled: !!user,
   });
 
-  const orgUsers = users.filter((u) => u.orgId === user?.organisationId || user?.role === 'admin');
+  const orgUsers = users.filter((u) => u.orgId === user?.organisationId || !u.orgId);
 
   const nominate = async () => {
     const userId = nominateUserId || user?.id;

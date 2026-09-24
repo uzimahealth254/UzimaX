@@ -81,7 +81,7 @@ export default function InvoiceRegisterPage() {
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#D3F36B] text-[#0E1F1A] text-xs font-bold hover:bg-[#C5E85A] disabled:opacity-50 min-h-[34px]"
             >
               <RefreshCw size={12} className={syncing ? 'animate-spin' : ''} />
-              {syncing ? '…' : 'Reload'}
+              {syncing ? '…' : 'Refresh'}
             </button>
           </div>
         </header>

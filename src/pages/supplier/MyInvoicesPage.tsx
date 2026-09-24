@@ -106,14 +106,20 @@ export default function MyInvoicesPage() {
               >
                 <option value="all">All statuses</option>
                 <option value="completed">Completed</option>
+                <option value="awaiting_opt_in">Awaiting opt-in</option>
+                <option value="awaiting_buyer_verification">Awaiting buyer verification</option>
                 <option value="listed">Listed</option>
                 <option value="verified">Verified</option>
-                <option value="awaiting_opt_in">Awaiting opt-in</option>
                 <option value="offer_received">Offer received</option>
                 <option value="offer_accepted">Offer accepted</option>
+                <option value="pending_settlement">Pending settlement</option>
                 <option value="assigned">Assigned</option>
                 <option value="disbursed">Disbursed</option>
                 <option value="settled">Settled</option>
+                <option value="matured">Matured</option>
+                <option value="opt_in_declined">Opt-in declined</option>
+                <option value="buyer_rejected">Buyer rejected</option>
+                <option value="cancelled">Cancelled</option>
               </select>
             </div>
           </div>

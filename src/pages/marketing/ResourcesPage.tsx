@@ -5,6 +5,8 @@ import MarketingLayout from '@/components/marketing/MarketingLayout';
 import Reveal from '@/components/marketing/Reveal';
 import { useHashScroll } from '@/components/marketing/useHashScroll';
 import { BRAND } from '@/lib/brand';
+import { api } from '@/lib/apiClient';
+import { toast } from 'sonner';
 
 const JUMP = [
   {
@@ -75,10 +77,27 @@ export default function ResourcesPage() {
   useHashScroll();
   const [open, setOpen] = useState<number | null>(0);
   const [sent, setSent] = useState(false);
+  const [sending, setSending] = useState(false);
 
-  const onSubmit = (e: FormEvent) => {
+  const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setSent(true);
+    const fd = new FormData(e.currentTarget);
+    setSending(true);
+    try {
+      await api.post('/contact', {
+        name: String(fd.get('name') || ''),
+        organisation: String(fd.get('org') || ''),
+        role: String(fd.get('role') || ''),
+        email: String(fd.get('email') || ''),
+        message: String(fd.get('message') || ''),
+      });
+      setSent(true);
+      toast.success('Message sent');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Could not send message — try again or email hello@ioux.africa');
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -259,8 +278,8 @@ Authorization: X-API-Key <key>`}
                   <label htmlFor="message">Message</label>
                   <textarea id="message" name="message" rows={4} placeholder="How can we help?" required />
                 </div>
-                <button className="btn btn-dark" type="submit">
-                  Send message <span className="node">→</span>
+                <button className="btn btn-dark" type="submit" disabled={sending}>
+                  {sending ? 'Sending…' : 'Send message'} <span className="node">→</span>
                 </button>
               </form>
             )}

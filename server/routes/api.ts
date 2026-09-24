@@ -48,6 +48,34 @@ import * as s from '../db/schema.js';
 export const authRouter = Router();
 export const apiRouter = Router();
 
+/** Public marketing contact — emails SUPPORT_EMAIL (no auth) */
+apiRouter.post('/contact', validate(z.object({
+  name: z.string().min(1).max(120),
+  organisation: z.string().min(1).max(200),
+  role: z.string().max(80).optional(),
+  email: z.string().email(),
+  message: z.string().min(1).max(4000),
+})), async (req, res, next) => {
+  try {
+    const to = process.env.SUPPORT_EMAIL || 'hello@ioux.africa';
+    const { name, organisation, role, email, message } = req.body;
+    await sendEmail({
+      to,
+      replyTo: email,
+      subject: `IOUX contact: ${organisation} — ${name}`,
+      template: 'marketing_contact',
+      html: `<p><strong>Name:</strong> ${name}</p>
+<p><strong>Organisation:</strong> ${organisation}</p>
+<p><strong>Role:</strong> ${role || '—'}</p>
+<p><strong>Email:</strong> ${email}</p>
+<p><strong>Message:</strong></p>
+<p>${String(message).replace(/</g, '&lt;').replace(/\n/g, '<br/>')}</p>`,
+      text: `Name: ${name}\nOrg: ${organisation}\nRole: ${role || '—'}\nEmail: ${email}\n\n${message}`,
+    });
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+});
+
 async function persistRefreshToken(userId: string, refreshToken: string) {
   const refreshHash = await bcrypt.hash(refreshToken, 12);
   await db.insert(s.refreshTokens).values({
@@ -1650,6 +1678,23 @@ apiRouter.get('/documents/download', authenticate, async (req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Content-Disposition', `inline; filename="${path.basename(fullPath)}"`);
     res.send(buffer);
+  } catch (e) { next(e); }
+});
+
+// Org peers (for signatory nomination — non-admins cannot call /admin/users)
+apiRouter.get('/org/users', authenticate, async (req, res, next) => {
+  try {
+    const orgId = req.user!.orgId;
+    if (!orgId) throw new AppError(400, 'no_org', 'No organisation');
+    const rows = await db.select({
+      id: s.users.id,
+      fullName: s.users.fullName,
+      email: s.users.email,
+      orgId: s.users.orgId,
+      role: s.users.role,
+      isActive: s.users.isActive,
+    }).from(s.users).where(eq(s.users.orgId, orgId));
+    res.json({ data: rows });
   } catch (e) { next(e); }
 });
 

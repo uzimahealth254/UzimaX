@@ -126,7 +126,7 @@ export default function ConsentInboxPage() {
             <ul className="space-y-1.5">
               {orgSignatories.map((sig: { id: string; userId: string; roleTitle?: string | null }) => {
                 const signed = selected.status === 'signed' && selected.signatoryId === sig.id;
-                const rejected = selected.status === 'rejected';
+                const rejected = selected.status === 'rejected' || selected.status === 'declined';
                 const pendingSig = selected.status === 'pending';
                 const label = sig.userId === user?.id ? user.name : sig.roleTitle || 'Authorised signatory';
                 return (

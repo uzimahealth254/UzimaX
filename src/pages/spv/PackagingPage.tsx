@@ -108,7 +108,15 @@ export default function PackagingPage() {
         p.status === 'draft' ? (
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); updatePackageStatus(p.id, 'structured', actor); toast.success('Package structured'); }}
+            onClick={async (e) => {
+              e.stopPropagation();
+              try {
+                await updatePackageStatus(p.id, 'structured', actor);
+                toast.success('Package structured');
+              } catch (err: any) {
+                toast.error(err?.response?.data?.message || err?.message || 'Failed to structure package');
+              }
+            }}
             className="min-h-[32px] px-2.5 py-1 text-[11px] font-bold rounded-md bg-[#0E1F1A] text-white hover:bg-[#1A3A2E]"
           >
             Structure
@@ -116,10 +124,14 @@ export default function PackagingPage() {
         ) : p.status === 'structured' ? (
           <button
             type="button"
-            onClick={(e) => {
+            onClick={async (e) => {
               e.stopPropagation();
-              updatePackageStatus(p.id, 'ready_for_submission', actor);
-              toast.success('Package marked ready for submission');
+              try {
+                await updatePackageStatus(p.id, 'ready_for_submission', actor);
+                toast.success('Package marked ready for submission');
+              } catch (err: any) {
+                toast.error(err?.response?.data?.message || err?.message || 'Failed to update package');
+              }
             }}
             className="min-h-[32px] px-2.5 py-1 text-[11px] font-bold rounded-md bg-[#D3F36B] text-[#0E1F1A] hover:bg-[#C5E85A]"
           >

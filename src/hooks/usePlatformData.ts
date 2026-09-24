@@ -132,10 +132,11 @@ export function usePlatformData() {
     queryFn: async () => (await api.get('/programmes')).data.data,
     enabled,
   });
+  const walletEnabled = import.meta.env.VITE_ENABLE_WALLET === 'true';
   const walletQ = useQuery({
     queryKey: ['wallet'],
     queryFn: async () => (await api.get('/wallets/me')).data,
-    enabled: enabled && user?.role !== 'admin',
+    enabled: enabled && walletEnabled && user?.role !== 'admin',
   });
   const notifQ = useQuery({
     queryKey: ['notifications'],
@@ -357,14 +358,21 @@ export function usePlatformData() {
 
   const value: ApiDataContextType = {
     invoices,
-    offers: (offersQ.data || []).map((o: any) => ({
-      ...o,
-      discountRate: (o.discountRateBps || 0) / 100,
-      offerPrice: Number(o.purchasePrice),
-      faceValue: Number(o.faceValue),
-      supplierName: orgMap[o.supplierOrgId] || '',
-      tenor: o.tenorDays || 90,
-    })),
+    offers: (offersQ.data || []).map((o: any) => {
+      const inv = invoices.find((i: any) => i.id === o.invoiceId);
+      return {
+        ...o,
+        discountRate: (o.discountRateBps || 0) / 100,
+        offerPrice: Number(o.purchasePrice),
+        faceValue: Number(o.faceValue),
+        supplierId: inv?.supplierId || inv?.supplierOrgId || o.supplierOrgId,
+        supplierName: inv?.supplierName || orgMap[o.supplierOrgId] || orgMap[inv?.supplierOrgId] || '',
+        buyerId: inv?.buyerId || inv?.buyerOrgId,
+        buyerName: inv?.buyerName || orgMap[inv?.buyerOrgId] || '',
+        iouRegistryId: inv?.iouRegistryId || '',
+        tenor: o.tenorDays || 90,
+      };
+    }),
     consents: (consentsQ.data || []).map((c: any) => {
       const inv = invoices.find((i: any) => i.id === c.invoiceId);
       return {
@@ -444,7 +452,9 @@ export function usePlatformData() {
       supplierName: orgMap[a.supplierOrgId] || '',
       buyerName: orgMap[a.buyerOrgId] || '',
       spvName: orgMap[a.spvOrgId] || 'IOU Exchange Capital SPV',
-      triggeredBy: a.assignmentType === 'opt_in_auto' ? 'supplier_opt_in' : 'consent_signed',
+      triggeredBy: (a.assignmentType === 'opt_in_auto' || a.assignmentType === 'standard_confirmation')
+        ? 'supplier_opt_in'
+        : 'consent_signed',
       createdAt: a.assignedAt,
       iouRegistryId: invoices.find((i: any) => i.id === a.invoiceId)?.iouRegistryId || '',
     })),
@@ -462,11 +472,15 @@ export function usePlatformData() {
     escrowLegs: (escrowQ.data || []).map((e: any) => {
       const asgn = (assignmentsQ.data || []).find((a: any) => a.id === e.assignmentId);
       const inv = invoices.find((i: any) => i.id === asgn?.invoiceId);
+      const isDisburse = String(e.legType || '').includes('disbursement');
+      const counterparty = isDisburse
+        ? (orgMap[asgn?.supplierOrgId] || inv?.supplierName || 'Supplier')
+        : (orgMap[asgn?.buyerOrgId] || inv?.buyerName || 'Buyer');
       return {
         ...e,
-        type: e.legType?.includes('disbursement') ? 'disbursement' : e.legType?.includes('collection') ? 'collection' : e.legType,
+        type: isDisburse ? 'disbursement' : e.legType?.includes('collection') ? 'collection' : e.legType,
         amount: Number(e.amount),
-        counterparty: e.legType,
+        counterparty,
         invoiceId: asgn?.invoiceId,
         iouRegistryId: inv?.iouRegistryId || '',
         dueDate: e.createdAt,

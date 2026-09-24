@@ -22,7 +22,11 @@ export default function BuyerDashboard() {
   );
   const pendingConsents = consents.filter(c => c.buyerId === user?.organisationId && c.status === 'pending');
   const myPayments = payments.filter(p => p.buyerId === user?.organisationId);
-  const overduePayments = myPayments.filter(p => p.status === 'overdue');
+  const overduePayments = myPayments.filter((p) => {
+    if (p.status === 'paid') return false;
+    const due = new Date(p.dueDate).getTime();
+    return Number.isFinite(due) && due < Date.now();
+  });
   const dueThisWeek = myPayments.filter((p) => {
     if (p.status === 'paid') return false;
     const due = new Date(p.dueDate).getTime();

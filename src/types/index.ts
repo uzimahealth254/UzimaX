@@ -22,7 +22,7 @@ export type InvoiceStatus =
 export type InvoiceOrigin = 'supplier_listed' | 'buyer_posted' | 'api_upload';
 
 export type OfferStatus = 'pending' | 'accepted' | 'rejected' | 'expired' | 'withdrawn';
-export type ConsentStatus = 'pending' | 'signed' | 'rejected';
+export type ConsentStatus = 'pending' | 'signed' | 'rejected' | 'declined';
 export type PackageStatus = 'draft' | 'structured' | 'listed' | 'placed';
 export type OptInStatus = 'pending' | 'accepted' | 'declined';
 export type EscrowLegType = 'disbursement' | 'collection';
