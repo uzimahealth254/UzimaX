@@ -471,6 +471,154 @@ paths:
       responses:
         "200":
           description: Applied
+  /api/v1/auth/login-otp:
+    post:
+      tags: [Auth]
+      summary: Complete sign-in with the emailed code when login OTP is enabled
+      description: |
+        When a super admin enables login OTP, `/auth/login` returns `{ otpRequired: true }` after a correct password
+        and emails a 6-digit code. Submit it here to receive tokens. Approval OTPs (opt-in, verification, consent)
+        stay mandatory whether or not login OTP is enabled.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, otp]
+              properties:
+                email: { type: string, format: email }
+                otp: { type: string, example: '482913' }
+      responses:
+        '200': { description: Access token and user (same shape as /auth/login) }
+        '400': { description: invalid_otp }
+        '429': { description: otp_locked after 5 wrong attempts }
+  /api/v1/external/opt-ins:
+    post:
+      tags: [OptIns]
+      summary: Partner-submitted supplier opt-in (sale instruction) for a buyer-originated IOU
+      description: |
+        Lets the originating platform (e.g. AfyaX) submit the supplier's accept/decline without the supplier
+        signing in to IOUX. The API key must belong to the IOU's source platform or the supplier organisation.
+        `actorEmail` must be an active user of the supplier organisation; the action, actor and `evidence`
+        (consent text, partner event ID, timestamp) are written to the audit log.
+      security:
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [iouRegistryId, decision, actorEmail]
+              properties:
+                iouRegistryId: { type: string, example: IOU-KE-2026-000123 }
+                decision: { type: string, enum: [accept, decline] }
+                actorEmail: { type: string, format: email }
+                listedAmount: { type: number, description: 'Amount to sell; must be > 0 and <= face value' }
+                declineReason: { type: string }
+                evidence: { type: string, maxLength: 2000, description: 'Consent evidence captured on the partner platform' }
+      responses:
+        '200':
+          description: Updated lifecycle status
+          content:
+            application/json:
+              example: { iouRegistryId: IOU-KE-2026-000123, status: pending_settlement, decision: accept, assignmentId: 7c1e... }
+        '400': { description: 'invalid_state — no pending opt-in; invalid_listed_amount' }
+        '403': { description: 'forbidden — key not authorised for this IOU; actor_not_authorised' }
+        '404': { description: IOU not found }
+  /api/v1/invoices/{id}/registry.pdf:
+    get:
+      tags: [Invoices]
+      summary: Printable registry record of the invoice / IOU (parties, terms, line items, instalments)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: PDF, content: { application/pdf: {} } }
+  /api/v1/standing-orders:
+    get:
+      tags: [Invoices]
+      summary: List bank standing orders recorded against instruments (scoped to caller's organisation)
+      responses:
+        '200': { description: List }
+    post:
+      tags: [Invoices]
+      summary: Record a bank standing order for an instrument (IOUX records; the bank executes)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [invoiceId, bankName, amount, firstExecutionDate]
+              properties:
+                invoiceId: { type: string, format: uuid }
+                bankName: { type: string }
+                accountMasked: { type: string, description: 'Stored masked to the last 4 digits' }
+                reference: { type: string }
+                amount: { type: number }
+                currency: { type: string, default: KES }
+                firstExecutionDate: { type: string, format: date }
+                frequency: { type: string, enum: [once, monthly, per_installment] }
+      responses:
+        '201': { description: Created with status requested }
+  /api/v1/standing-orders/{id}:
+    patch:
+      tags: [Invoices]
+      summary: Move a standing order through its lifecycle (history is preserved)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [requested, confirmed, executed, failed, cancelled, amended] }
+                statusReason: { type: string }
+      responses:
+        '200': { description: Updated }
+  /api/v1/credential-invites:
+    post:
+      tags: [Admin]
+      summary: Register a project and send its technical contact a one-time, time-limited credential link
+      description: The email carries only the link. The API key is generated and shown once when the link is claimed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [orgId, projectName, contactName, contactEmail]
+              properties:
+                orgId: { type: string, format: uuid }
+                projectName: { type: string }
+                contactName: { type: string }
+                contactEmail: { type: string, format: email }
+                environment: { type: string, enum: [sandbox, production] }
+                scopes: { type: array, items: { type: string } }
+      responses:
+        '201': { description: Invitation created and emailed }
+  /api/v1/credential-invites/claim:
+    post:
+      tags: [Admin]
+      summary: Claim a credential link once — returns the API key a single time
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string }
+      responses:
+        '200': { description: API key (shown once) }
+        '400': { description: invalid_invite — expired, revoked or already claimed }
 components:
   securitySchemes:
     bearerAuth:
