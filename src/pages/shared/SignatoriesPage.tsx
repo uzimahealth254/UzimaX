@@ -77,7 +77,7 @@ export default function SignatoriesPage({ embedded = false }: { embedded?: boole
       {!embedded && (
         <PageHeader
           title="Maker / checker signatories"
-          subtitle="Nominate makers (initiate) and checkers (OTP confirm). Critical confirms require an active checker."
+          subtitle="A signatory is an authorised person. Approval is an email code, not a pasted signature image. Documents show the signatory only when this record is active."
         />
       )}
 

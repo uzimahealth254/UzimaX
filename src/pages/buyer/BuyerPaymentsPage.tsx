@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/hooks/usePlatformData';
@@ -10,6 +10,7 @@ import StatCard from '@/components/shared/StatCard';
 import EmptyState from '@/components/shared/EmptyState';
 import { QuerySurface } from '@/components/shared/QueryState';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { exportToCsv } from '@/lib/exportUtils';
 import { toast } from 'sonner';
 import { Calendar, AlertTriangle, CheckCircle2, RefreshCw } from 'lucide-react';
 
@@ -36,6 +37,8 @@ export default function BuyerPaymentsPage() {
   const { user } = useAuth();
   const { refetchAll } = useData();
   const [tab, setTab] = useState<Tab>('schedule');
+  const [q, setQ] = useState('');
+  const [status, setStatus] = useState('');
 
   const scheduleQ = useQuery({
     queryKey: ['payment-schedule'],
@@ -63,6 +66,15 @@ export default function BuyerPaymentsPage() {
   const overdue = myPayments.filter((p) => p.status === 'overdue');
   const paid = myPayments.filter((p) => p.status === 'paid');
   const updates = historyQ.data || [];
+  const shownSchedule = useMemo(() => myPayments.filter((p) => {
+    if (status && p.status !== status) return false;
+    const blob = `${p.iouRegistryId || ''} ${p.payee}`.toLowerCase();
+    return !q || blob.includes(q.toLowerCase());
+  }), [myPayments, status, q]);
+  const shownUpdates = useMemo(() => updates.filter((u) => {
+    const blob = `${u.afyaxReference || ''} ${u.source} ${u.paymentMethod || ''}`.toLowerCase();
+    return !q || blob.includes(q.toLowerCase());
+  }), [updates, q]);
 
   const handleReload = async () => {
     await Promise.all([scheduleQ.refetch(), historyQ.refetch()]);
@@ -140,7 +152,7 @@ export default function BuyerPaymentsPage() {
             loading={loading}
             error={error}
             onRetry={() => { void (tab === 'schedule' ? scheduleQ.refetch() : historyQ.refetch()); }}
-            isEmpty={tab === 'schedule' ? myPayments.length === 0 : updates.length === 0}
+            isEmpty={tab === 'schedule' ? shownSchedule.length === 0 : shownUpdates.length === 0}
             empty={
               <EmptyState
                 compact
@@ -151,11 +163,36 @@ export default function BuyerPaymentsPage() {
               />
             }
           >
+            <div className="flex flex-wrap gap-2 px-3 py-2 border-b border-[#0E1F1A]/8">
+              <input className="field-input max-w-xs" placeholder="Search IOU, party, or reference" value={q} onChange={(e) => setQ(e.target.value)} />
+              {tab === 'schedule' && (
+                <select className="field-input max-w-[10rem]" value={status} onChange={(e) => setStatus(e.target.value)}>
+                  <option value="">All statuses</option>
+                  <option value="upcoming">Upcoming</option>
+                  <option value="due">Due</option>
+                  <option value="overdue">Overdue</option>
+                  <option value="paid">Paid</option>
+                </select>
+              )}
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => exportToCsv(
+                  tab === 'schedule' ? 'ioux-payment-schedule.csv' : 'ioux-payment-history.csv',
+                  tab === 'schedule' ? ['iou', 'payee', 'amount', 'due', 'status'] : ['received', 'amount', 'outstanding', 'source', 'reference'],
+                  tab === 'schedule'
+                    ? shownSchedule.map((p) => [p.iouRegistryId || '', p.payee, p.amount, p.dueDate, p.status])
+                    : shownUpdates.map((u) => [u.receivedAt, u.amountPaid, u.outstandingBalance, u.source, u.afyaxReference || '']),
+                )}
+              >
+                Export CSV
+              </button>
+            </div>
             {tab === 'schedule' ? (
-              <DataTable columns={scheduleColumns} data={myPayments} emptyMessage="No payments scheduled" />
+              <DataTable columns={scheduleColumns} data={shownSchedule} emptyMessage="No payments scheduled" />
             ) : (
               <DataTable
-                data={updates}
+                data={shownUpdates}
                 emptyMessage="No payment updates yet"
                 getRowKey={(u) => u.id}
                 columns={[

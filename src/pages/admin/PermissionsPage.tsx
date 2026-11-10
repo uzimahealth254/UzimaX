@@ -40,10 +40,10 @@ export default function PermissionsPage() {
   const active = custom ?? (user ? query.data?.defaults[user.role] || [] : []);
 
   return (
-    <div>
-      <PageHeader title="Permissions" subtitle="An empty custom list uses the role default. A saved list replaces that default for the person." />
-      <div className="mt-4 grid gap-4 md:grid-cols-[16rem_1fr]">
-        <ul className="rounded-xl border border-[#E4EDE6] bg-white">
+    <div className="portal-page animate-fade-in">
+      <PageHeader title="Permissions" subtitle="Leave a person on the role default, or save a list that replaces it. One organisation still cannot read another organisation's book." />
+      <div className="grid gap-4 md:grid-cols-[16rem_1fr]">
+        <ul className="portal-section divide-y divide-[#0E1F1A]/8 max-h-[70dvh] overflow-y-auto">
           {(query.data?.users || []).map((row) => (
             <li key={row.id}>
               <button type="button" className="w-full px-3 py-2 text-left text-sm hover:bg-[#F4FBE3]" onClick={() => choose(row.id)}>
@@ -54,7 +54,7 @@ export default function PermissionsPage() {
           ))}
         </ul>
         {user && (
-          <div className="rounded-xl border border-[#E4EDE6] bg-white p-4">
+          <div className="portal-section p-4">
             <p className="text-sm font-semibold">{user.fullName}</p>
             <p className="text-xs text-[#5A6B7D] mb-3">{custom ? 'Custom list' : 'Role default'}</p>
             <div className="grid gap-2 md:grid-cols-2">

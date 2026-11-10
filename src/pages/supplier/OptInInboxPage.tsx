@@ -270,7 +270,7 @@ export default function OptInInboxPage() {
             </div>
           </dl>
           <p className="text-[11px] text-[#5A6B7D] leading-relaxed">
-            {quote?.pricingBasis || 'The discount follows tenor and the active programme band.'}
+            Face value is the gross invoice. Net proceeds is the amount payable to you after the discount and your fee share. {quote?.pricingBasis || 'The discount follows tenor and the active programme band.'}
             {quote && quote.withinBand === false ? ' This tenor or rate sits outside the programme band.' : ''}
           </p>
           <div>

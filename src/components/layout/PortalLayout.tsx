@@ -62,6 +62,7 @@ function getNavItems(role: UserRole): NavItem[] {
         { label: 'Team', short: 'Team', path: '/buyer/team', icon: <Users size={s} strokeWidth={sw} /> },
         { label: 'Payments', short: 'Payments', path: '/buyer/payments', icon: <Calendar size={s} strokeWidth={sw} /> },
         { label: 'Documents', short: 'Docs', path: '/buyer/documents', icon: <FolderOpen size={s} strokeWidth={sw} /> },
+        { label: 'Developer', short: 'API', path: '/buyer/profile?tab=developer', icon: <Plug size={s} strokeWidth={sw} /> },
         ...(walletEnabled ? [{ label: 'Ledger', short: 'Ledger', path: '/buyer/wallet', icon: <Wallet size={s} strokeWidth={sw} /> }] : []),
         { label: 'Profile', short: 'Profile', path: '/buyer/profile', icon: <User size={s} strokeWidth={sw} /> },
       ];

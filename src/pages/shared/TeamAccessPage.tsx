@@ -31,25 +31,33 @@ export default function TeamAccessPage() {
   };
 
   return (
-    <div>
+    <div className="portal-page animate-fade-in">
       <PageHeader title="Team access" subtitle="Propose a colleague. A platform administrator approves, then that person sets their own password from a time-limited link." />
-      <form onSubmit={submit} className="mt-4 grid gap-3 rounded-xl border border-[#E4EDE6] bg-white p-4 md:grid-cols-2">
-        <input className="input" required placeholder="Full name" value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} />
-        <input className="input" required type="email" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-        <input className="input" placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-        <input className="input" placeholder="Country code" value={form.phoneCountryCode} onChange={(e) => setForm({ ...form, phoneCountryCode: e.target.value })} />
-        <input className="input" placeholder="Capacity" value={form.capacity} onChange={(e) => setForm({ ...form, capacity: e.target.value })} />
+      <section className="portal-section">
+        <header className="portal-section__head"><h2 className="portal-section__title">Propose a person</h2></header>
+      <form onSubmit={submit} className="portal-section__body--pad grid gap-3 md:grid-cols-2">
+        <input className="field-input" required placeholder="Full name" value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} />
+        <input className="field-input" required type="email" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+        <input className="field-input" placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+        <input className="field-input" placeholder="Country code" value={form.phoneCountryCode} onChange={(e) => setForm({ ...form, phoneCountryCode: e.target.value })} />
+        <input className="field-input" placeholder="Capacity" value={form.capacity} onChange={(e) => setForm({ ...form, capacity: e.target.value })} />
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.isSignatory} onChange={(e) => setForm({ ...form, isSignatory: e.target.checked })} /> Signatory</label>
-        <input className="input" type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+        <input className="field-input" type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} />
         <button className="btn-primary md:col-span-2" type="submit">Submit for approval</button>
       </form>
-      <ul className="mt-4 space-y-2">
+      </section>
+      <section className="portal-section">
+        <header className="portal-section__head"><h2 className="portal-section__title">Requests</h2></header>
+      <ul className="divide-y divide-[#0E1F1A]/8">
         {(requests.data || []).map((row) => (
-          <li key={row.id} className="rounded-xl border border-[#E4EDE6] bg-white p-3 text-sm">
-            <strong>{row.fullName}</strong> · {row.email} · {row.status}
+          <li key={row.id} className="px-3 py-2.5 text-sm">
+            <strong>{row.fullName}</strong>
+            <span className="text-[#5A6B7D]"> · {row.email} · {row.status}</span>
+            {(row.documents || []).length > 0 && <span className="text-xs text-[#5A6B7D]"> · {row.documents.length} file(s)</span>}
           </li>
         ))}
       </ul>
+      </section>
     </div>
   );
 }

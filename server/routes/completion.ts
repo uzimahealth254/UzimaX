@@ -384,6 +384,11 @@ completionRouter.post('/external/opt-ins', apiKeyAuth, requireScope('invoices:wr
   try {
     const [inv] = await db.select().from(s.invoices).where(eq(s.invoices.iouRegistryId, req.body.iouRegistryId)).limit(1);
     if (!inv) throw new AppError(404, 'not_found', 'IOU not found');
+    // Only the originating platform (or the supplier's own integration) may submit consent for this IOU.
+    const callerOrg = req.apiClient!.orgId;
+    if (callerOrg !== inv.sourcePlatformOrgId && callerOrg !== inv.supplierOrgId) {
+      throw new AppError(403, 'forbidden', 'This API key is not authorised for this IOU');
+    }
     const [actor] = await db.select().from(s.users).where(and(
       eq(s.users.email, req.body.actorEmail.toLowerCase()),
       eq(s.users.orgId, inv.supplierOrgId),

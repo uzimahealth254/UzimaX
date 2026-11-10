@@ -35,15 +35,17 @@ export default function AccessQueuePage() {
   };
 
   return (
-    <div>
-      <PageHeader title="Access requests" subtitle="Organisation proposals stay pending until you approve. Approval emails a link; it does not email a password." />
-      <label className="mt-4 flex items-center gap-2 rounded-xl border border-[#E4EDE6] bg-white p-4 text-sm">
+    <div className="portal-page animate-fade-in">
+      <PageHeader title="Access requests" subtitle="Organisation proposals stay pending until you approve. Approval emails a link. The email does not contain a password." />
+      <label className="portal-callout flex items-center gap-2 text-sm">
         <input type="checkbox" checked={!!security.data?.loginOtp} onChange={(e) => toggleOtp(e.target.checked)} />
         Require an email code after the password on every portal login
       </label>
-      <ul className="mt-4 space-y-2">
+      <section className="portal-section">
+        <header className="portal-section__head"><h2 className="portal-section__title">Queue</h2></header>
+      <ul className="divide-y divide-[#0E1F1A]/8">
         {(requests.data || []).map((row) => (
-          <li key={row.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#E4EDE6] bg-white p-3 text-sm">
+          <li key={row.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-sm">
             <span><strong>{row.fullName}</strong> · {row.email} · {row.status}</span>
             {row.status === 'pending' && (
               <span className="flex gap-2">
@@ -54,6 +56,7 @@ export default function AccessQueuePage() {
           </li>
         ))}
       </ul>
+      </section>
     </div>
   );
 }

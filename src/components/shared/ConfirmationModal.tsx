@@ -34,7 +34,7 @@ export default function ConfirmationModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="confirm-modal-title"
-        className="modal-sheet relative w-full sm:max-w-md animate-fade-in flex flex-col max-h-[min(92dvh,100%)]"
+        className="modal-sheet relative w-full sm:max-w-lg animate-fade-in flex flex-col max-h-[min(92dvh,100%)]"
       >
         <div className="mx-auto w-10 h-1 rounded-full bg-muted-foreground/20 mb-4 shrink-0 sm:hidden" />
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain scroll-touch px-5 pt-1 sm:px-6 sm:pt-2">

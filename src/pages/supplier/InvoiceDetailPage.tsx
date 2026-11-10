@@ -6,6 +6,7 @@ import LifecycleTimeline from '@/components/shared/LifecycleTimeline';
 import ConfirmationModal from '@/components/shared/ConfirmationModal';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { api } from '@/lib/apiClient';
+import { DocumentLinks, InstallmentTable, LineItems, RegistryPdfButton, useInstrumentDetail } from '@/components/shared/InstrumentFacts';
 import { ArrowLeft, FileText, Building2, Calendar, DollarSign } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -18,6 +19,7 @@ export default function InvoiceDetailPage() {
   const [otp, setOtp] = useState('');
   const [otpHint, setOtpHint] = useState<string | null>(null);
 
+  const instrument = useInstrumentDetail(id);
   const invoice = invoices.find(inv => inv.id === id);
   const invoiceOffers = offers.filter(o => o.invoiceId === id);
 
@@ -88,6 +90,18 @@ export default function InvoiceDetailPage() {
         </header>
         <div className="portal-section__body--pad">
           <LifecycleTimeline currentStatus={invoice.status} />
+        </div>
+      </section>
+
+      <section className="portal-section">
+        <header className="portal-section__head">
+          <h2 className="portal-section__title">Schedule, lines and documents</h2>
+        </header>
+        <div className="portal-section__body--pad space-y-4">
+          <InstallmentTable rows={instrument.data?.installments || []} />
+          <LineItems items={instrument.data?.lineItems} />
+          {id && <RegistryPdfButton invoiceId={id} />}
+          <DocumentLinks docs={instrument.data?.documents || []} />
         </div>
       </section>
 
