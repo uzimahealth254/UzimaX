@@ -8,6 +8,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import type { Server } from 'http';
 import { authRouter, apiRouter } from './routes/api.js';
+import { completionRouter } from './routes/completion.js';
+import { docsRouter } from './routes/docs.js';
 import { apiRateLimit, authRateLimit, initRateLimitStore } from './middleware/rateLimit.js';
 import { AppError } from './lib/errors.js';
 import { writeAudit } from './middleware/audit.js';
@@ -57,6 +59,9 @@ app.use(express.json({
 app.use(cookieParser());
 app.use('/api/v1', apiRateLimit);
 app.use('/api/v1/auth', authRateLimit);
+app.use('/api/v1/docs-auth/login', authRateLimit);
+app.use('/api/v1/docs-auth/forgot-password', authRateLimit);
+app.use('/api/v1/docs-auth/reset-password', authRateLimit);
 
 app.use('/api/v1', (req, res, next) => {
   if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return next();
@@ -102,6 +107,8 @@ app.get('/api/v1/health', async (_req, res) => {
 });
 
 app.use('/api/v1/auth', authRouter);
+app.use('/api/v1', completionRouter);
+app.use('/api/v1/docs-auth', docsRouter);
 app.use('/api/v1', apiRouter);
 
 // Single Render service: API + built marketing/portal (https://uzimax.onrender.com)

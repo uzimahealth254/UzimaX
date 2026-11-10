@@ -32,6 +32,12 @@ import ConsentInboxPage from '@/pages/buyer/ConsentInboxPage';
 import BuyerPaymentsPage from '@/pages/buyer/BuyerPaymentsPage';
 import BuyerProfilePage from '@/pages/buyer/BuyerProfilePage';
 import PostIOUPage from '@/pages/buyer/PostIOUPage';
+import StandingOrdersPage from '@/pages/buyer/StandingOrdersPage';
+import TeamAccessPage from '@/pages/shared/TeamAccessPage';
+import AccessQueuePage from '@/pages/admin/AccessQueuePage';
+import ProjectsPage from '@/pages/admin/ProjectsPage';
+import ClaimKeyPage from '@/pages/ClaimKeyPage';
+import AcceptInvitePage from '@/pages/AcceptInvitePage';
 import BuyerVerificationInboxPage from '@/pages/buyer/BuyerVerificationInboxPage';
 import WalletPage from '@/pages/shared/WalletPage';
 import DocumentsPage from '@/pages/shared/DocumentsPage';
@@ -58,6 +64,7 @@ import FeesPage from '@/pages/admin/FeesPage';
 import AdminProfilePage from '@/pages/admin/AdminProfilePage';
 import IntegrationsPage from '@/pages/admin/IntegrationsPage';
 import NotFound from '@/pages/NotFound';
+import DocsApp, { isDocsSurface } from '@/docs/DocsApp';
 
 const walletEnabled = import.meta.env.VITE_ENABLE_WALLET === 'true';
 const engineEnabled = import.meta.env.VITE_ENABLE_ENGINE === 'true';
@@ -92,6 +99,8 @@ function AppRoutes() {
       <Route path="/resources/faq" element={<ResourcesHashRedirect hash="faq" />} />
       <Route path="/resources/security" element={<ResourcesHashRedirect hash="security" />} />
       <Route path="/resources/contact" element={<ResourcesHashRedirect hash="contact" />} />
+      <Route path="/claim-key" element={<ClaimKeyPage />} />
+      <Route path="/accept-invite" element={<AcceptInvitePage />} />
 
       <Route path="/supplier" element={<ProtectedRoute allowedRole="supplier"><PortalLayout /></ProtectedRoute>}>
         <Route index element={<SupplierDashboard />} />
@@ -105,6 +114,7 @@ function AppRoutes() {
         <Route path="wallet" element={<WalletRoute home="/supplier" />} />
         <Route path="documents" element={<DocumentsPage />} />
         <Route path="signatories" element={<Navigate to="/supplier/profile?tab=signatories" replace />} />
+        <Route path="team" element={<TeamAccessPage />} />
         <Route path="profile" element={<SupplierProfilePage />} />
       </Route>
 
@@ -115,6 +125,8 @@ function AppRoutes() {
         <Route path="register" element={<InvoiceRegisterPage />} />
         <Route path="consent" element={<ConsentInboxPage />} />
         <Route path="api" element={<Navigate to="/buyer/profile?tab=developer" replace />} />
+        <Route path="standing-orders" element={<StandingOrdersPage />} />
+        <Route path="team" element={<TeamAccessPage />} />
         <Route path="payments" element={<BuyerPaymentsPage />} />
         <Route path="payment-history" element={<Navigate to="/buyer/payments" replace />} />
         <Route path="wallet" element={<WalletRoute home="/buyer" />} />
@@ -138,6 +150,7 @@ function AppRoutes() {
         <Route path="payment-history" element={<Navigate to="/spv/payments" replace />} />
         <Route path="documents" element={<Navigate to="/spv/profile?tab=documents" replace />} />
         <Route path="signatories" element={<Navigate to="/spv/profile?tab=signatories" replace />} />
+        <Route path="team" element={<TeamAccessPage />} />
         <Route path="profile" element={<SPVProfilePage />} />
       </Route>
 
@@ -149,6 +162,8 @@ function AppRoutes() {
         <Route path="reconciliation" element={<ReconciliationPage />} />
         <Route path="escrow" element={<EscrowPage />} />
         <Route path="users" element={<UsersPage />} />
+        <Route path="access" element={<AccessQueuePage />} />
+        <Route path="projects" element={<ProjectsPage />} />
         <Route path="integrations" element={<IntegrationsPage />} />
         <Route path="workflow" element={<WorkflowMonitorPage />} />
         <Route path="analytics" element={<AnalyticsPage />} />
@@ -161,6 +176,14 @@ function AppRoutes() {
 }
 
 export default function App() {
+  if (isDocsSurface()) {
+    return (
+      <>
+        <DocsApp />
+        <Toaster position="top-right" richColors />
+      </>
+    );
+  }
   return (
     <AuthProvider>
       <NotificationProvider>

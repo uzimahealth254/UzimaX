@@ -17,7 +17,7 @@ export interface EmailPayload {
 }
 
 const SITE_URL = () => process.env.SITE_URL || process.env.MARKETING_URL || 'https://www.ioux.africa';
-const PORTAL_URL = () => {
+export const PORTAL_URL = () => {
   if (process.env.PORTAL_URL) return process.env.PORTAL_URL;
   if (process.env.VITE_APP_URL) return process.env.VITE_APP_URL;
   if (process.env.NODE_ENV === 'production') return 'https://app.ioux.africa';
@@ -324,6 +324,36 @@ export const templates = {
     ctaHref: `${PORTAL_URL()}/spv/assignments`,
   }),
 
+  purchaseNote: (opts: { iouId: string; face: string; net: string }) => wrapTemplate({
+    preheader: `Purchase note ready — ${opts.iouId}`,
+    eyebrow: 'Document',
+    title: 'Purchase note is ready',
+    bodyHtml: `
+      <p style="margin:0 0 12px">A purchase note PDF has been filed on this receivable. Open Documents in the supplier portal to download or print it. IOU Exchange records the sale; it does not transfer the funds.</p>
+      ${detailsTable([
+        ['IOU', opts.iouId],
+        ['Face value', opts.face],
+        ['Indicative net proceeds', opts.net],
+      ])}`,
+    ctaLabel: 'Open documents',
+    ctaHref: `${PORTAL_URL()}/supplier/documents`,
+  }),
+
+  paymentReceipt: (opts: { iouId: string; paid: string; outstanding: string }) => wrapTemplate({
+    preheader: `Payment receipt — ${opts.iouId}`,
+    eyebrow: 'Document',
+    title: 'Payment receipt is ready',
+    bodyHtml: `
+      <p style="margin:0 0 12px">A receipt PDF has been filed for this repayment record. Download it from Documents in the buyer portal.</p>
+      ${detailsTable([
+        ['IOU', opts.iouId],
+        ['Amount recorded', opts.paid],
+        ['Outstanding', opts.outstanding],
+      ])}`,
+    ctaLabel: 'Open documents',
+    ctaHref: `${PORTAL_URL()}/buyer/documents`,
+  }),
+
   assignmentCreated: (iouId: string, trigger?: string) => wrapTemplate({
     preheader: `Assigned to SPV — ${iouId}`,
     eyebrow: 'Assignment',
@@ -461,6 +491,16 @@ export const templates = {
     ctaHref: `${PORTAL_URL()}/admin/programs`,
   }),
 
+  /** Generic notice with a custom call-to-action link (never put secrets in body). */
+  action: (opts: { title: string; body: string; ctaLabel: string; ctaHref: string; eyebrow?: string }) => wrapTemplate({
+    preheader: opts.title,
+    eyebrow: opts.eyebrow || 'IOU Exchange',
+    title: opts.title,
+    bodyHtml: `<p style="margin:0;white-space:pre-wrap">${esc(opts.body)}</p>`,
+    ctaLabel: opts.ctaLabel,
+    ctaHref: opts.ctaHref,
+  }),
+
   generic: (title: string, body: string) => wrapTemplate({
     preheader: title,
     eyebrow: 'IOU Exchange',
@@ -526,6 +566,8 @@ export const emailSubjects = {
   consentRequired: (iou: string) => `IOU Exchange — consent required: ${iou}`,
   consentSigned: (iou: string) => `IOU Exchange — consent signed: ${iou}`,
   consentDeclined: (iou: string) => `IOU Exchange — consent declined: ${iou}`,
+  purchaseNote: (iou: string) => `IOU Exchange — purchase note: ${iou}`,
+  paymentReceipt: (iou: string) => `IOU Exchange — payment receipt: ${iou}`,
   assignment: (iou: string) => `IOU Exchange — assigned: ${iou}`,
   escrowDisburse: (iou: string) => `IOU Exchange — escrow disbursement recorded: ${iou}`,
   escrowCollect: (iou: string) => `IOU Exchange — escrow collection recorded: ${iou}`,

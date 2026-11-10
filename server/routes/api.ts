@@ -17,12 +17,14 @@ import {
   getOrCreateWallet,
   createAssignment,
   recordSettlement,
+  quoteSale,
 } from '../services/core.js';
 import { computeTenorDays, priceReceivable } from '../lib/pricing.js';
 import { packageTotals, weightedAvgDiscountBps, weightedAvgTenorDays } from '../lib/packageMetrics.js';
 import { writeAudit } from '../middleware/audit.js';
 import { storeFile, readStoredFile, orgIdFromStorageKey } from '../services/storage.js';
 import { issueOtp, verifyOtp } from '../services/otp.js';
+import { loginOtpEnabled } from './completion.js';
 import { generateAssignmentLetter, generatePackageSummary } from '../services/pdf.js';
 import { templates, emailSubjects, sendEmail } from '../services/email.js';
 import { notifyOrgUsers, notifyUser } from '../services/notificationService.js';
@@ -122,6 +124,12 @@ authRouter.post('/login', validate(z.object({
     }
     await clearFailedLogin(email, ip);
 
+    if (await loginOtpEnabled()) {
+      const issued = await issueOtp({ userId: user.id, purpose: 'login', email: user.email });
+      res.json({ otpRequired: true, email: user.email, ...(issued.demoHint ? { demoHint: issued.demoHint } : {}) });
+      return;
+    }
+
     const authUser = {
       userId: user.id,
       email: user.email,
@@ -140,6 +148,45 @@ authRouter.post('/login', validate(z.object({
       org = o || null;
     }
 
+    res.cookie(REFRESH_COOKIE, refreshToken, refreshCookieOptions());
+    const body: Record<string, unknown> = {
+      accessToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.fullName,
+        role: user.role,
+        organisationId: user.orgId,
+        organisationName: org?.name || null,
+        uzimaPartyId: org?.uzimaPartyId || null,
+        mustChangePassword: !!user.mustChangePassword,
+      },
+    };
+    if (bodyRefreshAllowed()) body.refreshToken = refreshToken;
+    res.json(body);
+  } catch (e) { next(e); }
+});
+
+authRouter.post('/login-otp', validate(z.object({
+  email: z.string().email(),
+  otp: z.string().min(4),
+})), async (req, res, next) => {
+  try {
+    const email = String(req.body.email).toLowerCase();
+    const [user] = await db.select().from(s.users).where(eq(s.users.email, email)).limit(1);
+    if (!user || user.status !== 'active') throw new AppError(401, 'invalid_credentials', 'Invalid email or code');
+    await verifyOtp(user.id, 'login', req.body.otp);
+    const accessToken = signAccessToken({
+      userId: user.id, email: user.email, role: user.role, orgId: user.orgId, fullName: user.fullName,
+    });
+    const refreshToken = signRefreshToken(user.id);
+    await persistRefreshToken(user.id, refreshToken);
+    await db.update(s.users).set({ lastLoginAt: new Date() }).where(eq(s.users.id, user.id));
+    let org = null;
+    if (user.orgId) {
+      const [o] = await db.select().from(s.organisations).where(eq(s.organisations.id, user.orgId)).limit(1);
+      org = o || null;
+    }
     res.cookie(REFRESH_COOKIE, refreshToken, refreshCookieOptions());
     const body: Record<string, unknown> = {
       accessToken,
@@ -462,7 +509,10 @@ const invoiceCreateSchema = z.object({
     installmentNo: z.number(),
     dueDate: z.string(),
     amount: z.number(),
+    interestAmount: z.number().nonnegative().optional(),
+    charges: z.number().nonnegative().optional(),
   })).optional(),
+  lineItems: z.array(z.record(z.string(), z.unknown())).optional(),
   supportingDocs: z.array(z.object({
     id: z.string().uuid().optional(),
     name: z.string(),
@@ -643,6 +693,9 @@ apiRouter.post('/external/invoices', apiKeyAuth, requireScope('invoices:write'),
         commitmentToPay: body.commitmentToPay ?? true,
         bankStandingOrderRef: body.bankStandingOrderRef,
         sourcePlatformOrgId,
+        installmentSchedule: body.installmentSchedule,
+        lineItems: body.lineItems,
+        description: body.description,
       });
       if (Object.keys(metadata).length) {
         await db.update(s.invoices).set({
@@ -724,6 +777,10 @@ apiRouter.post('/ious', apiKeyAuth, requireScope('invoices:write'), validate(inv
       supportingDocs: body.supportingDocs,
       commitmentToPay: body.commitmentToPay ?? true,
       sourcePlatformOrgId,
+      installmentSchedule: body.installmentSchedule,
+      interestRate: body.interestRate,
+      description: body.description,
+      lineItems: body.lineItems,
     });
     res.status(201).json({
       invoiceId: result.invoice.id,
@@ -745,7 +802,25 @@ apiRouter.get('/invoices/:id', authenticate, async (req, res, next) => {
     const [inv] = await db.select().from(s.invoices).where(eq(s.invoices.id, req.params.id)).limit(1);
     assertInvoiceAccess(req.user!, inv);
     const history = await db.select().from(s.invoiceStatusHistory).where(eq(s.invoiceStatusHistory.invoiceId, inv.id));
-    res.json({ ...inv, statusHistory: history });
+    const installments = await db.select().from(s.installmentSchedules)
+      .where(eq(s.installmentSchedules.invoiceId, inv.id))
+      .orderBy(s.installmentSchedules.installmentNo);
+    const docs = await db.select().from(s.orgDocuments).where(eq(s.orgDocuments.invoiceId, inv.id));
+    const role = req.user!.role;
+    const visibleDocs = role === 'admin' || role === 'spv'
+      ? docs
+      : docs.filter((d) => d.orgId === req.user!.orgId);
+    res.json({
+      ...inv,
+      statusHistory: history,
+      installments,
+      documents: visibleDocs.map((d) => ({
+        id: d.id,
+        docType: d.docType,
+        fileUrl: d.fileUrl,
+        uploadedAt: d.uploadedAt,
+      })),
+    });
   } catch (e) { next(e); }
 });
 
@@ -1757,6 +1832,7 @@ apiRouter.post('/programmes', authenticate, authorize('admin'), validate(z.objec
   maxTenorDays: z.number().int().positive().optional(),
   discountBandMinBps: z.number().int().optional(),
   discountBandMaxBps: z.number().int().optional(),
+  buyerVerificationRule: z.enum(['required', 'waived_if_commitment']).optional(),
   effectiveFrom: z.string().optional().nullable(),
   expiresAt: z.string().optional().nullable(),
 })), async (req, res, next) => {
@@ -1769,6 +1845,7 @@ apiRouter.post('/programmes', authenticate, authorize('admin'), validate(z.objec
       maxTenorDays: req.body.maxTenorDays ?? 180,
       discountBandMinBps: req.body.discountBandMinBps ?? 300,
       discountBandMaxBps: req.body.discountBandMaxBps ?? 900,
+      buyerVerificationRule: req.body.buyerVerificationRule || 'required',
       effectiveFrom: req.body.effectiveFrom || null,
       expiresAt: req.body.expiresAt || null,
       status: 'active',
@@ -1784,6 +1861,7 @@ apiRouter.patch('/programmes/:id', authenticate, authorize('admin'), validate(z.
   maxTenorDays: z.number().int().optional(),
   discountBandMinBps: z.number().int().optional(),
   discountBandMaxBps: z.number().int().optional(),
+  buyerVerificationRule: z.enum(['required', 'waived_if_commitment']).optional(),
   effectiveFrom: z.string().optional().nullable(),
   expiresAt: z.string().optional().nullable(),
   status: z.enum(['active', 'paused', 'closed']).optional(),
@@ -2241,10 +2319,15 @@ apiRouter.post('/pricing/quote', authenticate, validate(z.object({
   faceValue: z.number().positive(),
   issueDate: z.string(),
   dueDate: z.string(),
+  buyerOrgId: z.string().uuid().optional(),
 })), async (req, res, next) => {
   try {
     const tenor = computeTenorDays(req.body.issueDate, req.body.dueDate);
-    res.json(priceReceivable({ faceValue: req.body.faceValue, tenorDays: tenor }));
+    res.json(await quoteSale({
+      faceValue: req.body.faceValue,
+      tenorDays: tenor,
+      buyerOrgId: req.body.buyerOrgId,
+    }));
   } catch (e) { next(e); }
 });
 

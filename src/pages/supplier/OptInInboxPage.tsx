@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/hooks/usePlatformData';
 import { useActor } from '@/hooks/useActor';
@@ -13,7 +13,7 @@ import { HandCoins } from 'lucide-react';
 
 export default function OptInInboxPage() {
   const { user } = useAuth();
-  const { optIns, respondToOptIn } = useData();
+  const { optIns, invoices, respondToOptIn } = useData();
   const actor = useActor();
   const [declineId, setDeclineId] = useState<string | null>(null);
   const [reason, setReason] = useState('');
@@ -22,6 +22,17 @@ export default function OptInInboxPage() {
   const [sellAmount, setSellAmount] = useState('');
   const [otp, setOtp] = useState('');
   const [otpHint, setOtpHint] = useState<string | null>(null);
+  const [quote, setQuote] = useState<null | {
+    recommendedDiscount: number;
+    tenorDays: number;
+    offerPrice: number;
+    discountAmount: number;
+    supplierFeeShare: number;
+    netProceeds: number;
+    currency: string;
+    pricingBasis: string;
+    withinBand?: boolean;
+  }>(null);
 
   const mine = optIns.filter(o => o.supplierId === user?.organisationId);
   const pending = mine.filter(o => o.status === 'pending');
@@ -35,13 +46,31 @@ export default function OptInInboxPage() {
   const face = Number(confirmOpt?.amount || 0);
   const listedForPreview = sellAmount ? Number(sellAmount) : face;
 
-  const preview = useMemo(() => {
-    if (!confirmOpt?.amount) return null;
-    const tenorDays = confirmOpt.issueDate && confirmOpt.dueDate
-      ? computeTenorDays(confirmOpt.issueDate, confirmOpt.dueDate)
-      : 90;
-    return priceReceivable({ faceValue: listedForPreview || face, tenorDays });
-  }, [confirmOpt, listedForPreview, face]);
+  const linkedInvoice = useMemo(
+    () => invoices.find((inv) => inv.id === confirmOpt?.invoiceId) || null,
+    [invoices, confirmOpt],
+  );
+
+  useEffect(() => {
+    if (!confirmOpt || !(listedForPreview > 0)) {
+      setQuote(null);
+      return;
+    }
+    const issueDate = confirmOpt.issueDate || new Date().toISOString().slice(0, 10);
+    const dueDate = confirmOpt.dueDate || issueDate;
+    let cancelled = false;
+    api.post('/pricing/quote', {
+      faceValue: listedForPreview,
+      issueDate,
+      dueDate,
+      buyerOrgId: linkedInvoice?.buyerId,
+    }).then(({ data }) => {
+      if (!cancelled) setQuote(data);
+    }).catch(() => {
+      if (!cancelled) setQuote(null);
+    });
+    return () => { cancelled = true; };
+  }, [confirmOpt, listedForPreview, linkedInvoice?.buyerId]);
 
   const requestOtp = async (id: string) => {
     try {
@@ -198,17 +227,52 @@ export default function OptInInboxPage() {
 
       <ConfirmationModal
         open={!!confirmId}
-        title="Confirm opt-in & sell?"
-        description={
-          preview
-            ? `If you sell ${formatCurrency(listedForPreview)}, you'll receive ~${formatCurrency(preview.offerPrice)} now (${preview.recommendedDiscount}% discount, ${preview.tenorDays}d tenor). Checker OTP required.`
-            : 'This assigns the receivable to the SPV. Checker OTP required.'
-        }
-        confirmLabel="Confirm sell"
+        title="Confirm opt-in and sell"
+        description="Confirming records your instruction to sell this receivable to the SPV. It does not move cash. A purchase note is filed when the assignment is created."
+        confirmLabel="Confirm opt-in"
+        cancelLabel="Cancel"
         onCancel={() => { setConfirmId(null); setSellAmount(''); setOtp(''); }}
         onConfirm={accept}
       >
         <div className="space-y-3 text-left mt-2">
+          <dl className="grid grid-cols-2 gap-2 text-xs">
+            <div className="rounded-md bg-[#f7faf6] border border-[#0E1F1A]/8 p-2">
+              <dt className="text-[10px] font-semibold text-[#5A6B7D]">Face value</dt>
+              <dd className="font-mono font-bold mt-0.5">{formatCurrency(face)} {quote?.currency || 'KES'}</dd>
+            </div>
+            <div className="rounded-md bg-[#f7faf6] border border-[#0E1F1A]/8 p-2">
+              <dt className="text-[10px] font-semibold text-[#5A6B7D]">Amount you are selling</dt>
+              <dd className="font-mono font-bold mt-0.5">{formatCurrency(listedForPreview || 0)}</dd>
+            </div>
+            <div className="rounded-md bg-[#f7faf6] border border-[#0E1F1A]/8 p-2">
+              <dt className="text-[10px] font-semibold text-[#5A6B7D]">Discount rate</dt>
+              <dd className="font-mono font-bold mt-0.5">{quote ? `${quote.recommendedDiscount}%` : '…'}</dd>
+            </div>
+            <div className="rounded-md bg-[#f7faf6] border border-[#0E1F1A]/8 p-2">
+              <dt className="text-[10px] font-semibold text-[#5A6B7D]">Discount amount</dt>
+              <dd className="font-mono font-bold mt-0.5">{quote ? formatCurrency(quote.discountAmount) : '…'}</dd>
+            </div>
+            <div className="rounded-md bg-[#f7faf6] border border-[#0E1F1A]/8 p-2">
+              <dt className="text-[10px] font-semibold text-[#5A6B7D]">Your fee share</dt>
+              <dd className="font-mono font-bold mt-0.5">{quote ? formatCurrency(quote.supplierFeeShare) : '…'}</dd>
+            </div>
+            <div className="rounded-md bg-[#D3F36B]/40 border border-[#0E1F1A]/10 p-2">
+              <dt className="text-[10px] font-semibold text-[#5A6B7D]">Net proceeds</dt>
+              <dd className="font-mono font-bold mt-0.5">{quote ? formatCurrency(quote.netProceeds) : '…'}</dd>
+            </div>
+            <div className="rounded-md bg-[#f7faf6] border border-[#0E1F1A]/8 p-2">
+              <dt className="text-[10px] font-semibold text-[#5A6B7D]">Tenor</dt>
+              <dd className="font-bold mt-0.5">{quote ? `${quote.tenorDays} days` : '…'}</dd>
+            </div>
+            <div className="rounded-md bg-[#f7faf6] border border-[#0E1F1A]/8 p-2">
+              <dt className="text-[10px] font-semibold text-[#5A6B7D]">Due date</dt>
+              <dd className="font-bold mt-0.5">{confirmOpt?.dueDate ? formatDate(confirmOpt.dueDate) : '—'}</dd>
+            </div>
+          </dl>
+          <p className="text-[11px] text-[#5A6B7D] leading-relaxed">
+            {quote?.pricingBasis || 'The discount follows tenor and the active programme band.'}
+            {quote && quote.withinBand === false ? ' This tenor or rate sits outside the programme band.' : ''}
+          </p>
           <div>
             <label className="block text-[11px] font-semibold text-[#0E1F1A] mb-1">
               Amount to sell <span className="font-normal text-[#5A6B7D]">(partial OK · max {formatCurrency(face)})</span>

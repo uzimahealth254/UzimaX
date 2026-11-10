@@ -26,6 +26,15 @@ export const users = pgTable('users', {
   /** Stable AfyaX / originator user reference */
   afyaxUserId: text('afyax_user_id').unique(),
   phone: text('phone'),
+  /** E.164 country calling code, e.g. +254 */
+  phoneCountryCode: text('phone_country_code'),
+  phoneVerifiedAt: timestamp('phone_verified_at', { withTimezone: true }),
+  /** Consent to receive SMS notifications (captured for future SMS use) */
+  smsOptIn: boolean('sms_opt_in').default(false),
+  /** Granular permissions (see server/lib/permissions.ts). NULL = role defaults. */
+  permissions: text('permissions').array(),
+  /** Can manage users / access requests for their own organisation */
+  isOrgAdmin: boolean('is_org_admin').default(false),
   isSignatory: boolean('is_signatory').default(false),
   mustChangePassword: boolean('must_change_password').default(false),
   status: text('status').notNull().default('active'),
@@ -42,6 +51,9 @@ export const apiKeys = pgTable('api_keys', {
   label: text('label'),
   scopes: text('scopes').array().default([]),
   isActive: boolean('is_active').default(true),
+  /** sandbox | production */
+  environment: text('environment').default('production'),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
   lastUsed: timestamp('last_used', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({
@@ -74,6 +86,7 @@ export const orgDocuments = pgTable('org_documents', {
   orgId: uuid('org_id').notNull().references(() => organisations.id),
   docType: text('doc_type').notNull(),
   fileUrl: text('file_url').notNull(),
+  invoiceId: uuid('invoice_id'),
   uploadedBy: uuid('uploaded_by').references(() => users.id),
   uploadedAt: timestamp('uploaded_at', { withTimezone: true }).notNull().defaultNow(),
 });
@@ -133,6 +146,8 @@ export const installmentSchedules = pgTable('installment_schedules', {
   amount: numeric('amount', { precision: 15, scale: 2 }).notNull(),
   status: text('status').default('pending'),
   paidAmount: numeric('paid_amount', { precision: 15, scale: 2 }).default('0'),
+  interestAmount: numeric('interest_amount', { precision: 15, scale: 2 }).default('0'),
+  charges: numeric('charges', { precision: 15, scale: 2 }).default('0'),
   paidAt: timestamp('paid_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
@@ -296,6 +311,12 @@ export const programmes = pgTable('programmes', {
   maxTenorDays: integer('max_tenor_days'),
   discountBandMinBps: integer('discount_band_min_bps'),
   discountBandMaxBps: integer('discount_band_max_bps'),
+  /**
+   * Buyer verification rule for supplier-originated IOUs:
+   * required (default) | waive_with_commitment (waived when the obligor commitment and a standing-order
+   * reference are on record) | waive_for_source (waived when submitted by a trusted source platform via API)
+   */
+  buyerVerificationRule: text('buyer_verification_rule').default('required'),
   effectiveFrom: date('effective_from'),
   expiresAt: date('expires_at'),
   status: text('status').default('active'),
@@ -419,3 +440,106 @@ export const emailSendLog = pgTable('email_send_log', {
   index('idx_email_send_log_created').on(t.createdAt),
   index('idx_email_send_log_to').on(t.toEmail),
 ]);
+
+/** Readers of docs.ioux.africa — separate from portal users so access can be revoked independently. */
+export const docsUsers = pgTable('docs_users', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  email: text('email').notNull().unique(),
+  fullName: text('full_name').notNull(),
+  passwordHash: text('password_hash').notNull(),
+  /** docs_admin | docs_reader */
+  role: text('role').notNull().default('docs_reader'),
+  /** active | revoked */
+  status: text('status').notNull().default('active'),
+  mustChangePassword: boolean('must_change_password').default(false),
+  lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const docsOtpCodes = pgTable('docs_otp_codes', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => docsUsers.id, { onDelete: 'cascade' }),
+  purpose: text('purpose').notNull(),
+  codeHash: text('code_hash').notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  consumedAt: timestamp('consumed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Platform-wide settings (security policy etc.). Changes are written to audit_log. */
+export const platformSettings = pgTable('platform_settings', {
+  key: text('key').primaryKey(),
+  value: jsonb('value').$type<Record<string, unknown>>().notNull().default({}),
+  updatedBy: uuid('updated_by').references(() => users.id),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Bank standing-order lifecycle per instrument (IOUX records it; the bank executes it). */
+export const standingOrders = pgTable('standing_orders', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  invoiceId: uuid('invoice_id').notNull().references(() => invoices.id),
+  buyerOrgId: uuid('buyer_org_id').notNull().references(() => organisations.id),
+  bankName: text('bank_name').notNull(),
+  /** Masked debit account, e.g. ****4321 — never a full account number */
+  accountMasked: text('account_masked'),
+  reference: text('reference'),
+  amount: numeric('amount', { precision: 15, scale: 2 }).notNull(),
+  currency: text('currency').notNull().default('KES'),
+  firstExecutionDate: date('first_execution_date').notNull(),
+  /** once | monthly | per_installment */
+  frequency: text('frequency').notNull().default('once'),
+  /** requested | confirmed | executed | failed | cancelled | amended */
+  status: text('status').notNull().default('requested'),
+  statusReason: text('status_reason'),
+  history: jsonb('history').$type<Record<string, unknown>[]>().default([]),
+  createdBy: uuid('created_by').references(() => users.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index('idx_standing_orders_invoice').on(t.invoiceId),
+]);
+
+/** One-time secure link that releases API credentials to a project's technical contact. */
+export const credentialInvites = pgTable('credential_invites', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id').notNull().references(() => organisations.id),
+  projectName: text('project_name').notNull(),
+  contactName: text('contact_name').notNull(),
+  contactEmail: text('contact_email').notNull(),
+  environment: text('environment').notNull().default('production'),
+  scopes: text('scopes').array().default([]),
+  tokenHash: text('token_hash').notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  claimedAt: timestamp('claimed_at', { withTimezone: true }),
+  claimedIp: text('claimed_ip'),
+  apiKeyId: uuid('api_key_id').references(() => apiKeys.id),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  createdBy: uuid('created_by').references(() => users.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Organisation-proposed users awaiting super-admin approval, then a time-limited invitation. */
+export const userAccessRequests = pgTable('user_access_requests', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id').notNull().references(() => organisations.id),
+  requestedBy: uuid('requested_by').references(() => users.id),
+  fullName: text('full_name').notNull(),
+  email: text('email').notNull(),
+  phone: text('phone'),
+  phoneCountryCode: text('phone_country_code'),
+  capacity: text('capacity'),
+  permissions: text('permissions').array(),
+  isSignatory: boolean('is_signatory').default(false),
+  documents: jsonb('documents').$type<{ name: string; fileUrl: string }[]>().default([]),
+  /** pending | approved | rejected | accepted | revoked */
+  status: text('status').notNull().default('pending'),
+  decisionReason: text('decision_reason'),
+  decidedBy: uuid('decided_by').references(() => users.id),
+  decidedAt: timestamp('decided_at', { withTimezone: true }),
+  inviteTokenHash: text('invite_token_hash'),
+  inviteExpiresAt: timestamp('invite_expires_at', { withTimezone: true }),
+  acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+  userId: uuid('user_id').references(() => users.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});

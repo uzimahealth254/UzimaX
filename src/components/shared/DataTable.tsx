@@ -13,6 +13,7 @@ interface DataTableProps<T> {
   columns: Column<T>[];
   data: T[];
   onRowClick?: (item: T) => void;
+  isRowSelected?: (item: T) => boolean;
   emptyMessage?: string;
   /** Optional stable row key */
   getRowKey?: (item: T, index: number) => string | number;
@@ -22,6 +23,7 @@ export default function DataTable<T>({
   columns,
   data,
   onRowClick,
+  isRowSelected,
   emptyMessage = 'No data available',
   getRowKey,
 }: DataTableProps<T>) {
@@ -50,7 +52,7 @@ export default function DataTable<T>({
               key={key}
               type="button"
               onClick={() => onRowClick?.(item)}
-              className={`w-full text-left px-3 py-2.5 space-y-1.5 transition-colors active:bg-primary/[0.05] ${onRowClick ? '' : 'cursor-default'}`}
+              className={`w-full text-left px-3 py-2.5 space-y-1.5 transition-colors active:bg-primary/[0.05] ${onRowClick ? '' : 'cursor-default'} ${isRowSelected?.(item) ? 'bg-[#D3F36B]/40' : ''}`}
               disabled={!onRowClick}
             >
               {primary.map((col) => (
@@ -76,7 +78,7 @@ export default function DataTable<T>({
 
       {/* Desktop / tablet table */}
       <div className="hidden md:block overflow-x-auto scroll-touch -mx-px">
-        <table className="data-table min-w-full">
+        <table className="data-table min-w-[720px] w-full">
           <thead>
             <tr>
               {columns.map((col) => (
@@ -91,7 +93,7 @@ export default function DataTable<T>({
                 <tr
                   key={key}
                   onClick={() => onRowClick?.(item)}
-                  className={onRowClick ? 'cursor-pointer' : ''}
+                  className={`${onRowClick ? 'cursor-pointer' : ''} ${isRowSelected?.(item) ? 'bg-[#D3F36B]/35' : ''}`}
                 >
                   {columns.map((col) => (
                     <td key={col.key} className={col.className}>{col.render(item)}</td>

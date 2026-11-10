@@ -6,6 +6,7 @@ import DataTable from '@/components/shared/DataTable';
 import StatusBadge from '@/components/shared/StatusBadge';
 import EmptyState from '@/components/shared/EmptyState';
 import DetailDrawer from '@/components/shared/DetailDrawer';
+import { DocumentLinks, InstallmentTable, LineItems, useInstrumentDetail } from '@/components/shared/InstrumentFacts';
 import LifecycleTimeline from '@/components/shared/LifecycleTimeline';
 import { QuerySurface } from '@/components/shared/QueryState';
 import { formatCurrency, formatDate } from '@/lib/utils';
@@ -85,130 +86,164 @@ export default function InvoiceRegisterPage() {
             </button>
           </div>
         </header>
-        <div className="[&_.surface-card]:border-0 [&_.surface-card]:rounded-none">
-          <QuerySurface
-            loading={loading}
-            error={error}
-            onRetry={refetchAll}
-            isEmpty={!loading && filtered.length === 0}
-            empty={
-              <EmptyState
-                compact
-                title="No invoices in your register"
-                description="When you post an IOU or a supplier lists against you, it appears here."
+        <div className={selected ? 'lg:grid lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start' : ''}>
+          <div className="min-w-0 [&_.surface-card]:border-0 [&_.surface-card]:rounded-none">
+            <QuerySurface
+              loading={loading}
+              error={error}
+              onRetry={refetchAll}
+              isEmpty={!loading && filtered.length === 0}
+              empty={
+                <EmptyState
+                  compact
+                  title="No invoices in your register"
+                  description="When you post an IOU or a supplier lists against you, it appears here."
+                />
+              }
+            >
+              <DataTable
+                columns={columns}
+                data={filtered}
+                onRowClick={setSelected}
+                isRowSelected={(inv) => inv.id === selected?.id}
+                getRowKey={(inv) => inv.id}
+                emptyMessage="No invoices in your register"
               />
-            }
-          >
-            <DataTable
-              columns={columns}
-              data={filtered}
-              onRowClick={setSelected}
-              emptyMessage="No invoices in your register"
-            />
-          </QuerySurface>
+            </QuerySurface>
+          </div>
+          {selected && (
+            <aside className="hidden lg:block border-l border-[#0E1F1A]/10 max-h-[calc(100dvh-8rem)] overflow-y-auto">
+              <RegisterDetail invoice={selected} assignments={assignments} consents={consents} onClose={() => setSelected(null)} />
+            </aside>
+          )}
         </div>
       </section>
 
-      {selected && (() => {
-        const asgn = assignments.find(a => a.invoiceId === selected.id);
-        const consent = consents.find(c => c.invoiceId === selected.id);
-        const history = selected.statusHistory?.length
-          ? selected.statusHistory
-          : [
-              {
-                status: selected.status,
-                at: selected.assignedAt || selected.postedAt || selected.listedAt || selected.createdAt,
-                note: 'Current status',
-              },
-            ];
-        return (
+      {selected && (
+        <div className="lg:hidden">
           <DetailDrawer
             open
             title={selected.invoiceNumber}
             subtitle={selected.iouRegistryId}
             onClose={() => setSelected(null)}
           >
-            <div className="flex items-center justify-between gap-2">
-              <StatusBadge status={selected.status} />
-              <span className="font-mono text-xs font-bold text-[#0E1F1A]">{formatCurrency(selected.amount)}</span>
-            </div>
-
-            <div>
-              <p className="text-[10px] font-semibold text-[#5A6B7D] uppercase tracking-wide mb-2">Lifecycle</p>
-              <LifecycleTimeline currentStatus={selected.status} />
-            </div>
-
-            <div>
-              <p className="text-[10px] font-semibold text-[#5A6B7D] uppercase tracking-wide mb-2">Parties</p>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="rounded-md bg-[#f7faf6] border border-[#0E1F1A]/6 p-2">
-                  <p className="text-[10px] font-semibold text-[#5A6B7D]">Supplier</p>
-                  <p className="font-semibold text-[#0E1F1A] mt-0.5">{selected.supplierName}</p>
-                </div>
-                <div className="rounded-md bg-[#f7faf6] border border-[#0E1F1A]/6 p-2">
-                  <p className="text-[10px] font-semibold text-[#5A6B7D]">Buyer</p>
-                  <p className="font-semibold text-[#0E1F1A] mt-0.5">{selected.buyerName}</p>
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <p className="text-[10px] font-semibold text-[#5A6B7D] uppercase tracking-wide mb-2">Status history</p>
-              <div className="space-y-2 text-xs">
-                {history.map((h: { status: string; at: string; by?: string; note?: string }, i: number) => (
-                  <div key={`${h.at}-${i}`} className="flex gap-2">
-                    <div className="w-1.5 h-1.5 mt-1.5 rounded-full bg-[#0E1F1A] shrink-0" />
-                    <div>
-                      <StatusBadge status={h.status} />
-                      <p className="text-[11px] text-[#5A6B7D] mt-1">
-                        {formatDate(h.at)}{h.by ? ` · ${h.by}` : ''}
-                      </p>
-                      {h.note && <p className="text-[11px] text-[#0E1F1A] mt-0.5">{h.note}</p>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {(asgn || consent) && (
-              <div>
-                <p className="text-[10px] font-semibold text-[#5A6B7D] uppercase tracking-wide mb-2">Linked records</p>
-                <div className="space-y-2 text-xs">
-                  {asgn && (
-                    <div className="rounded-md bg-[#f7faf6] border border-[#0E1F1A]/6 p-2">
-                      <p className="text-[10px] font-semibold text-[#5A6B7D]">Assignment</p>
-                      <p className="text-[#0E1F1A] mt-0.5 font-mono">{asgn.id}</p>
-                      <p className="text-[11px] text-[#5A6B7D] mt-0.5">
-                        {asgn.triggeredBy === 'supplier_opt_in' ? 'Supplier opt-in' : 'Consent signed'} · {formatDate(asgn.createdAt)}
-                      </p>
-                    </div>
-                  )}
-                  {consent && (
-                    <div className="rounded-md bg-[#f7faf6] border border-[#0E1F1A]/6 p-2">
-                      <p className="text-[10px] font-semibold text-[#5A6B7D]">Consent</p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <StatusBadge status={consent.status} />
-                        <span className="text-[11px] text-[#5A6B7D]">{formatDate(consent.requestedAt)}</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-[#0E1F1A]/8">
-              <div>
-                <p className="text-[10px] font-semibold text-[#5A6B7D]">Issue</p>
-                <p className="text-[#0E1F1A] mt-0.5">{formatDate(selected.issueDate)}</p>
-              </div>
-              <div>
-                <p className="text-[10px] font-semibold text-[#5A6B7D]">Due</p>
-                <p className="text-[#0E1F1A] mt-0.5">{formatDate(selected.dueDate)}</p>
-              </div>
-            </div>
+            <RegisterDetail invoice={selected} assignments={assignments} consents={consents} />
           </DetailDrawer>
-        );
-      })()}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RegisterDetail({
+  invoice,
+  assignments,
+  consents,
+  onClose,
+}: {
+  invoice: Invoice;
+  assignments: { id: string; invoiceId: string; triggeredBy?: string; createdAt: string }[];
+  consents: { invoiceId: string; status: string; requestedAt: string }[];
+  onClose?: () => void;
+}) {
+  const detail = useInstrumentDetail(invoice.id);
+  const asgn = assignments.find(a => a.invoiceId === invoice.id);
+  const consent = consents.find(c => c.invoiceId === invoice.id);
+  const history = invoice.statusHistory?.length
+    ? invoice.statusHistory
+    : [{
+        status: invoice.status,
+        at: invoice.assignedAt || invoice.postedAt || invoice.listedAt || invoice.createdAt,
+        note: 'Current status',
+      }];
+
+  return (
+    <div className="p-3 space-y-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-sm font-bold text-[#0E1F1A] truncate">{invoice.invoiceNumber}</p>
+          <p className="text-[11px] font-mono text-[#5A6B7D] truncate">{invoice.iouRegistryId}</p>
+        </div>
+        {onClose && (
+          <button type="button" className="text-xs font-semibold underline shrink-0" onClick={onClose}>Close</button>
+        )}
+      </div>
+      <div className="flex items-center justify-between gap-2">
+        <StatusBadge status={invoice.status} />
+        <span className="font-mono text-xs font-bold text-[#0E1F1A]">{formatCurrency(invoice.amount)}</span>
+      </div>
+      <div>
+        <p className="text-[10px] font-semibold text-[#5A6B7D] uppercase tracking-wide mb-2">Lifecycle</p>
+        <LifecycleTimeline currentStatus={invoice.status} />
+      </div>
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <div className="rounded-md bg-[#f7faf6] border border-[#0E1F1A]/6 p-2">
+          <p className="text-[10px] font-semibold text-[#5A6B7D]">Supplier</p>
+          <p className="font-semibold text-[#0E1F1A] mt-0.5">{invoice.supplierName}</p>
+        </div>
+        <div className="rounded-md bg-[#f7faf6] border border-[#0E1F1A]/6 p-2">
+          <p className="text-[10px] font-semibold text-[#5A6B7D]">Buyer</p>
+          <p className="font-semibold text-[#0E1F1A] mt-0.5">{invoice.buyerName}</p>
+        </div>
+        <div>
+          <p className="text-[10px] font-semibold text-[#5A6B7D]">Issue</p>
+          <p className="text-[#0E1F1A] mt-0.5">{formatDate(invoice.issueDate)}</p>
+        </div>
+        <div>
+          <p className="text-[10px] font-semibold text-[#5A6B7D]">Due</p>
+          <p className="text-[#0E1F1A] mt-0.5">{formatDate(invoice.dueDate)}</p>
+        </div>
+      </div>
+      <div>
+        <p className="text-[10px] font-semibold text-[#5A6B7D] uppercase tracking-wide mb-2">Line items</p>
+        <LineItems items={detail.data?.lineItems} />
+        {!detail.data?.lineItems?.length && <p className="text-xs text-[#5A6B7D]">No line items were supplied with this invoice.</p>}
+      </div>
+      <div>
+        <p className="text-[10px] font-semibold text-[#5A6B7D] uppercase tracking-wide mb-2">Instalments</p>
+        <InstallmentTable rows={detail.data?.installments || []} />
+      </div>
+      <div>
+        <p className="text-[10px] font-semibold text-[#5A6B7D] uppercase tracking-wide mb-2">Notes and receipts</p>
+        <DocumentLinks docs={detail.data?.documents || []} />
+      </div>
+      <div>
+        <p className="text-[10px] font-semibold text-[#5A6B7D] uppercase tracking-wide mb-2">Status history</p>
+        <div className="space-y-2 text-xs">
+          {history.map((h, i) => (
+            <div key={`${h.at}-${i}`} className="flex gap-2">
+              <div className="w-1.5 h-1.5 mt-1.5 rounded-full bg-[#0E1F1A] shrink-0" />
+              <div>
+                <StatusBadge status={h.status} />
+                <p className="text-[11px] text-[#5A6B7D] mt-1">{formatDate(h.at)}{h.by ? ` · ${h.by}` : ''}</p>
+                {h.note && <p className="text-[11px] text-[#0E1F1A] mt-0.5">{h.note}</p>}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      {(asgn || consent) && (
+        <div className="space-y-2 text-xs">
+          {asgn && (
+            <div className="rounded-md bg-[#f7faf6] border border-[#0E1F1A]/6 p-2">
+              <p className="text-[10px] font-semibold text-[#5A6B7D]">Assignment</p>
+              <p className="text-[#0E1F1A] mt-0.5 font-mono break-all">{asgn.id}</p>
+              <p className="text-[11px] text-[#5A6B7D] mt-0.5">
+                {asgn.triggeredBy === 'supplier_opt_in' ? 'Supplier opt-in' : 'Consent signed'} · {formatDate(asgn.createdAt)}
+              </p>
+            </div>
+          )}
+          {consent && (
+            <div className="rounded-md bg-[#f7faf6] border border-[#0E1F1A]/6 p-2">
+              <p className="text-[10px] font-semibold text-[#5A6B7D]">Consent</p>
+              <div className="flex items-center gap-2 mt-0.5">
+                <StatusBadge status={consent.status} />
+                <span className="text-[11px] text-[#5A6B7D]">{formatDate(consent.requestedAt)}</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

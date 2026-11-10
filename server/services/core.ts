@@ -87,6 +87,20 @@ async function getSpvOrg() {
   return spv;
 }
 
+type ScheduleInput = { installmentNo: number; dueDate: string; amount: number; interestAmount?: number; charges?: number };
+
+async function insertInstallmentSchedule(invoiceId: string, rows?: ScheduleInput[]) {
+  if (!rows?.length) return;
+  await db.insert(s.installmentSchedules).values(rows.map((row) => ({
+    invoiceId,
+    installmentNo: row.installmentNo,
+    dueDate: row.dueDate,
+    amount: String(row.amount),
+    interestAmount: String(row.interestAmount || 0),
+    charges: String(row.charges || 0),
+  })));
+}
+
 async function getPlatformOrg() {
   const [p] = await db.select().from(s.organisations).where(eq(s.organisations.orgType, 'platform')).limit(1);
   return p;
@@ -103,7 +117,8 @@ export async function createBuyerOriginatedInvoice(data: {
   dueDate: string;
   description?: string;
   interestRate?: number;
-  installmentSchedule?: { installmentNo: number; dueDate: string; amount: number }[];
+  installmentSchedule?: { installmentNo: number; dueDate: string; amount: number; interestAmount?: number; charges?: number }[];
+  lineItems?: unknown[];
   origin?: string;
   supportingDocs?: unknown[];
   commitmentToPay?: boolean;
@@ -140,6 +155,7 @@ export async function createBuyerOriginatedInvoice(data: {
     interestRate: data.interestRate != null ? String(data.interestRate) : null,
     status: 'awaiting_opt_in',
     supportingDocs: data.supportingDocs || [],
+    lineItems: data.lineItems || null,
     commitmentToPay: true,
     commitmentAckBy: actorId || null,
     commitmentAckAt: now,
@@ -159,16 +175,7 @@ export async function createBuyerOriginatedInvoice(data: {
     status: 'pending',
   }).returning();
 
-  if (data.installmentSchedule?.length) {
-    await db.insert(s.installmentSchedules).values(
-      data.installmentSchedule.map((row) => ({
-        invoiceId: inv.id,
-        installmentNo: row.installmentNo,
-        dueDate: row.dueDate,
-        amount: String(row.amount),
-      })),
-    );
-  }
+  await insertInstallmentSchedule(inv.id, data.installmentSchedule);
 
   await notifyOrgUsers(data.supplierOrgId, {
     type: 'opt_in_request',
@@ -205,6 +212,8 @@ export async function createSupplierOriginatedInvoice(data: {
   commitmentToPay?: boolean;
   bankStandingOrderRef?: string;
   sourcePlatformOrgId?: string | null;
+  installmentSchedule?: { installmentNo: number; dueDate: string; amount: number; interestAmount?: number; charges?: number }[];
+  lineItems?: unknown[];
 }, actorId?: string) {
   await assertProgrammeAllows({
     buyerOrgId: data.buyerOrgId,
@@ -235,6 +244,7 @@ export async function createSupplierOriginatedInvoice(data: {
     status: 'awaiting_buyer_verification',
     listingStatus: 'listed',
     supportingDocs: data.supportingDocs || [],
+    lineItems: data.lineItems || null,
     commitmentToPay: Boolean(data.commitmentToPay),
     bankStandingOrderRef: data.bankStandingOrderRef || null,
     metadata: data.description ? { description: data.description } : {},
@@ -243,6 +253,24 @@ export async function createSupplierOriginatedInvoice(data: {
   await db.insert(s.invoiceStatusHistory).values({
     invoiceId: inv.id, fromStatus: null, toStatus: 'awaiting_buyer_verification', changedBy: actorId || null, reason: 'Supplier listed invoice',
   });
+
+  await insertInstallmentSchedule(inv.id, data.installmentSchedule);
+
+  const programmes = await db.select().from(s.programmes).where(eq(s.programmes.status, 'active'));
+  const programme = programmes.find((p) => p.buyerOrgId === data.buyerOrgId) || programmes.find((p) => !p.buyerOrgId);
+  const waiveVerification = programme?.buyerVerificationRule === 'waived_if_commitment' && data.commitmentToPay;
+  if (waiveVerification) {
+    await db.update(s.invoices).set({ status: 'listed', updatedAt: new Date() }).where(eq(s.invoices.id, inv.id));
+    await db.insert(s.invoiceStatusHistory).values({
+      invoiceId: inv.id, fromStatus: 'awaiting_buyer_verification', toStatus: 'listed', changedBy: actorId || null,
+      reason: 'Buyer verification waived by programme rule because commitment to pay is on record',
+    });
+    await writeAudit({
+      actorId, action: 'invoice.verification_waived', resourceType: 'invoice', resourceId: inv.id,
+      details: { iou, programmeId: programme?.id },
+    });
+    return { invoice: { ...inv, status: 'listed' }, verification: null };
+  }
 
   const [verification] = await db.insert(s.buyerVerifications).values({
     invoiceId: inv.id,
@@ -305,7 +333,7 @@ export async function walletDebit(orgId: string, amount: number, reference: stri
 async function calculateAssignmentFees(faceValue: number) {
   const configs = await db.select().from(s.feeConfigurations).where(eq(s.feeConfigurations.isActive, true));
   let total = 0;
-  const lines: { feeConfigId: string; amount: number; appliesTo: string }[] = [];
+  const lines: { feeConfigId: string; amount: number; appliesTo: string; label: string }[] = [];
   for (const c of configs) {
     if (c.feeType === 'per_payment_pct') continue; // applied on payment updates only
     let amount = 0;
@@ -317,7 +345,12 @@ async function calculateAssignmentFees(faceValue: number) {
     if (c.flatAmount && c.feeType !== 'flat_fee') amount += Number(c.flatAmount);
     if (amount > 0) {
       total += amount;
-      lines.push({ feeConfigId: c.id, amount, appliesTo: c.appliesTo });
+      lines.push({
+        feeConfigId: c.id,
+        amount,
+        appliesTo: c.appliesTo,
+        label: c.feeType.replace(/_/g, ' '),
+      });
     }
   }
   return { total, lines };
@@ -339,6 +372,35 @@ async function calculatePerPaymentFees(paymentAmount: number) {
     }
   }
   return { total, lines };
+}
+
+export async function quoteSale(input: { faceValue: number; tenorDays: number; buyerOrgId?: string }) {
+  let band: { discountMin: number; discountMax: number; maxTenorDays: number } | undefined;
+  if (input.buyerOrgId) {
+    const programmes = await db.select().from(s.programmes).where(eq(s.programmes.status, 'active'));
+    const prog = programmes.find((p) => p.buyerOrgId === input.buyerOrgId)
+      || programmes.find((p) => !p.buyerOrgId);
+    if (prog && prog.discountBandMinBps != null && prog.discountBandMaxBps != null && prog.maxTenorDays) {
+      band = {
+        discountMin: prog.discountBandMinBps / 100,
+        discountMax: prog.discountBandMaxBps / 100,
+        maxTenorDays: prog.maxTenorDays,
+      };
+    }
+  }
+  const price = priceReceivable({ faceValue: input.faceValue, tenorDays: input.tenorDays, band });
+  const fees = await calculateAssignmentFees(input.faceValue);
+  const supplierFeeShare = Math.round(fees.total / 2);
+  return {
+    ...price,
+    currency: 'KES',
+    discountAmount: input.faceValue - price.offerPrice,
+    feeTotal: fees.total,
+    supplierFeeShare,
+    netProceeds: price.offerPrice - supplierFeeShare,
+    feeLines: fees.lines.map((line) => ({ label: line.label, amount: line.amount })),
+    pricingBasis: '4% plus 0.35% for every 30 days of tenor, then clamped to the active programme band. The supplier net deducts half of the assignment fees. This is a recorded price, not a bank payment.',
+  };
 }
 
 export async function createAssignment(opts: {
@@ -457,15 +519,38 @@ export async function createAssignment(opts: {
       iouRegistryId: inv.iouRegistryId || inv.id,
       supplierName: supplier?.name || 'Supplier',
       buyerName: buyer?.name || 'Buyer',
+      spvName: spv.name,
       faceValue: face,
       purchasePrice,
+      discountAmount: Math.max(0, face - purchasePrice),
+      feeTotal: fees.total,
+      supplierFeeShare: Math.round(fees.total / 2),
+      netProceeds: purchasePrice - Math.round(fees.total / 2),
+      currency: inv.currency || 'KES',
+      issueDate: inv.issueDate,
+      dueDate: inv.dueDate,
+      invoiceNumber: inv.invoiceNumber,
       assignmentId: asgn.id,
     });
     await db.insert(s.orgDocuments).values({
       orgId: inv.supplierOrgId,
+      invoiceId: inv.id,
       docType: 'purchase_note',
       fileUrl: note.url,
       uploadedBy: opts.actorId || null,
+    });
+    await notifyOrgUsers(inv.supplierOrgId, {
+      type: 'purchase_note',
+      title: `Purchase note ready: ${inv.iouRegistryId}`,
+      body: `Face ${inv.currency || 'KES'} ${face.toLocaleString()}. Net proceeds ${inv.currency || 'KES'} ${(purchasePrice - Math.round(fees.total / 2)).toLocaleString()}. Open Documents to download the PDF.`,
+      referenceType: 'invoice',
+      referenceId: inv.id,
+      emailHtml: templates.purchaseNote({
+        iouId: inv.iouRegistryId || inv.id,
+        face: `${inv.currency || 'KES'} ${face.toLocaleString()}`,
+        net: `${inv.currency || 'KES'} ${(purchasePrice - Math.round(fees.total / 2)).toLocaleString()}`,
+      }),
+      emailSubject: emailSubjects.purchaseNote(inv.iouRegistryId || inv.id),
     });
   } catch (e) {
     console.warn('[pdf] purchase note generation failed', e);
@@ -821,17 +906,40 @@ export async function applyPaymentUpdate(data: {
       emailSubject: emailSubjects.payment(inv.iouRegistryId || undefined),
     });
     try {
+      const [buyerOrg] = await db.select().from(s.organisations).where(eq(s.organisations.id, inv.buyerOrgId)).limit(1);
+      const [supplierOrg] = await db.select().from(s.organisations).where(eq(s.organisations.id, inv.supplierOrgId)).limit(1);
       const receipt = await generatePaymentReceipt({
         orgId: inv.buyerOrgId,
         iouRegistryId: inv.iouRegistryId || inv.id,
+        invoiceNumber: inv.invoiceNumber,
+        buyerName: buyerOrg?.name || 'Buyer',
+        supplierName: supplierOrg?.name || 'Supplier',
+        currency: inv.currency || 'KES',
         amountPaid: data.amountPaid,
         outstandingBalance: data.outstandingBalance,
         reference: data.afyaxReference,
+        paymentMethod: data.paymentMethod,
+        issueDate: inv.issueDate,
+        dueDate: inv.dueDate,
       });
       await db.insert(s.orgDocuments).values({
         orgId: inv.buyerOrgId,
+        invoiceId: inv.id,
         docType: 'payment_receipt',
         fileUrl: receipt.url,
+      });
+      await notifyOrgUsers(inv.buyerOrgId, {
+        type: 'payment_receipt',
+        title: `Payment receipt: ${inv.iouRegistryId}`,
+        body: `Recorded ${inv.currency || 'KES'} ${data.amountPaid.toLocaleString()}. Outstanding ${inv.currency || 'KES'} ${data.outstandingBalance.toLocaleString()}. Download the PDF from Documents.`,
+        referenceType: 'invoice',
+        referenceId: inv.id,
+        emailHtml: templates.paymentReceipt({
+          iouId: inv.iouRegistryId || inv.id,
+          paid: `${inv.currency || 'KES'} ${data.amountPaid.toLocaleString()}`,
+          outstanding: `${inv.currency || 'KES'} ${data.outstandingBalance.toLocaleString()}`,
+        }),
+        emailSubject: emailSubjects.paymentReceipt(inv.iouRegistryId || inv.id),
       });
     } catch (e) {
       console.warn('[pdf] payment receipt failed', e);

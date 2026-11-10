@@ -23,4 +23,5 @@ export const LIVE_CORS_ORIGINS = [
   'https://www.ioux.africa',
   'https://ioux.africa',
   'https://app.ioux.africa',
+  'https://docs.ioux.africa',
 ].join(',');

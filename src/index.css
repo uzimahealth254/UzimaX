@@ -534,6 +534,9 @@
     background: #f7faf6;
   }
 
+  .input {
+    @apply w-full rounded-xl border border-[#D5E2D8] bg-white px-3 py-2 text-sm text-[#0E1F1A];
+  }
   .btn-primary {
     @apply inline-flex items-center justify-center gap-2;
     background: #0E1F1A;

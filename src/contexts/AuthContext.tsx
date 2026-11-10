@@ -1,11 +1,12 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
-import { fetchMe, loginApi, logoutApi, getAccessToken, setTokens, type UzimaUser } from '@/lib/apiClient';
+import { fetchMe, loginApi, loginOtpApi, logoutApi, getAccessToken, setTokens, type UzimaUser } from '@/lib/apiClient';
 
 interface AuthContextType {
   user: UzimaUser | null;
   isAuthenticated: boolean;
   loading: boolean;
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string; role?: string }>;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string; role?: string; otpRequired?: boolean; demoHint?: string }>;
+  completeLogin: (email: string, otp: string) => Promise<{ success: boolean; error?: string; role?: string }>;
   logout: () => void;
   refreshUser: () => Promise<void>;
   updateProfile: (updates: Partial<Pick<UzimaUser, 'name' | 'email' | 'mustChangePassword'>>) => void;
@@ -83,6 +84,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (email: string, password: string) => {
     try {
       const data = await loginApi(email, password);
+      if ('otpRequired' in data && data.otpRequired) {
+        return { success: false, otpRequired: true, demoHint: data.demoHint };
+      }
+      if (!('user' in data)) return { success: false, error: 'Login failed' };
       setUser(data.user);
       return { success: true, role: data.user.role };
     } catch (err: unknown) {
@@ -92,6 +97,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         || ax.message
         || 'Login failed';
       return { success: false, error: msg };
+    }
+  }, []);
+
+  const completeLogin = useCallback(async (email: string, otp: string) => {
+    try {
+      const data = await loginOtpApi(email, otp);
+      setUser(data.user);
+      return { success: true, role: data.user.role };
+    } catch (err: unknown) {
+      const ax = err as { response?: { data?: { message?: string } } };
+      return { success: false, error: ax.response?.data?.message || 'Invalid code' };
     }
   }, []);
 
@@ -105,6 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAuthenticated: !!user,
       loading,
       login,
+      completeLogin,
       logout,
       refreshUser,
       updateProfile,

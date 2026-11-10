@@ -12,6 +12,7 @@ import { formatCurrency, formatDate } from '@/lib/utils';
 import { isValidIOURegistryId } from '@/lib/iouId';
 import { toAssignmentTrack, trackExplanation, trackLabel } from '@/lib/assignmentTracks';
 import { ArrowLeft, FileText, Building2 } from 'lucide-react';
+import { DocumentLinks, InstallmentTable, LineItems, useInstrumentDetail } from '@/components/shared/InstrumentFacts';
 import { toast } from 'sonner';
 
 const OFFER_ELIGIBLE = new Set([
@@ -28,6 +29,7 @@ export default function IOUDetailPage() {
   const [offerBusy, setOfferBusy] = useState(false);
   const [consentBusy, setConsentBusy] = useState(false);
   const inv = invoices.find(i => i.id === id || i.iouRegistryId === id);
+  const instrument = useInstrumentDetail(inv?.id);
   const creditRiskQ = useQuery({
     queryKey: ['buyer-credit-risk', inv?.buyerId],
     queryFn: async () => (await api.get(`/buyers/${inv!.buyerId}/credit-risk`)).data,
@@ -144,6 +146,24 @@ export default function IOUDetailPage() {
         </header>
         <div className="portal-section__body--pad">
           <LifecycleTimeline currentStatus={inv.status} />
+        </div>
+      </section>
+
+      <section className="portal-section">
+        <header className="portal-section__head">
+          <h2 className="portal-section__title">Instalment schedule</h2>
+        </header>
+        <div className="portal-section__body--pad space-y-4">
+          <InstallmentTable rows={instrument.data?.installments || []} />
+          <div>
+            <p className="text-[10px] font-semibold text-[#5A6B7D] uppercase tracking-wide mb-2">Line items</p>
+            <LineItems items={instrument.data?.lineItems} />
+            {!instrument.data?.lineItems?.length && <p className="text-xs text-[#5A6B7D]">No line items on this IOU.</p>}
+          </div>
+          <div>
+            <p className="text-[10px] font-semibold text-[#5A6B7D] uppercase tracking-wide mb-2">Purchase notes and receipts</p>
+            <DocumentLinks docs={instrument.data?.documents || []} />
+          </div>
         </div>
       </section>
 

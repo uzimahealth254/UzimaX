@@ -12,7 +12,7 @@ const SHOW_DEMO = import.meta.env.DEV || import.meta.env.VITE_SHOW_DEMO === 'tru
 /** Full launch sequence: ignite → smoke → slow rise → exit */
 const LAUNCH_MS = 3400;
 
-type Mode = 'login' | 'forgot' | 'reset';
+type Mode = 'login' | 'login-otp' | 'forgot' | 'reset';
 
 export default function AuthPage() {
   const [mode, setMode] = useState<Mode>('login');
@@ -28,7 +28,7 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(false);
   const [launching, setLaunching] = useState(false);
   const launchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { login } = useAuth();
+  const { login, completeLogin } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -58,6 +58,12 @@ export default function AuthPage() {
     setLoading(true);
     const result = await login(email.trim(), password);
     setLoading(false);
+    if (result.otpRequired) {
+      setMode('login-otp');
+      setOtpHint(SHOW_DEMO ? (result.demoHint || null) : null);
+      setInfo('Enter the code sent to your email.');
+      return;
+    }
     if (result.success) {
       const dest = getRoleRedirect(result.role || 'buyer');
       const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -69,6 +75,16 @@ export default function AuthPage() {
     } else {
       setError(result.error || 'Invalid email or password. Please try again.');
     }
+  };
+
+  const handleLoginOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    resetMessages();
+    setLoading(true);
+    const result = await completeLogin(email.trim(), otp.trim());
+    setLoading(false);
+    if (result.success) navigate(getRoleRedirect(result.role || 'buyer'));
+    else setError(result.error || 'Invalid code');
   };
 
   const handleForgot = async (e: React.FormEvent) => {
@@ -169,11 +185,13 @@ export default function AuthPage() {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="font-display text-xl font-extrabold text-[#0E1F1A]">
-                  {mode === 'login' ? 'Sign in' : mode === 'forgot' ? 'Forgot password' : 'Reset password'}
+                  {mode === 'login' ? 'Sign in' : mode === 'login-otp' ? 'Enter code' : mode === 'forgot' ? 'Forgot password' : 'Reset password'}
                 </h2>
                 <p className="mt-1 text-xs font-medium text-[#5A6B7D]">
                   {mode === 'login'
                     ? 'Organisation portal access'
+                    : mode === 'login-otp'
+                      ? 'A one-time code was sent to your email'
                     : mode === 'forgot'
                       ? 'We will send a one-time reset code'
                       : 'Enter the code and choose a new password'}
@@ -299,6 +317,17 @@ export default function AuthPage() {
                 </div>,
                 document.body,
               )}
+
+            {mode === 'login-otp' && (
+              <form onSubmit={handleLoginOtp} className="mt-6 space-y-4">
+                <input className="input w-full" inputMode="numeric" required placeholder="Email code" value={otp} onChange={(e) => setOtp(e.target.value)} />
+                {otpHint && <p className="text-xs text-[#5A6B7D]">Demo code: {otpHint}</p>}
+                {error && <p className="text-sm text-red-700">{error}</p>}
+                {info && <p className="text-sm text-[#3D4F5C]">{info}</p>}
+                <button className="btn-primary w-full" type="submit" disabled={loading}>{loading ? 'Checking…' : 'Continue'}</button>
+                <button type="button" className="text-xs font-bold text-[#5A6B7D]" onClick={() => setMode('login')}>Back</button>
+              </form>
+            )}
 
             {mode === 'forgot' && (
               <form onSubmit={handleForgot} className="mt-6 space-y-4">

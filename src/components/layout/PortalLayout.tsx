@@ -48,6 +48,7 @@ function getNavItems(role: UserRole): NavItem[] {
         { label: 'Payments', short: 'Payments', path: '/supplier/payments', icon: <Receipt size={s} strokeWidth={sw} /> },
         { label: 'Documents', short: 'Docs', path: '/supplier/documents', icon: <FolderOpen size={s} strokeWidth={sw} /> },
         ...(walletEnabled ? [{ label: 'Ledger', short: 'Ledger', path: '/supplier/wallet', icon: <Wallet size={s} strokeWidth={sw} /> }] : []),
+        { label: 'Team', short: 'Team', path: '/supplier/team', icon: <Users size={s} strokeWidth={sw} /> },
         { label: 'Profile', short: 'Profile', path: '/supplier/profile', icon: <User size={s} strokeWidth={sw} /> },
       ];
     case 'buyer':
@@ -57,6 +58,8 @@ function getNavItems(role: UserRole): NavItem[] {
         { label: 'Verification', short: 'Verify', path: '/buyer/verification', icon: <ClipboardCheck size={s} strokeWidth={sw} /> },
         { label: 'Invoice Register', short: 'Register', path: '/buyer/register', icon: <ShoppingCart size={s} strokeWidth={sw} /> },
         { label: 'Consent', short: 'Consent', path: '/buyer/consent', icon: <ClipboardCheck size={s} strokeWidth={sw} /> },
+        { label: 'Standing orders', short: 'Orders', path: '/buyer/standing-orders', icon: <Calendar size={s} strokeWidth={sw} /> },
+        { label: 'Team', short: 'Team', path: '/buyer/team', icon: <Users size={s} strokeWidth={sw} /> },
         { label: 'Payments', short: 'Payments', path: '/buyer/payments', icon: <Calendar size={s} strokeWidth={sw} /> },
         { label: 'Documents', short: 'Docs', path: '/buyer/documents', icon: <FolderOpen size={s} strokeWidth={sw} /> },
         ...(walletEnabled ? [{ label: 'Ledger', short: 'Ledger', path: '/buyer/wallet', icon: <Wallet size={s} strokeWidth={sw} /> }] : []),
@@ -70,6 +73,7 @@ function getNavItems(role: UserRole): NavItem[] {
         { label: 'Assignments', short: 'Assign', path: '/spv/assignments', icon: <GitBranch size={s} strokeWidth={sw} /> },
         { label: 'Escrow', short: 'Escrow', path: '/spv/escrow', icon: <Wallet size={s} strokeWidth={sw} /> },
         { label: 'Packaging & Listing', short: 'Packages', path: '/spv/packaging', icon: <Layers size={s} strokeWidth={sw} /> },
+        { label: 'Team', short: 'Team', path: '/spv/team', icon: <Users size={s} strokeWidth={sw} /> },
         { label: 'Payments', short: 'Payments', path: '/spv/payments', icon: <Receipt size={s} strokeWidth={sw} /> },
         ...(walletEnabled ? [{ label: 'Ledger', short: 'Ledger', path: '/spv/wallet', icon: <Wallet size={s} strokeWidth={sw} /> }] : []),
         ...(engineEnabled ? [{ label: 'Backend Engine', short: 'Engine', path: '/spv/engine', icon: <Cpu size={s} strokeWidth={sw} /> }] : []),
@@ -84,6 +88,8 @@ function getNavItems(role: UserRole): NavItem[] {
         { label: 'Reconciliation', short: 'Reconcile', path: '/admin/reconciliation', icon: <Activity size={s} strokeWidth={sw} /> },
         { label: 'Escrow', short: 'Escrow', path: '/admin/escrow', icon: <Wallet size={s} strokeWidth={sw} /> },
         { label: 'Users & Orgs', short: 'Users', path: '/admin/users', icon: <Users size={s} strokeWidth={sw} /> },
+        { label: 'Access requests', short: 'Access', path: '/admin/access', icon: <ClipboardCheck size={s} strokeWidth={sw} /> },
+        { label: 'Project keys', short: 'Projects', path: '/admin/projects', icon: <Send size={s} strokeWidth={sw} /> },
         { label: 'Integrations', short: 'API', path: '/admin/integrations', icon: <Plug size={s} strokeWidth={sw} /> },
         { label: 'Workflow', short: 'Workflow', path: '/admin/workflow', icon: <Activity size={s} strokeWidth={sw} /> },
         { label: 'Analytics', short: 'Analytics', path: '/admin/analytics', icon: <BarChart3 size={s} strokeWidth={sw} /> },

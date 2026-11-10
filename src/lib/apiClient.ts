@@ -82,6 +82,13 @@ export type UzimaUser = {
 
 export async function loginApi(email: string, password: string) {
   const { data } = await api.post('/auth/login', { email, password });
+  if (data.otpRequired) return data as { otpRequired: true; demoHint?: string };
+  setTokens(data.accessToken, data.refreshToken ?? null);
+  return data as { accessToken: string; refreshToken?: string; user: UzimaUser };
+}
+
+export async function loginOtpApi(email: string, otp: string) {
+  const { data } = await api.post('/auth/login-otp', { email, otp });
   setTokens(data.accessToken, data.refreshToken ?? null);
   return data as { accessToken: string; refreshToken?: string; user: UzimaUser };
 }
