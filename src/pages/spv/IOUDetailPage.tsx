@@ -12,7 +12,7 @@ import { formatCurrency, formatDate } from '@/lib/utils';
 import { isValidIOURegistryId } from '@/lib/iouId';
 import { toAssignmentTrack, trackExplanation, trackLabel } from '@/lib/assignmentTracks';
 import { ArrowLeft, FileText, Building2 } from 'lucide-react';
-import { DocumentLinks, InstallmentTable, LineItems, useInstrumentDetail } from '@/components/shared/InstrumentFacts';
+import { DocumentLinks, InstallmentTable, LineItems, RegistryPdfButton, useInstrumentDetail } from '@/components/shared/InstrumentFacts';
 import { toast } from 'sonner';
 
 const OFFER_ELIGIBLE = new Set([
@@ -162,7 +162,8 @@ export default function IOUDetailPage() {
           </div>
           <div>
             <p className="text-[10px] font-semibold text-[#5A6B7D] uppercase tracking-wide mb-2">Purchase notes and receipts</p>
-            <DocumentLinks docs={instrument.data?.documents || []} />
+            {inv?.id && <RegistryPdfButton invoiceId={inv.id} />}
+            <div className="mt-2"><DocumentLinks docs={instrument.data?.documents || []} /></div>
           </div>
         </div>
       </section>

@@ -35,6 +35,7 @@ import PostIOUPage from '@/pages/buyer/PostIOUPage';
 import StandingOrdersPage from '@/pages/buyer/StandingOrdersPage';
 import TeamAccessPage from '@/pages/shared/TeamAccessPage';
 import AccessQueuePage from '@/pages/admin/AccessQueuePage';
+import PermissionsPage from '@/pages/admin/PermissionsPage';
 import ProjectsPage from '@/pages/admin/ProjectsPage';
 import ClaimKeyPage from '@/pages/ClaimKeyPage';
 import AcceptInvitePage from '@/pages/AcceptInvitePage';
@@ -66,7 +67,7 @@ import IntegrationsPage from '@/pages/admin/IntegrationsPage';
 import NotFound from '@/pages/NotFound';
 import DocsApp, { isDocsSurface } from '@/docs/DocsApp';
 
-const walletEnabled = import.meta.env.VITE_ENABLE_WALLET === 'true';
+const walletEnabled = true;
 const engineEnabled = import.meta.env.VITE_ENABLE_ENGINE === 'true';
 
 function WalletRoute({ home }: { home: string }) {
@@ -163,6 +164,7 @@ function AppRoutes() {
         <Route path="escrow" element={<EscrowPage />} />
         <Route path="users" element={<UsersPage />} />
         <Route path="access" element={<AccessQueuePage />} />
+        <Route path="permissions" element={<PermissionsPage />} />
         <Route path="projects" element={<ProjectsPage />} />
         <Route path="integrations" element={<IntegrationsPage />} />
         <Route path="workflow" element={<WorkflowMonitorPage />} />

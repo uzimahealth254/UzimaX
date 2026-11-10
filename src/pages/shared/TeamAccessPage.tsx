@@ -11,11 +11,17 @@ export default function TeamAccessPage() {
     queryFn: async () => (await api.get('/access-requests')).data.data as any[],
   });
   const [form, setForm] = useState({ fullName: '', email: '', phone: '', phoneCountryCode: '+254', capacity: '', isSignatory: false });
+  const [file, setFile] = useState<File | null>(null);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.post('/access-requests', form);
+      const { data } = await api.post('/access-requests', form);
+      if (file) {
+        const body = new FormData();
+        body.append('file', file);
+        await api.post(`/access-requests/${data.id}/documents`, body);
+      }
       toast.success('Request sent to the platform administrator');
       setForm({ fullName: '', email: '', phone: '', phoneCountryCode: '+254', capacity: '', isSignatory: false });
       qc.invalidateQueries({ queryKey: ['access-requests'] });
@@ -34,6 +40,7 @@ export default function TeamAccessPage() {
         <input className="input" placeholder="Country code" value={form.phoneCountryCode} onChange={(e) => setForm({ ...form, phoneCountryCode: e.target.value })} />
         <input className="input" placeholder="Capacity" value={form.capacity} onChange={(e) => setForm({ ...form, capacity: e.target.value })} />
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.isSignatory} onChange={(e) => setForm({ ...form, isSignatory: e.target.checked })} /> Signatory</label>
+        <input className="input" type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} />
         <button className="btn-primary md:col-span-2" type="submit">Submit for approval</button>
       </form>
       <ul className="mt-4 space-y-2">

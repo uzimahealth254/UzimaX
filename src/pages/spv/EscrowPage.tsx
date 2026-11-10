@@ -1,9 +1,11 @@
+import { useMemo, useState } from 'react';
 import { useData } from '@/hooks/usePlatformData';
 import { useActor } from '@/hooks/useActor';
 import PageHeader from '@/components/layout/PageHeader';
 import StatusBadge from '@/components/shared/StatusBadge';
 import DataTable from '@/components/shared/DataTable';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { exportToCsv } from '@/lib/exportUtils';
 import { EscrowLeg } from '@/types';
 import { toast } from 'sonner';
 import EmptyState from '@/components/shared/EmptyState';
@@ -12,9 +14,21 @@ import { QuerySurface } from '@/components/shared/QueryState';
 export default function EscrowPage() {
   const { escrowLegs, releaseEscrow, collectEscrow, loading, error, refetchAll } = useData();
   const actor = useActor();
+  const [status, setStatus] = useState('');
+  const [q, setQ] = useState('');
+  const [min, setMin] = useState('');
+  const [max, setMax] = useState('');
+  const visible = useMemo(() => escrowLegs.filter((l) => {
+    if (status && l.status !== status) return false;
+    if (min && l.amount < Number(min)) return false;
+    if (max && l.amount > Number(max)) return false;
+    const blob = `${l.iouRegistryId} ${l.counterparty} ${l.type}`.toLowerCase();
+    if (q && !blob.includes(q.toLowerCase())) return false;
+    return true;
+  }), [escrowLegs, status, q, min, max]);
 
-  const disbursements = escrowLegs.filter(l => l.type === 'disbursement');
-  const collections = escrowLegs.filter(l => l.type === 'collection');
+  const disbursements = visible.filter(l => l.type === 'disbursement');
+  const collections = visible.filter(l => l.type === 'collection');
 
   const columns = (kind: 'disbursement' | 'collection') => [
     { key: 'iou', header: 'IOU', primary: true, render: (l: EscrowLeg) => <span className="font-mono text-xs font-semibold">{l.iouRegistryId}</span> },
@@ -76,6 +90,13 @@ export default function EscrowPage() {
         subtitle="Workflow recording only — settlement partner moves the cash"
       />
 
+      <div className="grid gap-2 md:grid-cols-5 mb-3">
+        <input className="field-input" placeholder="Status" value={status} onChange={(e) => setStatus(e.target.value)} />
+        <input className="field-input" placeholder="Min amount" value={min} onChange={(e) => setMin(e.target.value)} />
+        <input className="field-input" placeholder="Max amount" value={max} onChange={(e) => setMax(e.target.value)} />
+        <input className="field-input" placeholder="IOU or party" value={q} onChange={(e) => setQ(e.target.value)} />
+        <button type="button" className="btn-secondary" onClick={() => exportToCsv('ioux-escrow.csv', ['iou', 'type', 'party', 'amount', 'status'], visible.map((l) => [l.iouRegistryId, l.type, l.counterparty, l.amount, l.status]))}>Export CSV</button>
+      </div>
       <div className="portal-callout">
         Escrow legs are tracked here for workflow and reconciliation. No funds move through IOU Exchange; disbursement and collection are executed by the settlement partner.
       </div>

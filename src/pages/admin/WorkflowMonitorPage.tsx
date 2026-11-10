@@ -1,4 +1,6 @@
+import { useMemo, useState } from 'react';
 import { useData } from '@/hooks/usePlatformData';
+import { api } from '@/lib/apiClient';
 import PageHeader from '@/components/layout/PageHeader';
 import StatusBadge from '@/components/shared/StatusBadge';
 import { formatDate } from '@/lib/utils';
@@ -8,6 +10,14 @@ import { Download } from 'lucide-react';
 
 export default function WorkflowMonitorPage() {
   const { activityLogs, invoices } = useData();
+  const [action, setAction] = useState('');
+  const [q, setQ] = useState('');
+  const [days, setDays] = useState('365');
+  const logs = useMemo(() => activityLogs.filter((l) => {
+    if (action && !String(l.action).includes(action)) return false;
+    if (q && !`${l.userName} ${l.action} ${l.entityType} ${l.details}`.toLowerCase().includes(q.toLowerCase())) return false;
+    return true;
+  }), [activityLogs, action, q]);
 
   const recentTransitions = invoices
     .filter(inv => inv.listedAt || inv.verifiedAt || inv.postedAt || inv.assignedAt)
@@ -26,7 +36,7 @@ export default function WorkflowMonitorPage() {
     exportToCsv(
       'uzima-audit-log.csv',
       ['timestamp', 'user', 'action', 'entityType', 'entityId', 'details'],
-      activityLogs.map(l => [l.timestamp, l.userName, l.action, l.entityType, l.entityId, l.details || '']),
+      logs.map(l => [l.timestamp, l.userName, l.action, l.entityType, l.entityId, l.details || '']),
     );
     toast.success('Audit log exported');
   };
@@ -47,6 +57,12 @@ export default function WorkflowMonitorPage() {
           </button>
         }
       />
+      <div className="grid gap-2 md:grid-cols-4 mb-3">
+        <input className="field-input" placeholder="Action contains" value={action} onChange={(e) => setAction(e.target.value)} />
+        <input className="field-input" placeholder="Actor, record, or detail" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input className="field-input" type="number" min={30} value={days} onChange={(e) => setDays(e.target.value)} />
+        <button type="button" className="btn-secondary" onClick={() => void api.put('/admin/audit/retention', { days: Number(days) }).then(() => toast.success('Retention saved and older rows removed')).catch(() => toast.error('Could not save retention'))}>Save retention (days)</button>
+      </div>
 
       <div className="portal-split">
         <section className="portal-section">
@@ -82,16 +98,16 @@ export default function WorkflowMonitorPage() {
           <header className="portal-section__head">
             <div>
               <h2 className="portal-section__title">Activity log</h2>
-              <p className="portal-section__desc">{activityLogs.length} events</p>
+              <p className="portal-section__desc">{logs.length} events</p>
             </div>
           </header>
           <div className="divide-y divide-[#0E1F1A]/8 max-h-[500px] overflow-y-auto">
-            {activityLogs.length === 0 ? (
+            {logs.length === 0 ? (
               <div className="portal-empty px-3 py-5">
                 <p className="text-xs font-medium text-[#5A6B7D]">No activity yet</p>
               </div>
             ) : (
-              activityLogs.map(log => (
+              logs.map(log => (
                 <div key={log.id} className="px-3 py-2.5">
                   <div className="flex items-start gap-2">
                     <div className="w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-bold bg-[#D3F36B] text-[#0E1F1A] shrink-0">

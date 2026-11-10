@@ -6,7 +6,7 @@ import DataTable from '@/components/shared/DataTable';
 import StatusBadge from '@/components/shared/StatusBadge';
 import EmptyState from '@/components/shared/EmptyState';
 import DetailDrawer from '@/components/shared/DetailDrawer';
-import { DocumentLinks, InstallmentTable, LineItems, useInstrumentDetail } from '@/components/shared/InstrumentFacts';
+import { DocumentLinks, InstallmentTable, LineItems, RegistryPdfButton, useInstrumentDetail } from '@/components/shared/InstrumentFacts';
 import LifecycleTimeline from '@/components/shared/LifecycleTimeline';
 import { QuerySurface } from '@/components/shared/QueryState';
 import { formatCurrency, formatDate } from '@/lib/utils';
@@ -205,7 +205,8 @@ function RegisterDetail({
       </div>
       <div>
         <p className="text-[10px] font-semibold text-[#5A6B7D] uppercase tracking-wide mb-2">Notes and receipts</p>
-        <DocumentLinks docs={detail.data?.documents || []} />
+        <RegistryPdfButton invoiceId={invoice.id} />
+        <div className="mt-2"><DocumentLinks docs={detail.data?.documents || []} /></div>
       </div>
       <div>
         <p className="text-[10px] font-semibold text-[#5A6B7D] uppercase tracking-wide mb-2">Status history</p>

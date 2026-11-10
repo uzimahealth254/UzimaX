@@ -1,3 +1,4 @@
+import multer from 'multer';
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
@@ -10,10 +11,12 @@ import { validate } from '../middleware/validate.js';
 import { authenticate, authorize, apiKeyAuth, requireScope } from '../middleware/auth.js';
 import { assertStrongPassword, generateApiKey } from '../lib/security.js';
 import { sendEmail } from '../services/email.js';
+import { storeFile } from '../services/storage.js';
 import { writeAudit } from '../middleware/audit.js';
 import { respondToOptIn } from '../services/core.js';
 
 export const completionRouter = Router();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 const STATUSES = ['requested', 'confirmed', 'executed', 'failed', 'cancelled', 'amended'] as const;
 
@@ -132,6 +135,26 @@ completionRouter.post('/access-requests', authenticate, authorize('spv', 'buyer'
       status: 'pending',
     }).returning();
     res.status(201).json(row);
+  } catch (e) { next(e); }
+});
+
+completionRouter.post('/access-requests/:id/documents', authenticate, upload.single('file'), async (req, res, next) => {
+  try {
+    const [existing] = await db.select().from(s.userAccessRequests).where(eq(s.userAccessRequests.id, req.params.id)).limit(1);
+    if (!existing) throw new AppError(404, 'not_found', 'Request not found');
+    if (req.user!.role !== 'admin' && existing.orgId !== req.user!.orgId) {
+      throw new AppError(403, 'forbidden', 'This request is not yours');
+    }
+    if (!req.file) throw new AppError(400, 'no_file', 'Choose a file');
+    const stored = await storeFile({
+      orgId: existing.orgId,
+      originalName: req.file.originalname,
+      buffer: req.file.buffer,
+      mimeType: req.file.mimetype,
+    });
+    const documents = [...(existing.documents || []), { name: req.file.originalname, fileUrl: stored.url }];
+    const [row] = await db.update(s.userAccessRequests).set({ documents }).where(eq(s.userAccessRequests.id, existing.id)).returning();
+    res.json({ id: row.id, documents: row.documents });
   } catch (e) { next(e); }
 });
 

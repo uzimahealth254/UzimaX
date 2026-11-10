@@ -358,6 +358,9 @@ export const auditLog = pgTable('audit_log', {
   resourceId: uuid('resource_id'),
   details: jsonb('details').$type<Record<string, unknown>>().default({}),
   ipAddress: text('ip_address'),
+  /** Request id echoed on the response, so a support case can be tied to one call */
+  correlationId: text('correlation_id'),
+  orgId: uuid('org_id'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   index('idx_audit_actor').on(t.actorId),

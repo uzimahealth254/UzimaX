@@ -32,7 +32,7 @@ interface NavItem {
   icon: React.ReactNode;
 }
 
-const walletEnabled = import.meta.env.VITE_ENABLE_WALLET === 'true';
+const walletEnabled = true;
 const engineEnabled = import.meta.env.VITE_ENABLE_ENGINE === 'true';
 
 function getNavItems(role: UserRole): NavItem[] {
@@ -89,6 +89,7 @@ function getNavItems(role: UserRole): NavItem[] {
         { label: 'Escrow', short: 'Escrow', path: '/admin/escrow', icon: <Wallet size={s} strokeWidth={sw} /> },
         { label: 'Users & Orgs', short: 'Users', path: '/admin/users', icon: <Users size={s} strokeWidth={sw} /> },
         { label: 'Access requests', short: 'Access', path: '/admin/access', icon: <ClipboardCheck size={s} strokeWidth={sw} /> },
+        { label: 'Permissions', short: 'Access', path: '/admin/permissions', icon: <Settings size={s} strokeWidth={sw} /> },
         { label: 'Project keys', short: 'Projects', path: '/admin/projects', icon: <Send size={s} strokeWidth={sw} /> },
         { label: 'Integrations', short: 'API', path: '/admin/integrations', icon: <Plug size={s} strokeWidth={sw} /> },
         { label: 'Workflow', short: 'Workflow', path: '/admin/workflow', icon: <Activity size={s} strokeWidth={sw} /> },

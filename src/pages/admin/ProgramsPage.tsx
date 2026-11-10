@@ -20,6 +20,7 @@ export default function ProgramsPage() {
     maxTenorDays: '120',
     discountBandMinBps: '350',
     discountBandMaxBps: '650',
+    buyerVerificationRule: 'required',
     effectiveFrom: '',
     expiresAt: '',
   });
@@ -40,6 +41,7 @@ export default function ProgramsPage() {
         maxTenorDays: Number(form.maxTenorDays),
         discountBandMinBps: Number(form.discountBandMinBps),
         discountBandMaxBps: Number(form.discountBandMaxBps),
+        buyerVerificationRule: form.buyerVerificationRule,
         effectiveFrom: form.effectiveFrom || null,
         expiresAt: form.expiresAt || null,
       });
@@ -148,6 +150,19 @@ export default function ProgramsPage() {
                   onChange={(e) => setForm({ ...form, discountBandMaxBps: e.target.value })}
                 />
               </div>
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold text-[#5A6B7D]">Buyer verification</label>
+              <select
+                className="field-input mt-1 !min-h-[34px] text-xs"
+                value={form.buyerVerificationRule}
+                onChange={(e) => setForm({ ...form, buyerVerificationRule: e.target.value })}
+              >
+                <option value="required">Required</option>
+                <option value="waive_with_commitment">Waive when commitment and standing-order reference are on record</option>
+                <option value="waive_for_source">Waive when a source platform submits the IOU</option>
+                <option value="waived">Waived</option>
+              </select>
             </div>
             <div>
               <label className="text-[10px] font-semibold text-[#5A6B7D]">Effective from</label>

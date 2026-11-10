@@ -258,12 +258,15 @@ export async function createSupplierOriginatedInvoice(data: {
 
   const programmes = await db.select().from(s.programmes).where(eq(s.programmes.status, 'active'));
   const programme = programmes.find((p) => p.buyerOrgId === data.buyerOrgId) || programmes.find((p) => !p.buyerOrgId);
-  const waiveVerification = programme?.buyerVerificationRule === 'waived_if_commitment' && data.commitmentToPay;
+  const rule = programme?.buyerVerificationRule || 'required';
+  const waiveVerification = rule === 'waived'
+    || ((rule === 'waive_with_commitment' || rule === 'waived_if_commitment') && data.commitmentToPay && !!data.bankStandingOrderRef)
+    || ((rule === 'waive_for_source' || rule === 'waived_for_partner') && !!data.sourcePlatformOrgId);
   if (waiveVerification) {
     await db.update(s.invoices).set({ status: 'listed', updatedAt: new Date() }).where(eq(s.invoices.id, inv.id));
     await db.insert(s.invoiceStatusHistory).values({
       invoiceId: inv.id, fromStatus: 'awaiting_buyer_verification', toStatus: 'listed', changedBy: actorId || null,
-      reason: 'Buyer verification waived by programme rule because commitment to pay is on record',
+      reason: `Buyer verification waived by programme rule (${rule})`,
     });
     await writeAudit({
       actorId, action: 'invoice.verification_waived', resourceType: 'invoice', resourceId: inv.id,
@@ -468,10 +471,17 @@ export async function createAssignment(opts: {
     await db.insert(s.feeLedger).values({
       assignmentId: asgn.id,
       feeConfigId: line.feeConfigId,
-      chargedToOrg: spv.id,
+      chargedToOrg: line.appliesTo === 'supplier' ? inv.supplierOrgId : spv.id,
       amount: String(line.amount),
-      status: 'pending',
+      status: 'accrued',
     });
+  }
+  if (fees.total > 0 && platform) {
+    try {
+      await walletCredit(platform.id, fees.total, `fee:accrual:${asgn.id}`, 'Simulated fee accrual to the platform ledger');
+    } catch {
+      /* ledger accrual must not block the assignment */
+    }
   }
 
   // DvS: wallets and listing transfer happen at escrow disbursement (releaseEscrowLeg), not here.

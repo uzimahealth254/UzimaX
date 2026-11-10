@@ -1,5 +1,5 @@
 import {
-  authenticate, authorize, apiKeyAuth, requireScope, authenticateAny,
+  authenticate, authorize, apiKeyAuth, requireScope, authenticateAny, requirePermission,
   signAccessToken, signRefreshToken, verifyRefreshToken, loadUser,
 } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
@@ -25,7 +25,7 @@ import { writeAudit } from '../middleware/audit.js';
 import { storeFile, readStoredFile, orgIdFromStorageKey } from '../services/storage.js';
 import { issueOtp, verifyOtp } from '../services/otp.js';
 import { loginOtpEnabled } from './completion.js';
-import { generateAssignmentLetter, generatePackageSummary } from '../services/pdf.js';
+import { generateAssignmentLetter, generatePackageSummary, generateRegistryInvoice } from '../services/pdf.js';
 import { templates, emailSubjects, sendEmail } from '../services/email.js';
 import { notifyOrgUsers, notifyUser } from '../services/notificationService.js';
 import { getAdminAnalytics, getProgrammeUtilisation, getBuyerCreditRisk } from '../services/analytics.js';
@@ -43,7 +43,7 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { Router } from 'express';
 import multer from 'multer';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, lt } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../db/client.js';
 import * as s from '../db/schema.js';
@@ -255,6 +255,11 @@ authRouter.get('/me', authenticate, async (req, res, next) => {
       organisationName: org?.name || null,
       uzimaPartyId: org?.uzimaPartyId || null,
       mustChangePassword: !!user.mustChangePassword,
+      phone: user.phone,
+      phoneCountryCode: user.phoneCountryCode,
+      smsOptIn: !!user.smsOptIn,
+      phoneVerifiedAt: user.phoneVerifiedAt,
+      permissions: user.permissions,
     });
   } catch (e) { next(e); }
 });
@@ -821,6 +826,30 @@ apiRouter.get('/invoices/:id', authenticate, async (req, res, next) => {
         uploadedAt: d.uploadedAt,
       })),
     });
+  } catch (e) { next(e); }
+});
+
+apiRouter.get('/invoices/:id/registry.pdf', authenticate, async (req, res, next) => {
+  try {
+    const [inv] = await db.select().from(s.invoices).where(eq(s.invoices.id, req.params.id)).limit(1);
+    assertInvoiceAccess(req.user!, inv);
+    const orgs = await db.select().from(s.organisations);
+    const nameOf = (id: string) => orgs.find((o) => o.id === id)?.name || id;
+    const pdf = await generateRegistryInvoice({
+      iouRegistryId: inv.iouRegistryId || inv.id,
+      invoiceNumber: inv.invoiceNumber,
+      buyerName: nameOf(inv.buyerOrgId),
+      supplierName: nameOf(inv.supplierOrgId),
+      currency: inv.currency,
+      faceValue: Number(inv.faceValue),
+      issueDate: inv.issueDate,
+      dueDate: inv.dueDate,
+      status: inv.status,
+      lineItems: (inv.lineItems as { description?: string; name?: string; quantity?: number; amount?: number }[] | null) || null,
+    });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${inv.iouRegistryId || 'invoice'}.pdf"`);
+    res.send(pdf);
   } catch (e) { next(e); }
 });
 
@@ -1435,7 +1464,7 @@ apiRouter.get('/wallets/me', authenticate, authorize('buyer', 'supplier', 'spv',
   } catch (e) { next(e); }
 });
 
-apiRouter.post('/wallets/me/deposit', authenticate, authorize('buyer', 'supplier', 'spv', 'admin'), validate(z.object({
+apiRouter.post('/wallets/me/deposit', authenticate, authorize('buyer', 'supplier', 'spv', 'admin'), requirePermission('wallets.simulate'), validate(z.object({
   amount: z.number().positive().max(50_000_000),
   description: z.string().max(200).optional(),
 })), async (req, res, next) => {
@@ -1463,7 +1492,7 @@ apiRouter.post('/wallets/me/deposit', authenticate, authorize('buyer', 'supplier
   } catch (e) { next(e); }
 });
 
-apiRouter.post('/wallets/me/withdraw', authenticate, authorize('buyer', 'supplier', 'spv', 'admin'), validate(z.object({
+apiRouter.post('/wallets/me/withdraw', authenticate, authorize('buyer', 'supplier', 'spv', 'admin'), requirePermission('wallets.simulate'), validate(z.object({
   amount: z.number().positive().max(50_000_000),
   description: z.string().max(200).optional(),
 })), async (req, res, next) => {
@@ -1488,6 +1517,31 @@ apiRouter.post('/wallets/me/withdraw', authenticate, authorize('buyer', 'supplie
       details: { amount: req.body.amount },
     });
     res.json({ wallet });
+  } catch (e) { next(e); }
+});
+
+apiRouter.post('/wallets/simulated-settlement', authenticate, authorize('spv', 'admin'), requirePermission('wallets.simulate'), validate(z.object({
+  invoiceId: z.string().uuid(),
+  amount: z.number().positive(),
+  reference: z.string().max(80).optional(),
+})), async (req, res, next) => {
+  try {
+    if (!simulatedWalletAllowed()) {
+      throw new AppError(403, 'forbidden', 'Simulated ledger entries are disabled until a processor is connected');
+    }
+    const [inv] = await db.select().from(s.invoices).where(eq(s.invoices.id, req.body.invoiceId)).limit(1);
+    if (!inv) throw new AppError(404, 'not_found', 'Invoice not found');
+    const { walletDebit, walletCredit } = await import('../services/core.js');
+    const ref = req.body.reference || `sim-settle:${inv.iouRegistryId}`;
+    const payer = req.user!.role === 'admin' ? inv.buyerOrgId : req.user!.orgId!;
+    await walletDebit(payer, req.body.amount, ref, 'Simulated purchase payment — no bank movement');
+    await walletCredit(inv.supplierOrgId, req.body.amount, ref, 'Simulated purchase receipt — no bank movement');
+    await writeAudit({
+      actorId: req.user!.userId, action: 'wallet.simulated_settlement', resourceType: 'invoice', resourceId: inv.id,
+      details: { amount: req.body.amount, reference: ref, simulated: true },
+      correlationId: req.correlationId, orgId: req.user!.orgId,
+    });
+    res.json({ ok: true, reference: ref, simulated: true, invoiceId: inv.id });
   } catch (e) { next(e); }
 });
 
@@ -1635,7 +1689,7 @@ apiRouter.get('/fees', authenticate, authorize('admin'), async (_req, res, next)
   } catch (e) { next(e); }
 });
 
-apiRouter.post('/fees', authenticate, authorize('admin'), validate(z.object({
+apiRouter.post('/fees', authenticate, authorize('admin'), requirePermission('fees.manage'), validate(z.object({
   feeType: z.string().min(1),
   rateBps: z.number().int().optional(),
   flatAmount: z.number().optional(),
@@ -1657,7 +1711,7 @@ apiRouter.post('/fees', authenticate, authorize('admin'), validate(z.object({
   } catch (e) { next(e); }
 });
 
-apiRouter.patch('/fees/:id', authenticate, authorize('admin'), validate(z.object({
+apiRouter.patch('/fees/:id', authenticate, authorize('admin'), requirePermission('fees.manage'), validate(z.object({
   rateBps: z.number().int().optional(),
   flatAmount: z.number().optional(),
   appliesTo: z.string().optional(),
@@ -1674,6 +1728,21 @@ apiRouter.patch('/fees/:id', authenticate, authorize('admin'), validate(z.object
     const [row] = await db.update(s.feeConfigurations).set(patch).where(eq(s.feeConfigurations.id, req.params.id)).returning();
     if (!row) throw new AppError(404, 'not_found', 'Fee config not found');
     res.json(row);
+  } catch (e) { next(e); }
+});
+
+apiRouter.post('/fees/ledger/:id/reverse', authenticate, authorize('admin'), requirePermission('fees.manage'), async (req, res, next) => {
+  try {
+    const [row] = await db.select().from(s.feeLedger).where(eq(s.feeLedger.id, req.params.id)).limit(1);
+    if (!row) throw new AppError(404, 'not_found', 'Fee entry not found');
+    if (row.status === 'reversed') throw new AppError(400, 'invalid_state', 'Already reversed');
+    const [reversed] = await db.update(s.feeLedger).set({ status: 'reversed' }).where(eq(s.feeLedger.id, row.id)).returning();
+    await writeAudit({
+      actorId: req.user!.userId, action: 'fee.reverse', resourceType: 'fee_ledger', resourceId: row.id,
+      details: { amount: row.amount, previousStatus: row.status },
+      correlationId: req.correlationId, orgId: req.user!.orgId,
+    });
+    res.json(reversed);
   } catch (e) { next(e); }
 });
 
@@ -1832,7 +1901,7 @@ apiRouter.post('/programmes', authenticate, authorize('admin'), validate(z.objec
   maxTenorDays: z.number().int().positive().optional(),
   discountBandMinBps: z.number().int().optional(),
   discountBandMaxBps: z.number().int().optional(),
-  buyerVerificationRule: z.enum(['required', 'waived_if_commitment']).optional(),
+  buyerVerificationRule: z.enum(['required', 'waive_with_commitment', 'waived_if_commitment', 'waive_for_source', 'waived_for_partner', 'waived']).optional(),
   effectiveFrom: z.string().optional().nullable(),
   expiresAt: z.string().optional().nullable(),
 })), async (req, res, next) => {
@@ -1861,7 +1930,7 @@ apiRouter.patch('/programmes/:id', authenticate, authorize('admin'), validate(z.
   maxTenorDays: z.number().int().optional(),
   discountBandMinBps: z.number().int().optional(),
   discountBandMaxBps: z.number().int().optional(),
-  buyerVerificationRule: z.enum(['required', 'waived_if_commitment']).optional(),
+  buyerVerificationRule: z.enum(['required', 'waive_with_commitment', 'waived_if_commitment', 'waive_for_source', 'waived_for_partner', 'waived']).optional(),
   effectiveFrom: z.string().optional().nullable(),
   expiresAt: z.string().optional().nullable(),
   status: z.enum(['active', 'paused', 'closed']).optional(),
@@ -1930,9 +1999,46 @@ apiRouter.get('/organisations', authenticate, async (req, res, next) => {
 });
 
 // Admin audit
-apiRouter.get('/admin/audit', authenticate, authorize('admin'), async (_req, res, next) => {
+apiRouter.get('/admin/audit', authenticate, async (req, res, next) => {
   try {
-    res.json({ data: await db.select().from(s.auditLog) });
+    const { hasPermission } = await import('../lib/permissions.js');
+    if (!hasPermission(req.user!.role, req.user!.permissions, 'audit.view')) {
+      throw new AppError(403, 'forbidden', 'Missing permission: audit.view');
+    }
+    const action = typeof req.query.action === 'string' ? req.query.action : '';
+    const q = typeof req.query.q === 'string' ? req.query.q.toLowerCase() : '';
+    const from = typeof req.query.from === 'string' ? new Date(req.query.from) : null;
+    const to = typeof req.query.to === 'string' ? new Date(req.query.to) : null;
+    let rows = await db.select().from(s.auditLog).orderBy(desc(s.auditLog.createdAt)).limit(1000);
+    if (req.user!.role !== 'admin') {
+      rows = rows.filter((row) => row.orgId === req.user!.orgId);
+    }
+    if (action) rows = rows.filter((row) => row.action.includes(action));
+    if (from && !Number.isNaN(from.getTime())) rows = rows.filter((row) => row.createdAt >= from);
+    if (to && !Number.isNaN(to.getTime())) rows = rows.filter((row) => row.createdAt <= to);
+    if (q) {
+      rows = rows.filter((row) => `${row.action} ${row.actorEmail || ''} ${row.resourceType} ${row.correlationId || ''}`.toLowerCase().includes(q));
+    }
+    res.json({ data: rows });
+  } catch (e) { next(e); }
+});
+
+apiRouter.put('/admin/audit/retention', authenticate, authorize('admin'), requirePermission('audit.export'), validate(z.object({
+  days: z.number().int().min(30).max(3650),
+})), async (req, res, next) => {
+  try {
+    await db.insert(s.platformSettings).values({
+      key: 'audit_retention_days',
+      value: { days: req.body.days },
+      updatedBy: req.user!.userId,
+      updatedAt: new Date(),
+    }).onConflictDoUpdate({
+      target: s.platformSettings.key,
+      set: { value: { days: req.body.days }, updatedBy: req.user!.userId, updatedAt: new Date() },
+    });
+    const cutoff = new Date(Date.now() - req.body.days * 86400000);
+    await db.delete(s.auditLog).where(lt(s.auditLog.createdAt, cutoff));
+    res.json({ days: req.body.days });
   } catch (e) { next(e); }
 });
 
@@ -1947,6 +2053,42 @@ apiRouter.get('/admin/users', authenticate, authorize('admin'), async (_req, res
       status: s.users.status,
     }).from(s.users);
     res.json({ data: rows });
+  } catch (e) { next(e); }
+});
+
+apiRouter.get('/admin/permissions', authenticate, authorize('admin'), async (_req, res, next) => {
+  try {
+    const { PERMISSIONS, ROLE_DEFAULTS } = await import('../lib/permissions.js');
+    const rows = await db.select({
+      id: s.users.id,
+      email: s.users.email,
+      fullName: s.users.fullName,
+      role: s.users.role,
+      permissions: s.users.permissions,
+    }).from(s.users);
+    res.json({ catalog: PERMISSIONS, defaults: ROLE_DEFAULTS, users: rows });
+  } catch (e) { next(e); }
+});
+
+apiRouter.put('/admin/users/:id/permissions', authenticate, authorize('admin'), requirePermission('users.manage'), validate(z.object({
+  permissions: z.array(z.string()).nullable(),
+})), async (req, res, next) => {
+  try {
+    const { PERMISSIONS } = await import('../lib/permissions.js');
+    const allowed = new Set<string>(PERMISSIONS);
+    const permissions = req.body.permissions
+      ? (req.body.permissions as string[]).filter((p) => allowed.has(p))
+      : null;
+    const [row] = await db.update(s.users).set({
+      permissions,
+      updatedAt: new Date(),
+    }).where(eq(s.users.id, req.params.id)).returning({ id: s.users.id, permissions: s.users.permissions });
+    if (!row) throw new AppError(404, 'not_found', 'User not found');
+    await writeAudit({
+      actorId: req.user!.userId, action: 'user.permissions', resourceType: 'user', resourceId: row.id,
+      details: { permissions }, correlationId: req.correlationId, orgId: req.user!.orgId,
+    });
+    res.json(row);
   } catch (e) { next(e); }
 });
 
@@ -2119,9 +2261,13 @@ apiRouter.get('/payment-schedule', authenticate, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-apiRouter.get('/admin/analytics', authenticate, authorize('admin'), async (_req, res, next) => {
+apiRouter.get('/admin/analytics', authenticate, authorize('admin', 'spv'), async (req, res, next) => {
   try {
-    res.json(await getAdminAnalytics());
+    const from = typeof req.query.from === 'string' ? req.query.from : undefined;
+    const to = typeof req.query.to === 'string' ? req.query.to : undefined;
+    res.json(await getAdminAnalytics({
+      from, to, orgId: req.user!.role === 'spv' ? req.user!.orgId : null,
+    }));
   } catch (e) { next(e); }
 });
 

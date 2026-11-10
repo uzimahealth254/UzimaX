@@ -2,13 +2,26 @@ import { eq, inArray } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import * as s from '../db/schema.js';
 
-export async function getAdminAnalytics() {
-  const invoices = await db.select().from(s.invoices);
+export async function getAdminAnalytics(opts?: { from?: string; to?: string; orgId?: string | null }) {
+  const from = opts?.from ? new Date(opts.from) : null;
+  const to = opts?.to ? new Date(opts.to) : null;
+  const inRange = (value: Date | string | null | undefined) => {
+    if (!value) return true;
+    const at = new Date(value);
+    if (from && !Number.isNaN(from.getTime()) && at < from) return false;
+    if (to && !Number.isNaN(to.getTime()) && at > to) return false;
+    return true;
+  };
+  let invoices = (await db.select().from(s.invoices)).filter((row) => inRange(row.createdAt));
+  if (opts?.orgId) {
+    invoices = invoices.filter((row) => row.buyerOrgId === opts.orgId || row.supplierOrgId === opts.orgId);
+  }
   const offers = await db.select().from(s.purchaseOffers);
   const orgs = await db.select().from(s.organisations);
-  const payments = await db.select().from(s.paymentUpdates);
+  const payments = (await db.select().from(s.paymentUpdates)).filter((row) => inRange(row.receivedAt));
   const assignments = await db.select().from(s.assignments);
   const packages = await db.select().from(s.packages);
+  const fees = await db.select().from(s.feeLedger);
 
   const byStatus: Record<string, number> = {};
   for (const inv of invoices) {
@@ -49,6 +62,11 @@ export async function getAdminAnalytics() {
       organisations: orgs.length,
       packages: packages.length,
       paymentUpdates: payments.length,
+      collections: payments.reduce((sum, row) => sum + Number(row.amountPaid), 0),
+      outstanding: invoices
+        .filter((row) => !['settled', 'closed'].includes(row.status))
+        .reduce((sum, row) => sum + Number(row.faceValue), 0),
+      feesAccrued: fees.filter((row) => row.status !== 'reversed').reduce((sum, row) => sum + Number(row.amount), 0),
     },
     pipeline: byStatus,
     monthlyVolume: monthly,

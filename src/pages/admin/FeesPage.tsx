@@ -305,7 +305,14 @@ export default function FeesPage() {
                 primary: true,
                 render: (l) => <span className="font-mono text-xs font-semibold">{formatCurrency(Number(l.amount))}</span>,
               },
-              { key: 'status', header: 'Status', render: (l) => <span className="text-xs capitalize">{l.status || '—'}</span> },
+              { key: 'status', header: 'Status', render: (l) => (
+                <span className="text-xs capitalize">
+                  {l.status || '—'}
+                  {l.status !== 'reversed' && (
+                    <button type="button" className="ml-2 underline" onClick={() => void api.post(`/fees/ledger/${l.id}/reverse`).then(() => qc.invalidateQueries({ queryKey: ['fees'] })).catch(() => toast.error('Could not reverse'))}>Reverse</button>
+                  )}
+                </span>
+              ) },
               {
                 key: 'when',
                 header: 'When',

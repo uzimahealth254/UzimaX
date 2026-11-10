@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import crypto from 'crypto';
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
@@ -64,6 +65,14 @@ app.use('/api/v1/docs-auth/forgot-password', authRateLimit);
 app.use('/api/v1/docs-auth/reset-password', authRateLimit);
 
 app.use('/api/v1', (req, res, next) => {
+  const headerId = req.headers['x-request-id'];
+  const correlationId = (typeof headerId === 'string' && headerId.trim()) || crypto.randomUUID();
+  req.correlationId = correlationId;
+  res.setHeader('x-request-id', correlationId);
+  next();
+});
+
+app.use('/api/v1', (req, res, next) => {
   if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return next();
   if (req.path === '/health' || req.path.startsWith('/auth/login') || req.path.startsWith('/auth/refresh')) {
     return next();
@@ -79,6 +88,8 @@ app.use('/api/v1', (req, res, next) => {
       resourceId: (req.params as { id?: string })?.id || null,
       details: { status: res.statusCode, ms: Date.now() - start, path: req.originalUrl },
       ipAddress: req.ip,
+      correlationId: req.correlationId || null,
+      orgId: req.user?.orgId || req.apiClient?.orgId || null,
     });
   });
   next();

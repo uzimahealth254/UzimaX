@@ -6,6 +6,7 @@ import { eq, and } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import { apiKeys, users } from '../db/schema.js';
 import { AppError } from '../lib/errors.js';
+import { hasPermission, type Permission } from '../lib/permissions.js';
 import { getJwtRefreshSecret, getJwtSecret } from '../lib/security.js';
 
 export interface AuthUser {
@@ -14,6 +15,7 @@ export interface AuthUser {
   role: string;
   orgId: string | null;
   fullName: string;
+  permissions?: string[] | null;
 }
 
 export interface ApiClient {
@@ -29,6 +31,7 @@ declare global {
     interface Request {
       user?: AuthUser;
       apiClient?: ApiClient;
+      correlationId?: string;
     }
   }
 }
@@ -57,6 +60,7 @@ function toAuthUser(u: typeof users.$inferSelect): AuthUser {
     role: u.role,
     orgId: u.orgId,
     fullName: u.fullName,
+    permissions: u.permissions,
   };
 }
 
@@ -84,6 +88,17 @@ export function authorize(...roles: string[]) {
     if (!req.user) return next(new AppError(401, 'unauthorized', 'Not authenticated'));
     if (!roles.includes(req.user.role)) {
       return next(new AppError(403, 'forbidden', 'Insufficient role'));
+    }
+    next();
+  };
+}
+
+/** Enforced when a user has a custom permission list. Role defaults apply when the list is empty. */
+export function requirePermission(permission: Permission) {
+  return (req: Request, _res: Response, next: NextFunction) => {
+    if (!req.user) return next(new AppError(401, 'unauthorized', 'Not authenticated'));
+    if (!hasPermission(req.user.role, req.user.permissions, permission)) {
+      return next(new AppError(403, 'forbidden', `Missing permission: ${permission}`));
     }
     next();
   };

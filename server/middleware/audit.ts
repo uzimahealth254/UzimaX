@@ -10,6 +10,8 @@ export async function writeAudit(opts: {
   resourceId?: string | null;
   details?: Record<string, unknown>;
   ipAddress?: string | null;
+  correlationId?: string | null;
+  orgId?: string | null;
 }) {
   await db.insert(auditLog).values({
     actorId: opts.actorId || null,
@@ -19,6 +21,8 @@ export async function writeAudit(opts: {
     resourceId: opts.resourceId || null,
     details: opts.details || {},
     ipAddress: opts.ipAddress || null,
+    correlationId: opts.correlationId || null,
+    orgId: opts.orgId || null,
   });
 }
 
@@ -37,6 +41,8 @@ export function auditAction(action: string, resourceType: string) {
         resourceId,
         details: { method: req.method, path: req.path },
         ipAddress: req.ip,
+        correlationId: req.correlationId || null,
+        orgId: req.user?.orgId || req.apiClient?.orgId || null,
       });
       return originalJson(body);
     }) as typeof res.json;

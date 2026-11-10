@@ -13,10 +13,12 @@ const CHART_COLORS = ['#0E1F1A', '#D3F36B', '#F0C419', '#5A6B7D', '#1A3A2E', '#8
 
 export default function AnalyticsPage() {
   const [tab, setTab] = useState<Tab>('volume');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
   const { data, isLoading } = useQuery({
-    queryKey: ['admin-analytics'],
-    queryFn: async () => (await api.get('/admin/analytics')).data as {
-      totals: { invoices: number; totalFaceValue: number; assignedFaceValue: number; organisations: number; packages: number; paymentUpdates: number };
+    queryKey: ['admin-analytics', from, to],
+    queryFn: async () => (await api.get('/admin/analytics', { params: { from: from || undefined, to: to || undefined } })).data as {
+      totals: { invoices: number; totalFaceValue: number; assignedFaceValue: number; organisations: number; packages: number; paymentUpdates: number; collections?: number; outstanding?: number; feesAccrued?: number };
       pipeline: Record<string, number>;
       monthlyVolume: { month: string; count: number; value: number }[];
       participants: { suppliers: number; buyers: number; spv: number };
@@ -50,6 +52,15 @@ export default function AnalyticsPage() {
   return (
     <div className="portal-page animate-fade-in">
       <PageHeader title="Analytics" subtitle="Live aggregations from Postgres" />
+      <div className="flex gap-2 mb-3">
+        <input className="field-input" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+        <input className="field-input" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+      </div>
+      <div className="grid gap-2 md:grid-cols-3 mb-3">
+        <StatCard label="Collections" value={formatCurrency(data.totals.collections || 0)} icon={DollarSign} />
+        <StatCard label="Outstanding face" value={formatCurrency(data.totals.outstanding || 0)} icon={CreditCard} />
+        <StatCard label="Fees accrued" value={formatCurrency(data.totals.feesAccrued || 0)} icon={Percent} />
+      </div>
 
       <section className="portal-section">
         <header className="portal-section__head">

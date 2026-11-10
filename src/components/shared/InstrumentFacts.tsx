@@ -117,6 +117,18 @@ async function openStoredFile(fileUrl: string) {
   window.open(URL.createObjectURL(blob), '_blank');
 }
 
+export function RegistryPdfButton({ invoiceId }: { invoiceId: string }) {
+  return (
+    <button
+      type="button"
+      className="text-xs font-semibold underline"
+      onClick={() => void openStoredFile(`/api/v1/invoices/${invoiceId}/registry.pdf`).catch(() => toast.error('Could not open the invoice'))}
+    >
+      Download registered invoice
+    </button>
+  );
+}
+
 export function DocumentLinks({ docs }: { docs: InstrumentDoc[] }) {
   if (!docs.length) {
     return <p className="text-xs text-[#5A6B7D]">No purchase note or receipt has been filed on this IOU yet. A purchase note is created when the receivable is assigned. A receipt is created when a repayment is recorded.</p>;

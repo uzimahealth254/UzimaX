@@ -161,6 +161,51 @@ export async function generatePaymentReceipt(opts: {
   });
 }
 
+export async function generateRegistryInvoice(opts: {
+  iouRegistryId: string;
+  invoiceNumber?: string | null;
+  buyerName: string;
+  supplierName: string;
+  currency?: string;
+  faceValue: number;
+  issueDate?: string | null;
+  dueDate?: string | null;
+  status: string;
+  lineItems?: { description?: string; name?: string; quantity?: number; amount?: number }[] | null;
+}): Promise<Buffer> {
+  const doc = new PDFDocument({ margin: 50 });
+  const done = bufferFromDoc(doc);
+  const ccy = opts.currency || 'KES';
+  doc.fontSize(18).text('IOU Exchange — Registered invoice', { underline: true });
+  doc.moveDown(0.4);
+  doc.fontSize(10).fillColor('#555').text('Registry copy. IOU Exchange records this instrument and does not move cash.');
+  doc.moveDown();
+  doc.fontSize(11).fillColor('#222');
+  doc.text(`Registry ID: ${opts.iouRegistryId}`);
+  if (opts.invoiceNumber) doc.text(`Invoice number: ${opts.invoiceNumber}`);
+  doc.text(`Supplier: ${opts.supplierName}`);
+  doc.text(`Buyer: ${opts.buyerName}`);
+  doc.text(`Status: ${opts.status}`);
+  if (opts.issueDate) doc.text(`Issue date: ${opts.issueDate}`);
+  if (opts.dueDate) doc.text(`Due date: ${opts.dueDate}`);
+  doc.text(`Face value: ${ccy} ${opts.faceValue.toLocaleString()}`);
+  if (opts.lineItems?.length) {
+    doc.moveDown();
+    doc.fontSize(12).text('Line items');
+    doc.fontSize(10);
+    for (const item of opts.lineItems) {
+      const label = item.description || item.name || 'Line';
+      const qty = item.quantity != null ? ` x ${item.quantity}` : '';
+      const amount = item.amount != null ? ` — ${ccy} ${Number(item.amount).toLocaleString()}` : '';
+      doc.text(`${label}${qty}${amount}`);
+    }
+  }
+  doc.moveDown();
+  doc.fontSize(9).fillColor('#555').text(`Generated ${new Date().toISOString()}`);
+  doc.end();
+  return done;
+}
+
 export async function generatePackageSummary(opts: {
   orgId: string;
   packageRef: string;
