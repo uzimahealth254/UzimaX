@@ -12,6 +12,8 @@ interface OfferCalculatorProps {
   discountRate: string;
   onDiscountChange: (rate: string) => void;
   band?: { discountMin: number; discountMax: number; maxTenorDays: number };
+  /** Dense layout for the offer dialog so the actions stay on screen. */
+  compact?: boolean;
 }
 
 /** SPV purchase engine v1 — tenor-based discount (not loan interest UI) */
@@ -24,6 +26,7 @@ export default function OfferCalculator({
   discountRate,
   onDiscountChange,
   band,
+  compact = false,
 }: OfferCalculatorProps) {
   const tenorDays = issueDate && dueDate ? computeTenorDays(issueDate, dueDate) : 90;
 
@@ -38,6 +41,56 @@ export default function OfferCalculator({
   const marginPct = offerPrice > 0 ? (margin / offerPrice) * 100 : 0;
 
   const applyRecommended = () => onDiscountChange(String(priced.recommendedDiscount));
+
+  if (compact) {
+    const figures = [
+      { label: 'Tenor', value: `${tenorDays} days` },
+      { label: 'Face', value: formatCurrency(faceValue) },
+      { label: 'Net to supplier', value: formatCurrency(offerPrice) },
+      { label: 'SPV margin', value: `${formatCurrency(margin)} · ${marginPct.toFixed(1)}%` },
+    ];
+    return (
+      <div className="space-y-3">
+        <div className="flex items-end gap-2">
+          <label className="min-w-0 flex-1">
+            <span className="text-[10px] font-bold uppercase tracking-wide text-[#5A6B7D]">Discount rate (%)</span>
+            <input
+              type="number"
+              step="0.01"
+              min={0}
+              max={25}
+              value={discountRate}
+              onChange={(e) => onDiscountChange(e.target.value)}
+              className="field-input mt-1 font-mono"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={applyRecommended}
+            className="h-10 shrink-0 rounded-lg bg-[#D3F36B] px-3 text-[11px] font-bold text-[#0E1F1A] hover:bg-[#C5E85A]"
+          >
+            Use {priced.recommendedDiscount}%
+          </button>
+        </div>
+        {!priced.withinBand && band && (
+          <p className="text-[11px] font-medium text-amber-800">
+            Outside the programme band ({band.discountMin}%–{band.discountMax}%, max {band.maxTenorDays} days).
+          </p>
+        )}
+        <dl className="grid grid-cols-2 gap-2">
+          {figures.map((item) => (
+            <div key={item.label} className="rounded-lg border border-[#0E1F1A]/8 bg-[#f7faf6] px-2.5 py-2">
+              <dt className="text-[10px] font-semibold uppercase tracking-wide text-[#5A6B7D]">{item.label}</dt>
+              <dd className="mt-0.5 font-mono text-sm font-bold text-[#0E1F1A]">{item.value}</dd>
+            </div>
+          ))}
+        </dl>
+        <p className="text-[11px] leading-snug text-[#5A6B7D]">
+          {supplierName || 'Supplier'} sells to {buyerName || 'the buyer'}. Submitting this offer asks the supplier to accept, then opens the assignment.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">

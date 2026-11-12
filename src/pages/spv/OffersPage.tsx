@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { useData } from '@/hooks/usePlatformData';
 import { useActor } from '@/hooks/useActor';
@@ -250,60 +251,93 @@ export default function OffersPage() {
         </div>
       </section>
 
-      {selectedInvoice && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="absolute inset-0 bg-slate-900/40" onClick={() => { setSelectedInvoice(null); setAgreed(false); }} />
-          <div className="relative bg-white rounded-t-xl sm:rounded-xl border border-[#0E1F1A]/10 p-5 sm:p-6 w-full max-w-md animate-fade-in max-h-[85dvh] overflow-y-auto scroll-touch safe-pad-bottom">
-            <div className="sm:hidden w-10 h-1 rounded-full bg-[#0E1F1A]/15 mx-auto mb-4" />
-            <h2 className="text-sm font-bold text-[#0E1F1A] mb-1">Make purchase offer</h2>
-            <p className="text-[11px] text-[#5A6B7D] font-mono mb-4 break-anywhere">{selectedInvoice.iouRegistryId}</p>
-
-            <OfferCalculator
-              faceValue={selectedInvoice.amount}
-              supplierName={selectedInvoice.supplierName}
-              buyerName={selectedInvoice.buyerName}
-              issueDate={selectedInvoice.issueDate}
-              dueDate={selectedInvoice.dueDate}
-              discountRate={discountRate}
-              onDiscountChange={setDiscountRate}
-            />
-
-            <label className="flex items-start gap-2 mt-4 text-[11px] text-[#5A6B7D] cursor-pointer">
-              <input type="checkbox" checked={agreed} onChange={e => setAgreed(e.target.checked)} className="mt-0.5" />
-              I confirm this offer is binding upon supplier acceptance and initiates the assignment workflow.
-            </label>
-
-            <div className="flex gap-2 mt-4">
+      {selectedInvoice && createPortal(
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-3 sm:p-6">
+          <button
+            type="button"
+            aria-label="Close offer"
+            className="absolute inset-0 bg-[#0E1F1A]/55"
+            onClick={() => { setSelectedInvoice(null); setAgreed(false); }}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="offer-dialog-title"
+            className="relative flex w-full max-w-lg max-h-[min(34rem,calc(100dvh-1.5rem))] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+          >
+            <header className="flex shrink-0 items-start justify-between gap-3 border-b border-[#0E1F1A]/8 px-4 py-3">
+              <div className="min-w-0">
+                <h2 id="offer-dialog-title" className="text-sm font-bold text-[#0E1F1A]">Make purchase offer</h2>
+                <p className="mt-0.5 truncate font-mono text-[11px] text-[#5A6B7D]">{selectedInvoice.iouRegistryId}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setSelectedInvoice(null); setAgreed(false); }}
+                className="shrink-0 rounded-md px-2 py-1 text-xs font-bold text-[#5A6B7D] hover:bg-[#f7faf6] hover:text-[#0E1F1A]"
+              >
+                Close
+              </button>
+            </header>
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+              <OfferCalculator
+                compact
+                faceValue={selectedInvoice.amount}
+                supplierName={selectedInvoice.supplierName}
+                buyerName={selectedInvoice.buyerName}
+                issueDate={selectedInvoice.issueDate}
+                dueDate={selectedInvoice.dueDate}
+                discountRate={discountRate}
+                onDiscountChange={setDiscountRate}
+              />
+              <label className="mt-3 flex items-start gap-2 text-[11px] text-[#5A6B7D] cursor-pointer">
+                <input type="checkbox" checked={agreed} onChange={e => setAgreed(e.target.checked)} className="mt-0.5" />
+                I confirm this offer is binding once the supplier accepts it.
+              </label>
+            </div>
+            <footer className="flex shrink-0 gap-2 border-t border-[#0E1F1A]/8 px-4 py-3">
               <button
                 type="button"
                 onClick={handleMakeOffer}
                 disabled={loading || !agreed}
-                className="flex-1 min-h-[36px] py-2 bg-[#0E1F1A] text-white rounded-lg text-xs font-bold hover:bg-[#1A3A2E] disabled:opacity-50"
+                className="flex-1 min-h-[40px] rounded-lg bg-[#0E1F1A] text-xs font-bold text-white hover:bg-[#1A3A2E] disabled:opacity-50"
               >
                 {loading ? 'Submitting…' : 'Submit offer'}
               </button>
               <button
                 type="button"
                 onClick={() => { setSelectedInvoice(null); setAgreed(false); }}
-                className="flex-1 min-h-[36px] py-2 border border-[#0E1F1A]/15 rounded-lg text-xs font-semibold text-[#0E1F1A] hover:bg-[#f7faf6]"
+                className="flex-1 min-h-[40px] rounded-lg border border-[#0E1F1A]/15 text-xs font-semibold text-[#0E1F1A] hover:bg-[#f7faf6]"
               >
                 Cancel
               </button>
-            </div>
+            </footer>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
-      {bulkOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="absolute inset-0 bg-slate-900/40" onClick={() => { setBulkOpen(false); setAgreed(false); }} />
-          <div className="relative bg-white rounded-t-xl sm:rounded-xl border border-[#0E1F1A]/10 p-5 sm:p-6 w-full max-w-md animate-fade-in max-h-[85dvh] overflow-y-auto scroll-touch safe-pad-bottom">
-            <h2 className="text-sm font-bold text-[#0E1F1A] mb-1">Bulk purchase offers</h2>
-            <p className="text-[11px] text-[#5A6B7D] mb-4">
-              Submit the same discount rate to {selectedIds.size} selected IOU{selectedIds.size === 1 ? '' : 's'}.
-            </p>
-            <div className="mb-4">
-              <label className="text-[10px] font-semibold text-[#5A6B7D]">Discount rate (%)</label>
+      {bulkOpen && createPortal(
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-3 sm:p-6">
+          <button
+            type="button"
+            aria-label="Close bulk offers"
+            className="absolute inset-0 bg-[#0E1F1A]/55"
+            onClick={() => { setBulkOpen(false); setAgreed(false); }}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="bulk-offer-title"
+            className="relative flex w-full max-w-md max-h-[min(28rem,calc(100dvh-1.5rem))] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+          >
+            <header className="shrink-0 border-b border-[#0E1F1A]/8 px-4 py-3">
+              <h2 id="bulk-offer-title" className="text-sm font-bold text-[#0E1F1A]">Bulk purchase offers</h2>
+              <p className="mt-0.5 text-[11px] text-[#5A6B7D]">
+                Same discount for {selectedIds.size} selected IOU{selectedIds.size === 1 ? '' : 's'}.
+              </p>
+            </header>
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+              <label className="text-[10px] font-bold uppercase tracking-wide text-[#5A6B7D]">Discount rate (%)</label>
               <input
                 type="number"
                 min="0"
@@ -311,33 +345,34 @@ export default function OffersPage() {
                 step="0.1"
                 value={discountRate}
                 onChange={(e) => setDiscountRate(e.target.value)}
-                className="field-input mt-1 font-mono !min-h-[36px]"
+                className="field-input mt-1 font-mono"
               />
-              <p className="text-[10px] text-[#5A6B7D] mt-1">{discountBps} bps</p>
+              <p className="mt-1 text-[10px] text-[#5A6B7D]">{discountBps} bps</p>
+              <label className="mt-3 flex items-start gap-2 text-[11px] text-[#5A6B7D] cursor-pointer">
+                <input type="checkbox" checked={agreed} onChange={e => setAgreed(e.target.checked)} className="mt-0.5" />
+                I confirm these offers are binding once each supplier accepts.
+              </label>
             </div>
-            <label className="flex items-start gap-2 text-[11px] text-[#5A6B7D] cursor-pointer">
-              <input type="checkbox" checked={agreed} onChange={e => setAgreed(e.target.checked)} className="mt-0.5" />
-              I confirm these offers are binding upon supplier acceptance.
-            </label>
-            <div className="flex gap-2 mt-4">
+            <footer className="flex shrink-0 gap-2 border-t border-[#0E1F1A]/8 px-4 py-3">
               <button
                 type="button"
                 onClick={handleBulkOffers}
                 disabled={loading || !agreed || selectedIds.size === 0}
-                className="flex-1 min-h-[36px] py-2 bg-[#0E1F1A] text-white rounded-lg text-xs font-bold hover:bg-[#1A3A2E] disabled:opacity-50"
+                className="flex-1 min-h-[40px] rounded-lg bg-[#0E1F1A] text-xs font-bold text-white hover:bg-[#1A3A2E] disabled:opacity-50"
               >
-                {loading ? 'Submitting…' : `Submit ${selectedIds.size} offer${selectedIds.size === 1 ? '' : 's'}`}
+                {loading ? 'Submitting…' : `Submit ${selectedIds.size}`}
               </button>
               <button
                 type="button"
                 onClick={() => { setBulkOpen(false); setAgreed(false); }}
-                className="flex-1 min-h-[36px] py-2 border border-[#0E1F1A]/15 rounded-lg text-xs font-semibold text-[#0E1F1A] hover:bg-[#f7faf6]"
+                className="flex-1 min-h-[40px] rounded-lg border border-[#0E1F1A]/15 text-xs font-semibold text-[#0E1F1A] hover:bg-[#f7faf6]"
               >
                 Cancel
               </button>
-            </div>
+            </footer>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
