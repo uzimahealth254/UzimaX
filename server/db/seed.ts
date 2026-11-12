@@ -13,6 +13,8 @@ const YEAR = 2026;
 
 async function clearAll() {
   const tables = [
+    s.docsOtpCodes, s.userAccessRequests, s.credentialInvites, s.standingOrders, s.platformSettings,
+    s.webhookDeliveries, s.platformIntegrations,
     s.otpCodes, s.emailSendLog, s.auditLog, s.notifications, s.paymentUpdates, s.packageItems, s.packages,
     s.feeLedger, s.feeConfigurations, s.escrowLegs, s.walletTransactions, s.wallets,
     s.assignments, s.assignmentConsents, s.purchaseOffers, s.buyerVerifications, s.optIns,

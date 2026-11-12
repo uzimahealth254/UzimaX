@@ -16,6 +16,8 @@ import { AppError } from './lib/errors.js';
 import { writeAudit } from './middleware/audit.js';
 import { assertSecurityConfig } from './lib/security.js';
 import { pgClient } from './db/client.js';
+import { ensureSchema } from './db/ensure-schema.js';
+import { LIVE_CORS_ORIGINS } from '../src/lib/brand.js';
 
 assertSecurityConfig();
 
@@ -28,10 +30,14 @@ const serveSpa = isProd && fs.existsSync(path.join(distPath, 'index.html'));
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
 
-const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173,http://localhost:5174,http://localhost:3000')
-  .split(',')
-  .map((o) => o.trim())
-  .filter(Boolean);
+const DEV_ORIGINS = 'http://localhost:5173,http://localhost:5174,http://localhost:3000,http://localhost:8787';
+const allowedOrigins = Array.from(new Set(
+  [LIVE_CORS_ORIGINS, DEV_ORIGINS, process.env.CORS_ORIGINS || '']
+    .join(',')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean),
+));
 
 app.use(helmet({
   contentSecurityPolicy: false,
@@ -175,8 +181,10 @@ process.on('uncaughtException', (err) => {
   void shutdown('uncaughtException');
 });
 
-void initRateLimitStore().then(() => {
+void (async () => {
+  await ensureSchema();
+  await initRateLimitStore();
   server = app.listen(PORT, () => {
     console.log(`IOU Exchange API listening on :${PORT} (${isProd ? 'production' : 'development'})`);
   });
-});
+})();

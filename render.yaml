@@ -84,7 +84,7 @@
       - key: STORAGE_LOCAL_PATH
         value: ./storage
       - key: CORS_ORIGINS
-        value: https://www.ioux.africa,https://ioux.africa,https://app.ioux.africa
+        value: https://www.ioux.africa,https://ioux.africa,https://app.ioux.africa,https://docs.ioux.africa,https://staging.ioux.africa,https://uzimax.onrender.com
       - key: REDIS_URL
         fromService:
           type: redis
@@ -103,6 +103,8 @@
         value: 20.18.0
       - key: VITE_API_URL
         value: https://uzimax.onrender.com
+      - key: VITE_API_MODE
+        value: remote
       - key: VITE_SHOW_DEMO
         value: "false"
       - key: VITE_ENABLE_WALLET
