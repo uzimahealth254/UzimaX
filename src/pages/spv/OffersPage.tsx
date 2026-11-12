@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useData } from '@/hooks/usePlatformData';
 import { useActor } from '@/hooks/useActor';
 import IOURegistryId from '@/components/shared/IOURegistryId';
@@ -34,6 +35,7 @@ export default function OffersPage() {
   const available = invoices.filter(inv =>
     ['listed', 'verified', 'awaiting_opt_in', 'awaiting_buyer_verification', 'offer_received'].includes(inv.status),
   );
+  const optedIn = invoices.filter(inv => inv.status === 'pending_settlement');
   const pendingOffers = offers.filter(o => o.status === 'pending');
   const acceptedOffers = offers.filter(o => o.status === 'accepted');
   const closedOffers = offers.filter(o => ['rejected', 'declined', 'expired', 'withdrawn'].includes(o.status));
@@ -173,6 +175,31 @@ export default function OffersPage() {
   return (
     <div className="portal-page animate-fade-in">
       <PageHeader title="Offers" subtitle="Purchase offer lifecycle — owned receivables live in Assignments" />
+
+      {optedIn.length > 0 && (
+        <section className="portal-section">
+          <header className="portal-section__head">
+            <div>
+              <h2 className="portal-section__title">Supplier already opted in</h2>
+              <p className="portal-section__desc">
+                These credit sales are assigned. They are not waiting for an offer. Release the disbursement from Escrow.
+              </p>
+            </div>
+            <Link to="/spv/escrow" className="text-[11px] font-bold text-[#0E1F1A] hover:underline">Open escrow</Link>
+          </header>
+          <ul className="divide-y divide-[#0E1F1A]/8">
+            {optedIn.map((inv) => (
+              <li key={inv.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                <div className="min-w-0">
+                  <Link to={`/spv/registry/${inv.id}`} className="font-mono text-xs font-semibold text-[#0E1F1A] hover:underline">{inv.iouRegistryId}</Link>
+                  <p className="text-[11px] text-[#5A6B7D] truncate">{inv.supplierName} · {inv.buyerName}</p>
+                </div>
+                <span className="font-mono text-xs font-semibold shrink-0">{formatCurrency(inv.amount)}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="portal-section">
         <header className="portal-section__head flex-col items-stretch gap-2 sm:flex-row sm:items-center">

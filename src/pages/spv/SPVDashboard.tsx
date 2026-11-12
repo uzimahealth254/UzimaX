@@ -18,8 +18,9 @@ export default function SPVDashboard() {
   const activeOffers = offers.filter(o => o.status === 'pending');
   const totalAUM = packages.reduce((sum, p) => sum + p.totalFaceValue, 0);
   const pendingConsents = consents.filter(c => c.status === 'pending');
-  const assignedCount = invoices.filter(i => i.status === 'assigned').length;
-  const openToOffer = invoices.filter(i => ['verified', 'listed'].includes(i.status)).length;
+  const readyToSettle = invoices.filter(i => i.status === 'pending_settlement');
+  const assignedCount = invoices.filter(i => ['assigned', 'pending_settlement', 'packaged'].includes(i.status)).length;
+  const openToOffer = invoices.filter(i => ['verified', 'listed', 'awaiting_opt_in', 'awaiting_buyer_verification'].includes(i.status)).length;
   const userNotifs = notifications.filter(n => n.userId === user?.id && !n.read);
 
   return (
@@ -53,8 +54,8 @@ export default function SPVDashboard() {
       </div>
 
       <div className="portal-metrics mt-2">
-        <button type="button" className="text-left" onClick={() => navigate('/spv/assignments')}>
-          <StatCard label="Assigned" value={assignedCount} icon={Database} accent="forest" />
+        <button type="button" className="text-left" onClick={() => navigate('/spv/escrow')}>
+          <StatCard label="Ready to settle" value={readyToSettle.length} icon={Database} accent="gold" />
         </button>
         <button type="button" className="text-left" onClick={() => navigate('/spv/assignments')}>
           <StatCard label="Pending consents" value={pendingConsents.length} icon={Send} accent="gold" />
@@ -86,6 +87,7 @@ export default function SPVDashboard() {
           </header>
           <div className="divide-y divide-[#0E1F1A]/8">
             {[
+              { label: 'Supplier opted in — release escrow', value: readyToSettle.length, to: '/spv/escrow' },
               { label: 'Verified (ready for offer)', value: verifiedInvoices.length, to: '/spv/offers' },
               { label: 'Offers pending response', value: activeOffers.length, to: '/spv/offers' },
               { label: 'Awaiting buyer consent', value: pendingConsents.length, to: '/spv/assignments' },
